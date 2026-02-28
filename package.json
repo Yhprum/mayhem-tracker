@@ -1,0 +1,60 @@
+{
+  "name": "mayhem-tracker",
+  "version": "1.0.0",
+  "description": "ARAM Mayhem match history tracker",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "dist": "electron-vite build && electron-builder --win",
+    "format": "oxfmt"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "league-connect": "^6.0.0-rc13",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.1"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.2",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@tailwindcss/vite": "^4.2.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.3.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.4",
+    "autoprefixer": "^10.4.27",
+    "electron": "^40.6.1",
+    "electron-builder": "^26.8.1",
+    "electron-rebuild": "^3.2.9",
+    "electron-vite": "^5.0.0",
+    "oxfmt": "^0.35.0",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  },
+  "build": {
+    "appId": "com.mayhem-tracker.app",
+    "productName": "Mayhem Tracker",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "assets/icon.png",
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "assets/icon.png",
+      "signAndEditExecutable": false
+    },
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
+    ]
+  }
+}
