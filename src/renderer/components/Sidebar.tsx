@@ -7,7 +7,7 @@ const links = [
   { to: "/champions", label: "Champions", icon: "🏆" },
   { to: "/augments", label: "Augments", icon: "🎯" },
   { to: "/friends", label: "Friends", icon: "👥" },
-  { to: "/global", label: "Global Stats", icon: "🌐" },
+  { to: "/global", label: "Total Stats", icon: "🌐" },
 ];
 
 const statusColors = {

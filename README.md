@@ -27,3 +27,7 @@ npm run dev       # start in dev mode
 ```bash
 npm run dist      # build Windows portable executable
 ```
+
+## Disclaimer
+
+Mayhem Tracker was created under Riot Games' "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.
