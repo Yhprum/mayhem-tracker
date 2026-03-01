@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, dialog } from "electron";
+import { ipcMain, BrowserWindow, dialog, app, shell } from "electron";
 import fs from "fs";
 import * as db from "./db";
 import * as lcu from "./lcu";
@@ -78,6 +78,36 @@ export function registerIpcHandlers(win: BrowserWindow) {
 
   ipcMain.handle("settings:set", (_event, key: string, value: string) => {
     db.setSetting(key, value);
+  });
+
+  // Version & updates
+  ipcMain.handle("app:version", () => {
+    return app.getVersion();
+  });
+
+  ipcMain.handle("app:check-update", async () => {
+    try {
+      const res = await fetch(
+        "https://api.github.com/repos/Yhprum/mayhem-tracker/releases/latest",
+        { headers: { "User-Agent": "mayhem-tracker" } },
+      );
+      if (!res.ok) return { hasUpdate: false, error: "No releases found" };
+      const data = await res.json();
+      const latest = (data.tag_name as string).replace(/^v/, "");
+      const current = app.getVersion();
+      return {
+        hasUpdate: latest !== current,
+        latest,
+        current,
+        url: data.html_url as string,
+      };
+    } catch {
+      return { hasUpdate: false, error: "Failed to check for updates" };
+    }
+  });
+
+  ipcMain.handle("app:open-url", (_event, url: string) => {
+    shell.openExternal(url);
   });
 
   // Data export/import

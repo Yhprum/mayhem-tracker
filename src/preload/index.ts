@@ -53,6 +53,12 @@ const api = {
   exportData: () => ipcRenderer.invoke("data:export"),
 
   importData: () => ipcRenderer.invoke("data:import"),
+
+  getVersion: () => ipcRenderer.invoke("app:version"),
+
+  checkForUpdate: () => ipcRenderer.invoke("app:check-update"),
+
+  openUrl: (url: string) => ipcRenderer.invoke("app:open-url", url),
 };
 
 contextBridge.exposeInMainWorld("api", api);

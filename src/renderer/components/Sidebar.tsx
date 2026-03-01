@@ -26,6 +26,17 @@ export default function Sidebar() {
   const status = useLcuStatus();
   const [refreshing, setRefreshing] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
+  const [version, setVersion] = useState("");
+  const [update, setUpdate] = useState<{
+    hasUpdate: boolean;
+    latest?: string;
+    url?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    window.api.getVersion().then(setVersion);
+    window.api.checkForUpdate().then(setUpdate);
+  }, []);
 
   useEffect(() => {
     if (!lastResult) return;
@@ -99,6 +110,26 @@ export default function Sidebar() {
           >
             {refreshing ? "Refreshing..." : "Refresh"}
           </button>
+        </div>
+        <div className="flex items-center justify-between mt-1">
+          <button
+            onClick={() =>
+              window.api.openUrl(
+                `https://github.com/Yhprum/mayhem-tracker/releases/tag/v${version}`,
+              )
+            }
+            className="text-[10px] text-lol-text/50 hover:text-lol-text transition-colors cursor-pointer"
+          >
+            v{version}
+          </button>
+          {update?.hasUpdate && (
+            <button
+              onClick={() => window.api.openUrl(update.url!)}
+              className="text-[10px] text-lol-gold hover:text-lol-gold-light transition-colors cursor-pointer"
+            >
+              v{update.latest} available
+            </button>
+          )}
         </div>
       </div>
     </nav>
