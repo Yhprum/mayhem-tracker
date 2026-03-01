@@ -10,6 +10,20 @@ let tray: Tray | null = null;
 let isQuitting = false;
 let didFinalFetch = false;
 
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 const iconPath = path.join(app.getAppPath(), "assets/icon.png");
 
 function createWindow() {
