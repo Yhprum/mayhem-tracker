@@ -42,6 +42,7 @@ export interface MatchListItem {
   game_id: number;
   game_creation: number;
   game_duration: number;
+  is_remake: number;
   champion_id: number;
   win: number;
   kills: number;

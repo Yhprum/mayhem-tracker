@@ -102,15 +102,17 @@ function ChampionExpanded({ championId }: { championId: number }) {
                 <div
                   key={m.game_id}
                   className={`flex items-center gap-2 px-2 h-7 rounded text-xs ${
-                    m.win
-                      ? "bg-lol-win/5 border border-lol-win/20"
-                      : "bg-lol-loss/5 border border-lol-loss/20"
+                    m.is_remake
+                      ? "bg-white/[0.03] border border-white/10"
+                      : m.win
+                        ? "bg-lol-win/5 border border-lol-win/20"
+                        : "bg-lol-loss/5 border border-lol-loss/20"
                   }`}
                 >
                   <span
-                    className={`font-bold w-4 shrink-0 ${m.win ? "text-lol-win" : "text-lol-loss"}`}
+                    className={`font-bold shrink-0 w-4 text-center ${m.is_remake ? "text-gray-500" : m.win ? "text-lol-win" : "text-lol-loss"}`}
                   >
-                    {m.win ? "W" : "L"}
+                    {m.is_remake ? "-" : m.win ? "W" : "L"}
                   </span>
                   <span className="text-lol-text-bright shrink-0">
                     {formatKDA(m.kills, m.deaths, m.assists)}

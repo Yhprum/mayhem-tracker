@@ -202,6 +202,7 @@ function GameRow({
   puuid,
   onToggle,
 }: GameRowProps) {
+  const isRemake = !!match.is_remake;
   const isWin = !!match.win;
   const kda = kdaRatio(match.kills, match.deaths, match.assists);
   const augmentIds = parseAugmentIds(match.augment_ids);
@@ -211,15 +212,17 @@ function GameRow({
       <button
         onClick={onToggle}
         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors text-left ${
-          isWin
-            ? "bg-lol-win/5 border-lol-win/20 hover:bg-lol-win/10"
-            : "bg-lol-loss/5 border-lol-loss/20 hover:bg-lol-loss/10"
+          isRemake
+            ? "bg-white/[0.03] border-white/10 hover:bg-white/[0.06]"
+            : isWin
+              ? "bg-lol-win/5 border-lol-win/20 hover:bg-lol-win/10"
+              : "bg-lol-loss/5 border-lol-loss/20 hover:bg-lol-loss/10"
         }`}
       >
         <div
-          className={`text-xs font-bold w-8 shrink-0 ${isWin ? "text-lol-win" : "text-lol-loss"}`}
+          className={`text-xs font-bold shrink-0 ${isRemake ? "text-gray-500 w-8" : isWin ? "text-lol-win w-8" : "text-lol-loss w-8"}`}
         >
-          {isWin ? "WIN" : "LOSS"}
+          {isRemake ? "RMK" : isWin ? "WIN" : "LOSS"}
         </div>
         <ChampionIcon championId={match.champion_id} size={36} />
         <div className="w-24 shrink-0">

@@ -35,6 +35,7 @@ function createTables() {
       game_mode     TEXT NOT NULL,
       game_creation INTEGER NOT NULL,
       game_duration INTEGER NOT NULL,
+      is_remake     INTEGER NOT NULL DEFAULT 0,
       raw_json      TEXT
     );
 
@@ -83,6 +84,45 @@ function createTables() {
     CREATE INDEX IF NOT EXISTS idx_player_stats_champion ON player_stats(champion_id);
     CREATE INDEX IF NOT EXISTS idx_game_augments_augment ON game_augments(augment_id);
   `);
+
+  // Migration: add is_remake column to existing databases
+  try {
+    db.exec("ALTER TABLE games ADD COLUMN is_remake INTEGER NOT NULL DEFAULT 0");
+    // Retroactively detect remakes for existing games
+    const games = db.prepare("SELECT game_id, game_duration, raw_json FROM games").all() as {
+      game_id: number;
+      game_duration: number;
+      raw_json: string | null;
+    }[];
+    const updateStmt = db.prepare("UPDATE games SET is_remake = 1 WHERE game_id = ?");
+    for (const game of games) {
+      if (detectRemake(game.game_duration, game.raw_json)) {
+        updateStmt.run(game.game_id);
+      }
+    }
+  } catch {
+    // Column already exists
+  }
+}
+
+function detectRemake(gameDuration: number, rawJson: string | null): boolean {
+  // Very short games are always remakes
+  if (gameDuration < 300) return true;
+  // Check for early surrender flag in participant data
+  if (rawJson) {
+    try {
+      const raw = JSON.parse(rawJson);
+      if (raw.participants) {
+        for (const p of raw.participants) {
+          const s = p.stats || p;
+          if (s.gameEndedInEarlySurrender && gameDuration < 600) return true;
+        }
+      }
+    } catch {
+      /* ignore parse errors */
+    }
+  }
+  return false;
 }
 
 // ---- Helpers ----
@@ -121,7 +161,7 @@ export function getMatchHistory(limit: number, offset: number): { matches: any[]
   const total = db.prepare("SELECT COUNT(*) as count FROM games").get() as any;
   const rows = db
     .prepare(`
-    SELECT g.game_id, g.game_creation, g.game_duration, g.raw_json,
+    SELECT g.game_id, g.game_creation, g.game_duration, g.is_remake, g.raw_json,
            ps.champion_id, ps.win, ps.kills, ps.deaths, ps.assists,
            ps.double_kills, ps.triple_kills, ps.quadra_kills, ps.penta_kills,
            ps.total_damage_dealt, ps.total_damage_taken, ps.total_heal, ps.gold_earned,
@@ -176,6 +216,8 @@ export function getChampionStatsAll(): any[] {
       SUM(ps.quadra_kills) as quadra_kills,
       SUM(ps.penta_kills) as penta_kills
     FROM player_stats ps
+    JOIN games g ON ps.game_id = g.game_id
+    WHERE g.is_remake = 0
     GROUP BY ps.champion_id
     ORDER BY games DESC
   `)
@@ -189,7 +231,8 @@ export function getAugmentStatsAll(championId?: number): any[] {
       SELECT ga.augment_id, COUNT(*) as picks, SUM(ps.win) as wins
       FROM game_augments ga
       JOIN player_stats ps ON ga.game_id = ps.game_id
-      WHERE ps.champion_id = ?
+      JOIN games g ON ga.game_id = g.game_id
+      WHERE ps.champion_id = ? AND g.is_remake = 0
       GROUP BY ga.augment_id
       ORDER BY picks DESC
     `)
@@ -200,6 +243,8 @@ export function getAugmentStatsAll(championId?: number): any[] {
     SELECT ga.augment_id, COUNT(*) as picks, SUM(ps.win) as wins
     FROM game_augments ga
     JOIN player_stats ps ON ga.game_id = ps.game_id
+    JOIN games g ON ga.game_id = g.game_id
+    WHERE g.is_remake = 0
     GROUP BY ga.augment_id
     ORDER BY picks DESC
   `)
@@ -210,15 +255,17 @@ export function getDashboardData(): any {
   const totals = db
     .prepare(`
     SELECT COUNT(*) as totalGames,
-           SUM(win) as wins,
-           SUM(kills) as totalKills,
-           SUM(deaths) as totalDeaths,
-           SUM(assists) as totalAssists,
-           SUM(double_kills) as doubles,
-           SUM(triple_kills) as triples,
-           SUM(quadra_kills) as quadras,
-           SUM(penta_kills) as pentas
-    FROM player_stats
+           SUM(ps.win) as wins,
+           SUM(ps.kills) as totalKills,
+           SUM(ps.deaths) as totalDeaths,
+           SUM(ps.assists) as totalAssists,
+           SUM(ps.double_kills) as doubles,
+           SUM(ps.triple_kills) as triples,
+           SUM(ps.quadra_kills) as quadras,
+           SUM(ps.penta_kills) as pentas
+    FROM player_stats ps
+    JOIN games g ON ps.game_id = g.game_id
+    WHERE g.is_remake = 0
   `)
     .get() as any;
 
@@ -227,6 +274,7 @@ export function getDashboardData(): any {
     SELECT ps.win, g.game_id
     FROM games g
     JOIN player_stats ps ON g.game_id = ps.game_id
+    WHERE g.is_remake = 0
     ORDER BY g.game_creation DESC
     LIMIT 10
   `)
@@ -242,6 +290,8 @@ export function getDashboardData(): any {
       ROUND(AVG(ps.deaths), 1) as avg_deaths,
       ROUND(AVG(ps.assists), 1) as avg_assists
     FROM player_stats ps
+    JOIN games g ON ps.game_id = g.game_id
+    WHERE g.is_remake = 0
     GROUP BY ps.champion_id
     ORDER BY games DESC
     LIMIT 5
@@ -253,6 +303,8 @@ export function getDashboardData(): any {
     SELECT ga.augment_id, COUNT(*) as picks, SUM(ps.win) as wins
     FROM game_augments ga
     JOIN player_stats ps ON ga.game_id = ps.game_id
+    JOIN games g ON ga.game_id = g.game_id
+    WHERE g.is_remake = 0
     GROUP BY ga.augment_id
     ORDER BY picks DESC
     LIMIT 5
@@ -288,6 +340,8 @@ export function getAugmentStatsWithChampions(): {
     SELECT ga.augment_id, COUNT(*) as picks, SUM(ps.win) as wins
     FROM game_augments ga
     JOIN player_stats ps ON ga.game_id = ps.game_id
+    JOIN games g ON ga.game_id = g.game_id
+    WHERE g.is_remake = 0
     GROUP BY ga.augment_id
     ORDER BY picks DESC
   `)
@@ -298,6 +352,8 @@ export function getAugmentStatsWithChampions(): {
     SELECT ga.augment_id, ps.champion_id, COUNT(*) as picks, SUM(ps.win) as wins
     FROM game_augments ga
     JOIN player_stats ps ON ga.game_id = ps.game_id
+    JOIN games g ON ga.game_id = g.game_id
+    WHERE g.is_remake = 0
     GROUP BY ga.augment_id, ps.champion_id
     ORDER BY picks DESC
   `)
@@ -327,7 +383,7 @@ export function getChampionMatchHistory(
     .get(championId) as any;
   const rows = db
     .prepare(`
-    SELECT g.game_id, g.game_creation, g.game_duration, g.raw_json,
+    SELECT g.game_id, g.game_creation, g.game_duration, g.is_remake, g.raw_json,
            ps.champion_id, ps.win, ps.kills, ps.deaths, ps.assists,
            ps.double_kills, ps.triple_kills, ps.quadra_kills, ps.penta_kills,
            ps.total_damage_dealt, ps.total_damage_taken, ps.total_heal, ps.gold_earned,
@@ -372,9 +428,11 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
 
   const s = participant.stats || participant;
 
+  const isRemake = detectRemake(gameData.gameDuration, JSON.stringify(gameData)) ? 1 : 0;
+
   const insertGameStmt = db.prepare(`
-    INSERT OR IGNORE INTO games (game_id, queue_id, game_mode, game_creation, game_duration, raw_json)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO games (game_id, queue_id, game_mode, game_creation, game_duration, is_remake, raw_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
   const insertStatsStmt = db.prepare(`
@@ -397,6 +455,7 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
       gameData.gameMode,
       gameData.gameCreation,
       gameData.gameDuration,
+      isRemake,
       JSON.stringify(gameData),
     );
 
@@ -464,7 +523,9 @@ export function getTeammateStats(): any[] {
   if (!summoner) return [];
 
   const games = db
-    .prepare("SELECT game_id, raw_json, game_creation FROM games WHERE raw_json IS NOT NULL")
+    .prepare(
+      "SELECT game_id, raw_json, game_creation FROM games WHERE raw_json IS NOT NULL AND is_remake = 0",
+    )
     .all() as any[];
   const puuid = summoner.puuid;
 
@@ -598,19 +659,19 @@ export function getChampionItemStats(
     .prepare(`
     SELECT item_id, COUNT(*) as picks, SUM(win) as wins
     FROM (
-      SELECT item0 as item_id, win FROM player_stats WHERE champion_id = ? AND item0 IS NOT NULL AND item0 > 0
+      SELECT ps.item0 as item_id, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item0 IS NOT NULL AND ps.item0 > 0 AND g.is_remake = 0
       UNION ALL
-      SELECT item1, win FROM player_stats WHERE champion_id = ? AND item1 IS NOT NULL AND item1 > 0
+      SELECT ps.item1, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item1 IS NOT NULL AND ps.item1 > 0 AND g.is_remake = 0
       UNION ALL
-      SELECT item2, win FROM player_stats WHERE champion_id = ? AND item2 IS NOT NULL AND item2 > 0
+      SELECT ps.item2, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item2 IS NOT NULL AND ps.item2 > 0 AND g.is_remake = 0
       UNION ALL
-      SELECT item3, win FROM player_stats WHERE champion_id = ? AND item3 IS NOT NULL AND item3 > 0
+      SELECT ps.item3, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item3 IS NOT NULL AND ps.item3 > 0 AND g.is_remake = 0
       UNION ALL
-      SELECT item4, win FROM player_stats WHERE champion_id = ? AND item4 IS NOT NULL AND item4 > 0
+      SELECT ps.item4, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item4 IS NOT NULL AND ps.item4 > 0 AND g.is_remake = 0
       UNION ALL
-      SELECT item5, win FROM player_stats WHERE champion_id = ? AND item5 IS NOT NULL AND item5 > 0
+      SELECT ps.item5, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item5 IS NOT NULL AND ps.item5 > 0 AND g.is_remake = 0
       UNION ALL
-      SELECT item6, win FROM player_stats WHERE champion_id = ? AND item6 IS NOT NULL AND item6 > 0
+      SELECT ps.item6, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item6 IS NOT NULL AND ps.item6 > 0 AND g.is_remake = 0
     )
     GROUP BY item_id
     ORDER BY picks DESC
@@ -631,7 +692,9 @@ export function getGlobalStats(): {
   augments: { augment_id: number; picks: number; wins: number }[];
   totalParticipantSlots: number;
 } {
-  const games = db.prepare("SELECT raw_json FROM games WHERE raw_json IS NOT NULL").all() as any[];
+  const games = db
+    .prepare("SELECT raw_json FROM games WHERE raw_json IS NOT NULL AND is_remake = 0")
+    .all() as any[];
 
   const championMap = new Map<number, { games: number; wins: number }>();
   const augmentMap = new Map<number, { picks: number; wins: number }>();
