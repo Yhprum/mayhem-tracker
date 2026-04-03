@@ -20,11 +20,11 @@ export default function MatchHistory() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<MatchDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [puuid, setPuuid] = useState<string | null>(null);
+  const [puuids, setPuuids] = useState<string[] | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    window.api.getSummonerPuuid().then(setPuuid);
+    window.api.getAllSummonerPuuids().then(setPuuids);
   }, []);
 
   useEffect(() => {
@@ -128,7 +128,7 @@ export default function MatchHistory() {
             expanded={expandedId === m.game_id}
             detail={expandedId === m.game_id ? detail : null}
             detailLoading={expandedId === m.game_id && detailLoading}
-            puuid={puuid}
+            puuids={puuids}
             onToggle={() => toggleExpand(m.game_id)}
           />
         ))}
@@ -148,7 +148,7 @@ interface GameRowProps {
   expanded: boolean;
   detail: MatchDetail | null;
   detailLoading: boolean;
-  puuid: string | null;
+  puuids: string[] | null;
   onToggle: () => void;
 }
 
@@ -199,7 +199,7 @@ function GameRow({
   expanded,
   detail,
   detailLoading,
-  puuid,
+  puuids,
   onToggle,
 }: GameRowProps) {
   const isRemake = !!match.is_remake;
@@ -296,7 +296,7 @@ function GameRow({
           {detailLoading ? (
             <div className="text-sm text-lol-text text-center py-4">Loading...</div>
           ) : detail ? (
-            <MatchScoreboard detail={detail} champData={champData} puuid={puuid} />
+            <MatchScoreboard detail={detail} champData={champData} puuids={puuids} />
           ) : null}
         </div>
       )}
@@ -311,15 +311,15 @@ const GRID_COLS = "grid-cols-[40px_minmax(80px,1fr)_76px_110px_110px_56px_56px_1
 function MatchScoreboard({
   detail,
   champData,
-  puuid,
+  puuids,
 }: {
   detail: MatchDetail;
   champData: any;
-  puuid: string | null;
+  puuids: string[] | null;
 }) {
   const participants = useMemo(
-    () => (detail.raw ? parseParticipants(detail.raw, puuid) : []),
-    [detail, puuid],
+    () => (detail.raw ? parseParticipants(detail.raw, puuids) : []),
+    [detail, puuids],
   );
   const teams = useMemo(() => groupByTeam(participants), [participants]);
 

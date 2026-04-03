@@ -1,6 +1,6 @@
 import type { ParsedParticipant } from "./types";
 
-export function parseParticipants(raw: any, selfPuuid: string | null): ParsedParticipant[] {
+export function parseParticipants(raw: any, selfPuuids: string[] | null): ParsedParticipant[] {
   if (!raw?.participants) return [];
 
   const participants = raw.participants || [];
@@ -45,7 +45,7 @@ export function parseParticipants(raw: any, selfPuuid: string | null): ParsedPar
       ],
       augments: [1, 2, 3, 4].map((n) => s[`playerAugment${n}`] ?? 0).filter((id: number) => id > 0),
       win: !!s.win,
-      isSelf: selfPuuid != null && puuid === selfPuuid,
+      isSelf: selfPuuids != null && puuid != null && selfPuuids.includes(puuid),
     };
   });
 }

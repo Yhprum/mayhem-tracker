@@ -34,6 +34,8 @@ const api = {
 
   getSummonerPuuid: () => ipcRenderer.invoke("db:summoner-puuid"),
 
+  getAllSummonerPuuids: () => ipcRenderer.invoke("db:all-summoner-puuids"),
+
   onStatusChanged: (callback: (status: string) => void) => {
     const handler = (_event: any, status: string) => callback(status);
     ipcRenderer.on("lcu:status-changed", handler);
@@ -53,6 +55,8 @@ const api = {
   exportData: () => ipcRenderer.invoke("data:export"),
 
   importData: () => ipcRenderer.invoke("data:import"),
+
+  repairPuuids: () => ipcRenderer.invoke("data:repair-puuids"),
 
   getVersion: () => ipcRenderer.invoke("app:version"),
 

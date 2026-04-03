@@ -66,6 +66,10 @@ export function registerIpcHandlers(win: BrowserWindow) {
     return db.getGlobalStats();
   });
 
+  ipcMain.handle("db:all-summoner-puuids", () => {
+    return db.getAllPuuids();
+  });
+
   ipcMain.handle("db:summoner-puuid", () => {
     const s = db.getSummoner();
     return s?.puuid ?? null;
@@ -134,5 +138,9 @@ export function registerIpcHandlers(win: BrowserWindow) {
     const data = JSON.parse(raw);
     const imported = db.importData(data);
     return { success: true, imported };
+  });
+
+  ipcMain.handle("data:repair-puuids", () => {
+    return db.repairPuuids();
   });
 }

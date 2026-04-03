@@ -5,6 +5,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [repairStatus, setRepairStatus] = useState<string | null>(null);
 
   useEffect(() => {
     window.api.getSetting("minimize_to_tray").then((val: string | null) => {
@@ -44,6 +45,18 @@ export default function Settings() {
       }
     } catch (err: any) {
       setImportStatus(`Error: ${err.message}`);
+    }
+  }, []);
+
+  const handleRepair = useCallback(async () => {
+    setRepairStatus(null);
+    try {
+      const result = await window.api.repairPuuids();
+      setRepairStatus(
+        `Repaired ${result.repairedGames} game(s), found ${result.discoveredAccounts} account(s)`,
+      );
+    } catch (err: any) {
+      setRepairStatus(`Error: ${err.message}`);
     }
   }, []);
 
@@ -119,6 +132,25 @@ export default function Settings() {
             </button>
           </div>
           {importStatus && <p className="text-xs text-lol-text">{importStatus}</p>}
+
+          <div className="border-t border-lol-border" />
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-lol-text-bright">Repair account data</p>
+              <p className="text-xs text-lol-text mt-0.5">
+                Re-detect which accounts are yours by analyzing game history. Use this if games are
+                attributed to the wrong account.
+              </p>
+            </div>
+            <button
+              onClick={handleRepair}
+              className="px-4 py-1.5 rounded text-sm bg-lol-gold/20 text-lol-gold hover:bg-lol-gold/30 transition-colors"
+            >
+              Repair
+            </button>
+          </div>
+          {repairStatus && <p className="text-xs text-lol-text">{repairStatus}</p>}
         </div>
       </div>
     </div>
