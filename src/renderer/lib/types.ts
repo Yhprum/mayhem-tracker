@@ -4,6 +4,7 @@ export interface GameRecord {
   game_mode: string;
   game_creation: number;
   game_duration: number;
+  puuid?: string;
   raw_json?: string;
 }
 
@@ -208,6 +209,7 @@ export interface ElectronAPI {
   getTeammateStats: () => Promise<TeammateStats[]>;
   getGlobalStats: () => Promise<GlobalStats>;
   getSummonerPuuid: () => Promise<string | null>;
+  getAllSummonerPuuids: () => Promise<string[]>;
   refreshGames: () => Promise<{ newGames: number; totalGames: number }>;
   getLcuStatus: () => Promise<LcuStatus>;
   getChampionData: () => Promise<ChampionData>;

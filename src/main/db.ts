@@ -36,6 +36,7 @@ function createTables() {
       game_creation INTEGER NOT NULL,
       game_duration INTEGER NOT NULL,
       is_remake     INTEGER NOT NULL DEFAULT 0,
+      puuid         TEXT NOT NULL DEFAULT '',
       raw_json      TEXT
     );
 
@@ -103,6 +104,75 @@ function createTables() {
   } catch {
     // Column already exists
   }
+
+  // Migration: add puuid column to games for multi-account support
+  try {
+    db.exec("ALTER TABLE games ADD COLUMN puuid TEXT NOT NULL DEFAULT ''");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_games_puuid ON games(puuid)");
+    // Backfill puuid by matching stored player_stats against raw_json participants
+    const gamesToBackfill = db
+      .prepare(`
+        SELECT g.game_id, g.raw_json,
+               ps.champion_id, ps.kills, ps.deaths, ps.assists
+        FROM games g
+        JOIN player_stats ps ON g.game_id = ps.game_id
+        WHERE g.puuid = '' AND g.raw_json IS NOT NULL
+      `)
+      .all() as {
+      game_id: number;
+      raw_json: string;
+      champion_id: number;
+      kills: number;
+      deaths: number;
+      assists: number;
+    }[];
+
+    const updateStmt = db.prepare("UPDATE games SET puuid = ? WHERE game_id = ?");
+    const upsertStmt = db.prepare(`
+      INSERT OR IGNORE INTO summoner (puuid, game_name, tag_line, summoner_id, account_id, updated_at)
+      VALUES (?, ?, ?, NULL, NULL, ?)
+    `);
+
+    for (const game of gamesToBackfill) {
+      try {
+        const raw = JSON.parse(game.raw_json);
+        const participants = raw.participants || [];
+        const identities = raw.participantIdentities || [];
+
+        for (let i = 0; i < participants.length; i++) {
+          const p = participants[i];
+          const identity = identities[i];
+          const s = p.stats || p;
+          const championId = p.championId ?? s.championId ?? 0;
+
+          if (
+            championId === game.champion_id &&
+            (s.kills ?? 0) === game.kills &&
+            (s.deaths ?? 0) === game.deaths &&
+            (s.assists ?? 0) === game.assists
+          ) {
+            const pPuuid = p.puuid || identity?.player?.puuid;
+            if (pPuuid) {
+              updateStmt.run(pPuuid, game.game_id);
+              const gameName =
+                identity?.player?.gameName ||
+                identity?.player?.summonerName ||
+                p.summonerName ||
+                p.riotIdGameName ||
+                null;
+              const tagLine = identity?.player?.tagLine || p.riotIdTagline || null;
+              upsertStmt.run(pPuuid, gameName, tagLine, Date.now());
+            }
+            break;
+          }
+        }
+      } catch {
+        /* ignore parse errors */
+      }
+    }
+  } catch {
+    // Column already exists
+  }
 }
 
 function detectRemake(gameDuration: number, rawJson: string | null): boolean {
@@ -161,7 +231,7 @@ export function getMatchHistory(limit: number, offset: number): { matches: any[]
   const total = db.prepare("SELECT COUNT(*) as count FROM games").get() as any;
   const rows = db
     .prepare(`
-    SELECT g.game_id, g.game_creation, g.game_duration, g.is_remake, g.raw_json,
+    SELECT g.game_id, g.game_creation, g.game_duration, g.is_remake, g.puuid, g.raw_json,
            ps.champion_id, ps.win, ps.kills, ps.deaths, ps.assists,
            ps.double_kills, ps.triple_kills, ps.quadra_kills, ps.penta_kills,
            ps.total_damage_dealt, ps.total_damage_taken, ps.total_heal, ps.gold_earned,
@@ -383,7 +453,7 @@ export function getChampionMatchHistory(
     .get(championId) as any;
   const rows = db
     .prepare(`
-    SELECT g.game_id, g.game_creation, g.game_duration, g.is_remake, g.raw_json,
+    SELECT g.game_id, g.game_creation, g.game_duration, g.is_remake, g.puuid, g.raw_json,
            ps.champion_id, ps.win, ps.kills, ps.deaths, ps.assists,
            ps.double_kills, ps.triple_kills, ps.quadra_kills, ps.penta_kills,
            ps.total_damage_dealt, ps.total_damage_taken, ps.total_heal, ps.gold_earned,
@@ -431,8 +501,8 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
   const isRemake = detectRemake(gameData.gameDuration, JSON.stringify(gameData)) ? 1 : 0;
 
   const insertGameStmt = db.prepare(`
-    INSERT OR IGNORE INTO games (game_id, queue_id, game_mode, game_creation, game_duration, is_remake, raw_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO games (game_id, queue_id, game_mode, game_creation, game_duration, is_remake, puuid, raw_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const insertStatsStmt = db.prepare(`
@@ -456,6 +526,7 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
       gameData.gameCreation,
       gameData.gameDuration,
       isRemake,
+      puuid,
       JSON.stringify(gameData),
     );
 
@@ -515,19 +586,23 @@ export function upsertSummoner(summoner: any): void {
 }
 
 export function getSummoner(): any {
-  return db.prepare("SELECT * FROM summoner LIMIT 1").get();
+  return db.prepare("SELECT * FROM summoner ORDER BY updated_at DESC LIMIT 1").get();
+}
+
+export function getAllPuuids(): string[] {
+  const rows = db.prepare("SELECT puuid FROM summoner").all() as { puuid: string }[];
+  return rows.map((r) => r.puuid);
 }
 
 export function getTeammateStats(): any[] {
-  const summoner = getSummoner();
-  if (!summoner) return [];
+  const puuids = new Set(getAllPuuids());
+  if (puuids.size === 0) return [];
 
   const games = db
     .prepare(
       "SELECT game_id, raw_json, game_creation FROM games WHERE raw_json IS NOT NULL AND is_remake = 0",
     )
     .all() as any[];
-  const puuid = summoner.puuid;
 
   const playerMap = new Map<
     string,
@@ -562,7 +637,8 @@ export function getTeammateStats(): any[] {
     for (let i = 0; i < participants.length; i++) {
       const p = participants[i];
       const identity = identities[i];
-      if (p.puuid === puuid || identity?.player?.puuid === puuid) {
+      const pPuuid = p.puuid || identity?.player?.puuid;
+      if (pPuuid && puuids.has(pPuuid)) {
         myTeamId = p.teamId || 100;
         myParticipantId = p.participantId;
         break;
@@ -578,7 +654,8 @@ export function getTeammateStats(): any[] {
       const teamId = p.teamId || 100;
 
       if (teamId !== myTeamId) continue;
-      if (p.puuid === puuid || identity?.player?.puuid === puuid) continue;
+      const pPuuid2 = p.puuid || identity?.player?.puuid;
+      if (pPuuid2 && puuids.has(pPuuid2)) continue;
       if (p.participantId === myParticipantId) continue;
 
       const rawPuuid = p.puuid || identity?.player?.puuid || null;
@@ -771,18 +848,37 @@ export function setSetting(key: string, value: string): void {
 
 export function exportAllData(): {
   version: number;
-  summoner: any | null;
+  summoner?: any | null;
+  summoners?: any[];
   games: any[];
 } {
-  const summoner = getSummoner();
-  const rows = db.prepare("SELECT raw_json FROM games WHERE raw_json IS NOT NULL").all() as {
+  const summoners = db.prepare("SELECT * FROM summoner").all();
+  const rows = db.prepare("SELECT raw_json, puuid FROM games WHERE raw_json IS NOT NULL").all() as {
     raw_json: string;
+    puuid: string;
   }[];
-  const games = rows.map((r) => JSON.parse(r.raw_json));
-  return { version: 2, summoner, games };
+  const games = rows.map((r) => {
+    const game = JSON.parse(r.raw_json);
+    game._ownerPuuid = r.puuid;
+    return game;
+  });
+  return { version: 3, summoners, games };
 }
 
 export function importData(data: any): number {
+  if (data.version >= 3) {
+    for (const s of data.summoners ?? []) {
+      upsertSummoner(s);
+    }
+    let imported = 0;
+    for (const game of data.games ?? []) {
+      const puuid = game._ownerPuuid || data.summoners?.[0]?.puuid;
+      if (!puuid) continue;
+      if (insertGameFull(game, puuid)) imported++;
+    }
+    return imported;
+  }
+  // v2 fallback: single summoner
   const puuid = data.summoner?.puuid;
   if (!puuid) return 0;
   upsertSummoner(data.summoner);
@@ -791,4 +887,144 @@ export function importData(data: any): number {
     if (insertGameFull(game, puuid)) imported++;
   }
   return imported;
+}
+
+// ---- Repair ----
+
+export function repairPuuids(): { repairedGames: number; discoveredAccounts: number } {
+  // Step 1: Parse all games and collect participant puuids per game
+  const games = db
+    .prepare("SELECT game_id, raw_json FROM games WHERE raw_json IS NOT NULL")
+    .all() as { game_id: number; raw_json: string }[];
+
+  const puuidToGames = new Map<string, Set<number>>();
+  const gameToPuuids = new Map<number, Set<string>>();
+
+  for (const game of games) {
+    try {
+      const raw = JSON.parse(game.raw_json);
+      const participants = raw.participants || [];
+      const identities = raw.participantIdentities || [];
+      const puuidsInGame = new Set<string>();
+
+      for (let i = 0; i < participants.length; i++) {
+        const p = participants[i];
+        const identity = identities[i];
+        const pPuuid = p.puuid || identity?.player?.puuid;
+        if (pPuuid && !/^0+(-0+)*$/.test(pPuuid)) {
+          puuidsInGame.add(pPuuid);
+          if (!puuidToGames.has(pPuuid)) {
+            puuidToGames.set(pPuuid, new Set());
+          }
+          puuidToGames.get(pPuuid)!.add(game.game_id);
+        }
+      }
+
+      gameToPuuids.set(game.game_id, puuidsInGame);
+    } catch {
+      continue;
+    }
+  }
+
+  // Step 2: Sort puuids by frequency (most games first)
+  const sortedPuuids = Array.from(puuidToGames.entries()).sort((a, b) => b[1].size - a[1].size);
+
+  // Step 3: Greedily identify user accounts — a puuid is a user account if it
+  // never co-occurs in the same game as an already-identified user account.
+  // This filters out friends (who always appear alongside a user account)
+  // while correctly identifying alt accounts (which never share a game).
+  const userPuuids = new Set<string>();
+
+  for (const [puuid, gameIds] of sortedPuuids) {
+    let coOccurs = false;
+    for (const gameId of gameIds) {
+      const puuidsInGame = gameToPuuids.get(gameId)!;
+      for (const userPuuid of userPuuids) {
+        if (puuidsInGame.has(userPuuid)) {
+          coOccurs = true;
+          break;
+        }
+      }
+      if (coOccurs) break;
+    }
+
+    if (!coOccurs) {
+      userPuuids.add(puuid);
+    }
+  }
+
+  // Step 4: For each game, find which user account is present and update puuid
+  const updateStmt = db.prepare("UPDATE games SET puuid = ? WHERE game_id = ?");
+  let repairedGames = 0;
+
+  for (const game of games) {
+    try {
+      const raw = JSON.parse(game.raw_json);
+      const participants = raw.participants || [];
+      const identities = raw.participantIdentities || [];
+
+      for (let i = 0; i < participants.length; i++) {
+        const p = participants[i];
+        const identity = identities[i];
+        const pPuuid = p.puuid || identity?.player?.puuid;
+        if (pPuuid && userPuuids.has(pPuuid)) {
+          updateStmt.run(pPuuid, game.game_id);
+          repairedGames++;
+          break;
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  // Step 5: Upsert discovered summoners using the most recent name from raw_json
+  const upsertStmt = db.prepare(`
+    INSERT OR IGNORE INTO summoner (puuid, game_name, tag_line, summoner_id, account_id, updated_at)
+    VALUES (?, ?, ?, NULL, NULL, ?)
+  `);
+
+  for (const puuid of userPuuids) {
+    const gameIds = puuidToGames.get(puuid)!;
+    let latestName: string | null = null;
+    let latestTagLine: string | null = null;
+    let latestCreation = 0;
+
+    for (const game of games) {
+      if (!gameIds.has(game.game_id)) continue;
+      try {
+        const raw = JSON.parse(game.raw_json);
+        const creation = raw.gameCreation || 0;
+        if (creation <= latestCreation) continue;
+
+        const participants = raw.participants || [];
+        const identities = raw.participantIdentities || [];
+        for (let i = 0; i < participants.length; i++) {
+          const p = participants[i];
+          const identity = identities[i];
+          const pPuuid = p.puuid || identity?.player?.puuid;
+          if (pPuuid === puuid) {
+            const name =
+              identity?.player?.gameName ||
+              identity?.player?.summonerName ||
+              p.summonerName ||
+              p.riotIdGameName ||
+              null;
+            if (name) {
+              latestName = name;
+              latestTagLine = identity?.player?.tagLine || p.riotIdTagline || null;
+              latestCreation = creation;
+            }
+            break;
+          }
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    upsertStmt.run(puuid, latestName, latestTagLine, Date.now());
+  }
+
+  return { repairedGames, discoveredAccounts: userPuuids.size };
 }
