@@ -7,7 +7,8 @@ const api = {
     filters?: { championId?: number; patch?: string; sort?: string },
   ) => ipcRenderer.invoke("db:match-history", limit, offset, filters),
 
-  getMatchFilterOptions: () => ipcRenderer.invoke("db:match-filters"),
+  getMatchFilterOptions: (filters?: { championId?: number; patch?: string }) =>
+    ipcRenderer.invoke("db:match-filters", filters),
 
   getMatchDetail: (gameId: number) => ipcRenderer.invoke("db:match-detail", gameId),
 
@@ -17,7 +18,8 @@ const api = {
 
   getAugmentStatsDetailed: () => ipcRenderer.invoke("db:augment-stats-detailed"),
 
-  getDashboard: () => ipcRenderer.invoke("db:dashboard"),
+  getDashboard: (filters?: { championId?: number; patch?: string }) =>
+    ipcRenderer.invoke("db:dashboard", filters),
 
   getChampionMatchHistory: (championId: number, limit: number, offset: number) =>
     ipcRenderer.invoke("db:champion-match-history", championId, limit, offset),

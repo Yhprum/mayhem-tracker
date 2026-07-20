@@ -39,8 +39,9 @@ export default function MatchHistory() {
     sort,
   });
   const champData = useChampionData();
-  const { data: dashboard, refetch: refetchDashboard } = useIpc<DashboardData>(() =>
-    window.api.getDashboard(),
+  const { data: dashboard, refetch: refetchDashboard } = useIpc<DashboardData>(
+    () => window.api.getDashboard({ championId: championFilter, patch: patchFilter }),
+    [championFilter, patchFilter],
   );
   const [filterOptions, setFilterOptions] = useState<MatchFilterOptions>({
     patches: [],
@@ -54,7 +55,6 @@ export default function MatchHistory() {
 
   useEffect(() => {
     window.api.getAllSummonerPuuids().then(setPuuids);
-    window.api.getMatchFilterOptions().then(setFilterOptions);
   }, []);
 
   useEffect(() => {
@@ -71,12 +71,29 @@ export default function MatchHistory() {
   }, [loadMore]);
 
   useEffect(() => {
+    const fetchOptions = () =>
+      window.api
+        .getMatchFilterOptions({ championId: championFilter, patch: patchFilter })
+        .then(setFilterOptions);
+    fetchOptions();
+
     const unsub = window.api.onGamesUpdated(() => {
       refetchDashboard();
-      window.api.getMatchFilterOptions().then(setFilterOptions);
+      fetchOptions();
     });
     return unsub;
-  }, [refetchDashboard]);
+  }, [championFilter, patchFilter, refetchDashboard]);
+
+  // Clear a selection if new data leaves it without any matching games
+  useEffect(() => {
+    if (filterOptions.champions.length === 0 && filterOptions.patches.length === 0) return;
+    if (championFilter !== undefined && !filterOptions.champions.includes(championFilter)) {
+      setChampionFilter(undefined);
+    }
+    if (patchFilter !== undefined && !filterOptions.patches.includes(patchFilter)) {
+      setPatchFilter(undefined);
+    }
+  }, [filterOptions]);
 
   const championOptions = useMemo(
     () =>

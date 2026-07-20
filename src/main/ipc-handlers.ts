@@ -17,9 +17,12 @@ export function registerIpcHandlers(win: BrowserWindow) {
     },
   );
 
-  ipcMain.handle("db:match-filters", () => {
-    return db.getMatchFilterOptions();
-  });
+  ipcMain.handle(
+    "db:match-filters",
+    (_event, filters?: { championId?: number; patch?: string }) => {
+      return db.getMatchFilterOptions(filters);
+    },
+  );
 
   ipcMain.handle("db:match-detail", (_event, gameId: number) => {
     return db.getMatchDetail(gameId);
@@ -37,8 +40,8 @@ export function registerIpcHandlers(win: BrowserWindow) {
     return db.getAugmentStatsWithChampions();
   });
 
-  ipcMain.handle("db:dashboard", () => {
-    return db.getDashboardData();
+  ipcMain.handle("db:dashboard", (_event, filters?: { championId?: number; patch?: string }) => {
+    return db.getDashboardData(filters);
   });
 
   ipcMain.handle(

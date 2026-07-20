@@ -210,12 +210,14 @@ export interface ElectronAPI {
     offset: number,
     filters?: MatchFilters,
   ) => Promise<{ matches: MatchListItem[]; total: number }>;
-  getMatchFilterOptions: () => Promise<MatchFilterOptions>;
+  getMatchFilterOptions: (
+    filters?: Pick<MatchFilters, "championId" | "patch">,
+  ) => Promise<MatchFilterOptions>;
   getMatchDetail: (gameId: number) => Promise<MatchDetail>;
   getChampionStats: () => Promise<ChampionStats[]>;
   getAugmentStats: (championId?: number) => Promise<AugmentStats[]>;
   getAugmentStatsDetailed: () => Promise<AugmentStatsDetailed[]>;
-  getDashboard: () => Promise<DashboardData>;
+  getDashboard: (filters?: Pick<MatchFilters, "championId" | "patch">) => Promise<DashboardData>;
   getChampionMatchHistory: (
     championId: number,
     limit: number,
