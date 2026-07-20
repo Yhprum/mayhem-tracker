@@ -8,6 +8,7 @@ import ItemIcon from "../components/ItemIcon";
 import WinRateBar from "../components/WinRateBar";
 import MultikillBadge from "../components/MultikillBadge";
 import { formatKDA, formatDuration, formatTimeAgo } from "../lib/format";
+import { scoreColor } from "../../shared/opScore";
 
 type SortKey =
   | "games"
@@ -117,6 +118,11 @@ function ChampionExpanded({ championId }: { championId: number }) {
                   <span className="text-lol-text-bright shrink-0">
                     {formatKDA(m.kills, m.deaths, m.assists)}
                   </span>
+                  {m.score != null && !m.is_remake && (
+                    <span className={`font-semibold shrink-0 ${scoreColor(m.score)}`}>
+                      {m.score.toFixed(1)}
+                    </span>
+                  )}
                   <span className="text-lol-text ml-auto shrink-0">
                     {formatDuration(m.game_duration)}
                   </span>

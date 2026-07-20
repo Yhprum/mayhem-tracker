@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import { app } from "electron";
+import { SCORE_FORMULA_VERSION, computeMatchScores, scoreInputsFromRaw } from "../shared/opScore";
 
 let db: Database.Database;
 
@@ -194,6 +195,83 @@ function createTables() {
   } catch {
     // Column already exists
   }
+
+  // Migration: add performance score columns to player_stats
+  try {
+    db.exec("ALTER TABLE player_stats ADD COLUMN score REAL");
+    db.exec("ALTER TABLE player_stats ADD COLUMN score_badge TEXT");
+  } catch {
+    // Columns already exist
+  }
+
+  // Backfill scores from raw_json — runs once, and again whenever the
+  // formula version changes so stored scores never go stale.
+  if (getSetting("score_formula_version") !== String(SCORE_FORMULA_VERSION)) {
+    backfillScores();
+    setSetting("score_formula_version", String(SCORE_FORMULA_VERSION));
+  }
+}
+
+function computeOwnerScore(
+  raw: any,
+  ownerPuuid: string | null,
+  fallback?: { champion_id: number; kills: number; deaths: number; assists: number },
+): { score: number; badge: string | null } | null {
+  const inputs = scoreInputsFromRaw(raw);
+  if (inputs.length === 0) return null;
+  let owner = ownerPuuid ? inputs.find((p) => p.puuid === ownerPuuid) : undefined;
+  if (!owner && fallback) {
+    owner = inputs.find(
+      (p) =>
+        p.championId === fallback.champion_id &&
+        p.kills === fallback.kills &&
+        p.deaths === fallback.deaths &&
+        p.assists === fallback.assists,
+    );
+  }
+  if (!owner) return null;
+  const s = computeMatchScores(inputs).get(owner.participantId);
+  return s ? { score: s.score, badge: s.badge } : null;
+}
+
+function backfillScores() {
+  const rows = db
+    .prepare(`
+      SELECT g.game_id, g.puuid, g.raw_json, g.is_remake,
+             ps.champion_id, ps.kills, ps.deaths, ps.assists
+      FROM games g
+      JOIN player_stats ps ON g.game_id = ps.game_id
+      WHERE g.raw_json IS NOT NULL
+    `)
+    .all() as {
+    game_id: number;
+    puuid: string;
+    raw_json: string;
+    is_remake: number;
+    champion_id: number;
+    kills: number;
+    deaths: number;
+    assists: number;
+  }[];
+
+  const updateStmt = db.prepare(
+    "UPDATE player_stats SET score = ?, score_badge = ? WHERE game_id = ?",
+  );
+  const tx = db.transaction(() => {
+    for (const row of rows) {
+      if (row.is_remake) {
+        updateStmt.run(null, null, row.game_id);
+        continue;
+      }
+      try {
+        const result = computeOwnerScore(JSON.parse(row.raw_json), row.puuid || null, row);
+        updateStmt.run(result?.score ?? null, result?.badge ?? null, row.game_id);
+      } catch {
+        /* ignore parse errors */
+      }
+    }
+  });
+  tx();
 }
 
 function parsePatch(version: unknown): string | null {
@@ -260,6 +338,7 @@ const MATCH_SORTS: Record<string, string> = {
   kda: "(ps.kills + ps.assists) * 1.0 / MAX(ps.deaths, 1) DESC, g.game_creation DESC",
   kills: "ps.kills DESC, g.game_creation DESC",
   duration: "g.game_duration DESC, g.game_creation DESC",
+  score: "ps.score IS NULL, ps.score DESC, g.game_creation DESC",
 };
 
 const MULTIKILL_COLUMNS: Record<string, string> = {
@@ -309,6 +388,7 @@ export function getMatchHistory(
            ps.champion_id, ps.win, ps.kills, ps.deaths, ps.assists,
            ps.double_kills, ps.triple_kills, ps.quadra_kills, ps.penta_kills,
            ps.total_damage_dealt, ps.total_damage_taken, ps.total_heal, ps.gold_earned,
+           ps.score, ps.score_badge,
            ps.item0, ps.item1, ps.item2, ps.item3, ps.item4, ps.item5,
            (SELECT GROUP_CONCAT(ga.augment_id) FROM game_augments ga WHERE ga.game_id = g.game_id ORDER BY ga.slot) as augment_ids
     FROM games g
@@ -589,6 +669,7 @@ export function getChampionMatchHistory(
            ps.champion_id, ps.win, ps.kills, ps.deaths, ps.assists,
            ps.double_kills, ps.triple_kills, ps.quadra_kills, ps.penta_kills,
            ps.total_damage_dealt, ps.total_damage_taken, ps.total_heal, ps.gold_earned,
+           ps.score, ps.score_badge,
            ps.item0, ps.item1, ps.item2, ps.item3, ps.item4, ps.item5,
            (SELECT GROUP_CONCAT(ga.augment_id) FROM game_augments ga WHERE ga.game_id = g.game_id ORDER BY ga.slot) as augment_ids
     FROM games g
@@ -632,6 +713,16 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
 
   const isRemake = detectRemake(gameData.gameDuration, JSON.stringify(gameData)) ? 1 : 0;
 
+  let ownerScore: { score: number; badge: string | null } | null = null;
+  if (!isRemake) {
+    ownerScore = computeOwnerScore(gameData, puuid, {
+      champion_id: participant.championId ?? s.championId ?? 0,
+      kills: s.kills ?? 0,
+      deaths: s.deaths ?? 0,
+      assists: s.assists ?? 0,
+    });
+  }
+
   const insertGameStmt = db.prepare(`
     INSERT OR IGNORE INTO games (game_id, queue_id, game_mode, game_creation, game_duration, is_remake, puuid, game_version, raw_json)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -642,8 +733,9 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
       game_id, champion_id, win, kills, deaths, assists,
       double_kills, triple_kills, quadra_kills, penta_kills,
       total_damage_dealt, total_damage_taken, gold_earned, total_heal,
-      largest_killing_spree, item0, item1, item2, item3, item4, item5, item6
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      largest_killing_spree, item0, item1, item2, item3, item4, item5, item6,
+      score, score_badge
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const insertAugmentStmt = db.prepare(`
@@ -688,6 +780,8 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
       s.item4 ?? null,
       s.item5 ?? null,
       s.item6 ?? null,
+      ownerScore?.score ?? null,
+      ownerScore?.badge ?? null,
     );
 
     // Augments

@@ -18,10 +18,12 @@ import ItemIcon from "../components/ItemIcon";
 import MultikillBadge from "../components/MultikillBadge";
 import StatCard from "../components/StatCard";
 import { formatDuration, formatTimeAgo, formatKDA, kdaRatio } from "../lib/format";
+import { computeMatchScores, scoreColor, type PlayerScore } from "../../shared/opScore";
 
 const SORT_OPTIONS: { value: MatchSort; label: string }[] = [
   { value: "newest", label: "Newest" },
   { value: "oldest", label: "Oldest" },
+  { value: "score", label: "Best Score" },
   { value: "kda", label: "Best KDA" },
   { value: "kills", label: "Most Kills" },
   { value: "duration", label: "Longest Game" },
@@ -401,6 +403,30 @@ function GameRow({
           </div>
         </div>
 
+        {/* Score */}
+        <div className="w-10 shrink-0 text-center">
+          {match.score != null && !isRemake && (
+            <>
+              <div className={`text-sm font-semibold ${scoreColor(match.score)}`}>
+                {match.score.toFixed(1)}
+              </div>
+              {match.score_badge ? (
+                <div
+                  className={`text-[9px] font-bold leading-[15px] px-1 rounded w-fit mx-auto ${
+                    match.score_badge === "MVP"
+                      ? "bg-amber-400/20 text-amber-300"
+                      : "bg-purple-500/20 text-purple-400"
+                  }`}
+                >
+                  {match.score_badge}
+                </div>
+              ) : (
+                <div className="text-[10px] text-lol-text uppercase tracking-wider">score</div>
+              )}
+            </>
+          )}
+        </div>
+
         {/* Stat bars */}
         <div className="w-40 shrink-0 space-y-0.5">
           <StatBar
@@ -466,7 +492,7 @@ function GameRow({
 
 /* ── Scoreboard grid layout ─────────────────────────────────── */
 
-const GRID_COLS = "grid-cols-[40px_minmax(80px,1fr)_76px_110px_110px_56px_56px_176px_100px]";
+const GRID_COLS = "grid-cols-[40px_minmax(80px,1fr)_52px_76px_110px_110px_56px_56px_176px_100px]";
 
 function MatchScoreboard({
   detail,
@@ -482,6 +508,7 @@ function MatchScoreboard({
     [detail, puuids],
   );
   const teams = useMemo(() => groupByTeam(participants), [participants]);
+  const scores = useMemo(() => computeMatchScores(participants), [participants]);
 
   const gameMaxStats = useMemo(() => {
     let dmg = 0,
@@ -512,6 +539,7 @@ function MatchScoreboard({
           players={players}
           maxStats={gameMaxStats}
           champData={champData}
+          scores={scores}
         />
       ))}
     </div>
@@ -523,11 +551,13 @@ function TeamScoreboard({
   players,
   maxStats,
   champData,
+  scores,
 }: {
   teamId: number;
   players: ParsedParticipant[];
   maxStats: { dmg: number; taken: number; gold: number; heal: number };
   champData: any;
+  scores: Map<number, PlayerScore>;
 }) {
   const isWin = players[0]?.win ?? false;
 
@@ -548,6 +578,7 @@ function TeamScoreboard({
       >
         <span></span>
         <span>Player</span>
+        <span className="text-center">Score</span>
         <span className="text-center">KDA</span>
         <span className="text-center">Damage</span>
         <span className="text-center">Taken</span>
@@ -559,7 +590,13 @@ function TeamScoreboard({
 
       {/* Player rows */}
       {players.map((p) => (
-        <PlayerRow key={p.participantId} player={p} maxStats={maxStats} champData={champData} />
+        <PlayerRow
+          key={p.participantId}
+          player={p}
+          maxStats={maxStats}
+          champData={champData}
+          score={scores.get(p.participantId)}
+        />
       ))}
     </div>
   );
@@ -581,10 +618,12 @@ function PlayerRow({
   player: p,
   maxStats,
   champData,
+  score,
 }: {
   player: ParsedParticipant;
   maxStats: { dmg: number; taken: number; gold: number; heal: number };
   champData: any;
+  score?: PlayerScore;
 }) {
   const kda = kdaRatio(p.kills, p.deaths, p.assists);
 
@@ -607,6 +646,26 @@ function PlayerRow({
         <div className="text-[10px] text-lol-text truncate">
           {getChampionName(champData, p.championId)}
         </div>
+      </div>
+
+      {/* Score */}
+      <div className="text-center">
+        <div
+          className={`text-[11px] font-semibold ${score ? scoreColor(score.score) : "text-lol-text"}`}
+        >
+          {score ? score.score.toFixed(1) : "-"}
+        </div>
+        {score?.badge && (
+          <div
+            className={`text-[9px] font-bold leading-[15px] px-1 rounded w-fit mx-auto ${
+              score.badge === "MVP"
+                ? "bg-amber-400/20 text-amber-300"
+                : "bg-purple-500/20 text-purple-400"
+            }`}
+          >
+            {score.badge}
+          </div>
+        )}
       </div>
 
       {/* KDA */}

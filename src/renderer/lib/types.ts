@@ -63,6 +63,8 @@ export interface MatchListItem {
   item3: number | null;
   item4: number | null;
   item5: number | null;
+  score: number | null;
+  score_badge: "MVP" | "ACE" | null;
   augment_ids: string | null;
   game_version: string | null;
   game_max_dmg: number;
@@ -70,7 +72,7 @@ export interface MatchListItem {
   game_max_heal: number;
 }
 
-export type MatchSort = "newest" | "oldest" | "kda" | "kills" | "duration";
+export type MatchSort = "newest" | "oldest" | "kda" | "kills" | "duration" | "score";
 
 export type MultikillType = "doubles" | "triples" | "quadras" | "pentas";
 
