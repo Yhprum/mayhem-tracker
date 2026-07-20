@@ -10,6 +10,7 @@ import type { GlobalStats } from "../lib/types";
 import ChampionIcon from "../components/ChampionIcon";
 import AugmentIcon from "../components/AugmentIcon";
 import WinRateBar from "../components/WinRateBar";
+import PatchSelect from "../components/PatchSelect";
 
 type Tab = "champions" | "augments";
 type ChampSortKey = "games" | "winRate" | "pickRate" | "name";
@@ -88,7 +89,8 @@ function SearchInput({
 export default function GlobalStats() {
   const champData = useChampionData();
   const augmentData = useAugmentData();
-  const { data, loading, refetch } = useIpc<GlobalStats>(() => window.api.getGlobalStats());
+  const [patch, setPatch] = useState<string | undefined>(undefined);
+  const { data, refetch } = useIpc<GlobalStats>(() => window.api.getGlobalStats(patch), [patch]);
   const [tab, setTab] = useState<Tab>("champions");
 
   // Champion tab state
@@ -190,7 +192,7 @@ export default function GlobalStats() {
     return filtered;
   }, [data, augSearch, augSortKey, augSortDir, augmentData, rarityFilter]);
 
-  if (loading || !data) {
+  if (!data) {
     return <div className="text-lol-text text-center mt-20">Loading...</div>;
   }
 
@@ -232,10 +234,13 @@ export default function GlobalStats() {
     <div className="max-w-4xl space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-lol-text-bright">Total Stats</h1>
-        <span className="text-xs text-lol-text">
-          {totalGames} games &middot; {data.champions.length} champions &middot;{" "}
-          {data.augments.length} augments
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-lol-text">
+            {totalGames} games &middot; {data.champions.length} champions &middot;{" "}
+            {data.augments.length} augments
+          </span>
+          <PatchSelect value={patch} onChange={setPatch} />
+        </div>
       </div>
 
       {/* Tabs */}

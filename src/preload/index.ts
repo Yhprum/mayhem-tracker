@@ -12,17 +12,19 @@ const api = {
 
   getMatchDetail: (gameId: number) => ipcRenderer.invoke("db:match-detail", gameId),
 
-  getChampionStats: () => ipcRenderer.invoke("db:champion-stats"),
+  getChampionStats: (patch?: string) => ipcRenderer.invoke("db:champion-stats", patch),
 
-  getAugmentStats: (championId?: number) => ipcRenderer.invoke("db:augment-stats", championId),
+  getAugmentStats: (championId?: number, patch?: string) =>
+    ipcRenderer.invoke("db:augment-stats", championId, patch),
 
-  getAugmentStatsDetailed: () => ipcRenderer.invoke("db:augment-stats-detailed"),
+  getAugmentStatsDetailed: (patch?: string) =>
+    ipcRenderer.invoke("db:augment-stats-detailed", patch),
 
   getDashboard: (filters?: { championId?: number; patch?: string }) =>
     ipcRenderer.invoke("db:dashboard", filters),
 
-  getChampionMatchHistory: (championId: number, limit: number, offset: number) =>
-    ipcRenderer.invoke("db:champion-match-history", championId, limit, offset),
+  getChampionMatchHistory: (championId: number, limit: number, offset: number, patch?: string) =>
+    ipcRenderer.invoke("db:champion-match-history", championId, limit, offset, patch),
 
   refreshGames: () => ipcRenderer.invoke("lcu:refresh"),
 
@@ -32,12 +34,12 @@ const api = {
 
   getAugmentData: () => ipcRenderer.invoke("dragon:augments"),
 
-  getChampionItemStats: (championId: number) =>
-    ipcRenderer.invoke("db:champion-item-stats", championId),
+  getChampionItemStats: (championId: number, patch?: string) =>
+    ipcRenderer.invoke("db:champion-item-stats", championId, patch),
 
   getTeammateStats: () => ipcRenderer.invoke("db:teammate-stats"),
 
-  getGlobalStats: () => ipcRenderer.invoke("db:global-stats"),
+  getGlobalStats: (patch?: string) => ipcRenderer.invoke("db:global-stats", patch),
 
   getSummonerPuuid: () => ipcRenderer.invoke("db:summoner-puuid"),
 

@@ -466,7 +466,13 @@ export function getMatchDetail(gameId: number): any {
   };
 }
 
-export function getChampionStatsAll(): any[] {
+export function getChampionStatsAll(patch?: string): any[] {
+  const where = ["g.is_remake = 0"];
+  const params: any[] = [];
+  if (patch) {
+    where.push("g.game_version = ?");
+    params.push(patch);
+  }
   return db
     .prepare(`
     SELECT
@@ -487,26 +493,23 @@ export function getChampionStatsAll(): any[] {
       SUM(ps.penta_kills) as penta_kills
     FROM player_stats ps
     JOIN games g ON ps.game_id = g.game_id
-    WHERE g.is_remake = 0
+    WHERE ${where.join(" AND ")}
     GROUP BY ps.champion_id
     ORDER BY games DESC
   `)
-    .all();
+    .all(...params);
 }
 
-export function getAugmentStatsAll(championId?: number): any[] {
+export function getAugmentStatsAll(championId?: number, patch?: string): any[] {
+  const where = ["g.is_remake = 0"];
+  const params: any[] = [];
   if (championId !== undefined) {
-    return db
-      .prepare(`
-      SELECT ga.augment_id, COUNT(*) as picks, SUM(ps.win) as wins
-      FROM game_augments ga
-      JOIN player_stats ps ON ga.game_id = ps.game_id
-      JOIN games g ON ga.game_id = g.game_id
-      WHERE ps.champion_id = ? AND g.is_remake = 0
-      GROUP BY ga.augment_id
-      ORDER BY picks DESC
-    `)
-      .all(championId);
+    where.push("ps.champion_id = ?");
+    params.push(championId);
+  }
+  if (patch) {
+    where.push("g.game_version = ?");
+    params.push(patch);
   }
   return db
     .prepare(`
@@ -514,11 +517,11 @@ export function getAugmentStatsAll(championId?: number): any[] {
     FROM game_augments ga
     JOIN player_stats ps ON ga.game_id = ps.game_id
     JOIN games g ON ga.game_id = g.game_id
-    WHERE g.is_remake = 0
+    WHERE ${where.join(" AND ")}
     GROUP BY ga.augment_id
     ORDER BY picks DESC
   `)
-    .all();
+    .all(...params);
 }
 
 export function getDashboardData(filters?: { championId?: number; patch?: string }): any {
@@ -611,23 +614,29 @@ export function getDashboardData(filters?: { championId?: number; patch?: string
   };
 }
 
-export function getAugmentStatsWithChampions(): {
+export function getAugmentStatsWithChampions(patch?: string): {
   augment_id: number;
   picks: number;
   wins: number;
   champions: { champion_id: number; picks: number; wins: number }[];
 }[] {
+  const where = ["g.is_remake = 0"];
+  const params: any[] = [];
+  if (patch) {
+    where.push("g.game_version = ?");
+    params.push(patch);
+  }
   const augments = db
     .prepare(`
     SELECT ga.augment_id, COUNT(*) as picks, SUM(ps.win) as wins
     FROM game_augments ga
     JOIN player_stats ps ON ga.game_id = ps.game_id
     JOIN games g ON ga.game_id = g.game_id
-    WHERE g.is_remake = 0
+    WHERE ${where.join(" AND ")}
     GROUP BY ga.augment_id
     ORDER BY picks DESC
   `)
-    .all() as { augment_id: number; picks: number; wins: number }[];
+    .all(...params) as { augment_id: number; picks: number; wins: number }[];
 
   const champBreakdown = db
     .prepare(`
@@ -635,11 +644,11 @@ export function getAugmentStatsWithChampions(): {
     FROM game_augments ga
     JOIN player_stats ps ON ga.game_id = ps.game_id
     JOIN games g ON ga.game_id = g.game_id
-    WHERE g.is_remake = 0
+    WHERE ${where.join(" AND ")}
     GROUP BY ga.augment_id, ps.champion_id
     ORDER BY picks DESC
   `)
-    .all() as { augment_id: number; champion_id: number; picks: number; wins: number }[];
+    .all(...params) as { augment_id: number; champion_id: number; picks: number; wins: number }[];
 
   const champMap = new Map<number, { champion_id: number; picks: number; wins: number }[]>();
   for (const row of champBreakdown) {
@@ -659,10 +668,23 @@ export function getChampionMatchHistory(
   championId: number,
   limit: number,
   offset: number,
+  patch?: string,
 ): { matches: any[]; total: number } {
+  const where = ["ps.champion_id = ?"];
+  const params: any[] = [championId];
+  if (patch) {
+    where.push("g.game_version = ?");
+    params.push(patch);
+  }
+  const whereSql = `WHERE ${where.join(" AND ")}`;
   const total = db
-    .prepare("SELECT COUNT(*) as count FROM player_stats WHERE champion_id = ?")
-    .get(championId) as any;
+    .prepare(`
+    SELECT COUNT(*) as count
+    FROM games g
+    JOIN player_stats ps ON g.game_id = ps.game_id
+    ${whereSql}
+  `)
+    .get(...params) as any;
   const rows = db
     .prepare(`
     SELECT g.game_id, g.game_creation, g.game_duration, g.is_remake, g.puuid, g.raw_json,
@@ -674,11 +696,11 @@ export function getChampionMatchHistory(
            (SELECT GROUP_CONCAT(ga.augment_id) FROM game_augments ga WHERE ga.game_id = g.game_id ORDER BY ga.slot) as augment_ids
     FROM games g
     JOIN player_stats ps ON g.game_id = ps.game_id
-    WHERE ps.champion_id = ?
+    ${whereSql}
     ORDER BY g.game_creation DESC
     LIMIT ? OFFSET ?
   `)
-    .all(championId, limit, offset);
+    .all(...params, limit, offset);
   const matches = rows.map((row: any) => {
     const maxStats = extractGameMaxStats(row.raw_json);
     const { raw_json, ...match } = row;
@@ -958,47 +980,39 @@ export function getTeammateStats(): any[] {
 
 export function getChampionItemStats(
   championId: number,
+  patch?: string,
 ): { item_id: number; picks: number; wins: number }[] {
+  const patchSql = patch ? " AND g.game_version = ?" : "";
+  const itemCols = ["item0", "item1", "item2", "item3", "item4", "item5", "item6"];
+  const subquery = (col: string) =>
+    `SELECT ps.${col} as item_id, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.${col} IS NOT NULL AND ps.${col} > 0 AND g.is_remake = 0${patchSql}`;
+  const params = itemCols.flatMap(() => (patch ? [championId, patch] : [championId]));
   return db
     .prepare(`
     SELECT item_id, COUNT(*) as picks, SUM(win) as wins
     FROM (
-      SELECT ps.item0 as item_id, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item0 IS NOT NULL AND ps.item0 > 0 AND g.is_remake = 0
-      UNION ALL
-      SELECT ps.item1, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item1 IS NOT NULL AND ps.item1 > 0 AND g.is_remake = 0
-      UNION ALL
-      SELECT ps.item2, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item2 IS NOT NULL AND ps.item2 > 0 AND g.is_remake = 0
-      UNION ALL
-      SELECT ps.item3, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item3 IS NOT NULL AND ps.item3 > 0 AND g.is_remake = 0
-      UNION ALL
-      SELECT ps.item4, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item4 IS NOT NULL AND ps.item4 > 0 AND g.is_remake = 0
-      UNION ALL
-      SELECT ps.item5, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item5 IS NOT NULL AND ps.item5 > 0 AND g.is_remake = 0
-      UNION ALL
-      SELECT ps.item6, ps.win FROM player_stats ps JOIN games g ON ps.game_id = g.game_id WHERE ps.champion_id = ? AND ps.item6 IS NOT NULL AND ps.item6 > 0 AND g.is_remake = 0
+      ${itemCols.map(subquery).join("\n      UNION ALL\n      ")}
     )
     GROUP BY item_id
     ORDER BY picks DESC
   `)
-    .all(
-      championId,
-      championId,
-      championId,
-      championId,
-      championId,
-      championId,
-      championId,
-    ) as any[];
+    .all(...params) as any[];
 }
 
-export function getGlobalStats(): {
+export function getGlobalStats(patch?: string): {
   champions: { champion_id: number; games: number; wins: number }[];
   augments: { augment_id: number; picks: number; wins: number }[];
   totalParticipantSlots: number;
 } {
+  const where = ["raw_json IS NOT NULL", "is_remake = 0"];
+  const params: any[] = [];
+  if (patch) {
+    where.push("game_version = ?");
+    params.push(patch);
+  }
   const games = db
-    .prepare("SELECT raw_json FROM games WHERE raw_json IS NOT NULL AND is_remake = 0")
-    .all() as any[];
+    .prepare(`SELECT raw_json FROM games WHERE ${where.join(" AND ")}`)
+    .all(...params) as any[];
 
   const championMap = new Map<number, { games: number; wins: number }>();
   const augmentMap = new Map<number, { picks: number; wins: number }>();

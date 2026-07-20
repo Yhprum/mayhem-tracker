@@ -219,18 +219,19 @@ export interface ElectronAPI {
     filters?: Pick<MatchFilters, "championId" | "patch">,
   ) => Promise<MatchFilterOptions>;
   getMatchDetail: (gameId: number) => Promise<MatchDetail>;
-  getChampionStats: () => Promise<ChampionStats[]>;
-  getAugmentStats: (championId?: number) => Promise<AugmentStats[]>;
-  getAugmentStatsDetailed: () => Promise<AugmentStatsDetailed[]>;
+  getChampionStats: (patch?: string) => Promise<ChampionStats[]>;
+  getAugmentStats: (championId?: number, patch?: string) => Promise<AugmentStats[]>;
+  getAugmentStatsDetailed: (patch?: string) => Promise<AugmentStatsDetailed[]>;
   getDashboard: (filters?: Pick<MatchFilters, "championId" | "patch">) => Promise<DashboardData>;
   getChampionMatchHistory: (
     championId: number,
     limit: number,
     offset: number,
+    patch?: string,
   ) => Promise<{ matches: MatchListItem[]; total: number }>;
-  getChampionItemStats: (championId: number) => Promise<ItemStats[]>;
+  getChampionItemStats: (championId: number, patch?: string) => Promise<ItemStats[]>;
   getTeammateStats: () => Promise<TeammateStats[]>;
-  getGlobalStats: () => Promise<GlobalStats>;
+  getGlobalStats: (patch?: string) => Promise<GlobalStats>;
   getSummonerPuuid: () => Promise<string | null>;
   getAllSummonerPuuids: () => Promise<string[]>;
   refreshGames: () => Promise<{ newGames: number; totalGames: number }>;

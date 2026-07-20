@@ -7,6 +7,7 @@ import AugmentIcon from "../components/AugmentIcon";
 import ItemIcon from "../components/ItemIcon";
 import WinRateBar from "../components/WinRateBar";
 import MultikillBadge from "../components/MultikillBadge";
+import PatchSelect from "../components/PatchSelect";
 import { formatKDA, formatDuration, formatTimeAgo } from "../lib/format";
 import { scoreColor } from "../../shared/opScore";
 
@@ -21,17 +22,17 @@ type SortKey =
   | "multikills";
 type SortDir = "asc" | "desc";
 
-function ChampionExpanded({ championId }: { championId: number }) {
+function ChampionExpanded({ championId, patch }: { championId: number; patch?: string }) {
   const augData = useAugmentData();
   const [augStats, setAugStats] = useState<AugmentStats[] | null>(null);
   const [itemStats, setItemStats] = useState<ItemStats[] | null>(null);
   const [matches, setMatches] = useState<MatchListItem[] | null>(null);
 
   useEffect(() => {
-    window.api.getAugmentStats(championId).then(setAugStats);
-    window.api.getChampionItemStats(championId).then(setItemStats);
-    window.api.getChampionMatchHistory(championId, 5, 0).then((r) => setMatches(r.matches));
-  }, [championId]);
+    window.api.getAugmentStats(championId, patch).then(setAugStats);
+    window.api.getChampionItemStats(championId, patch).then(setItemStats);
+    window.api.getChampionMatchHistory(championId, 5, 0, patch).then((r) => setMatches(r.matches));
+  }, [championId, patch]);
 
   if (!augStats || !itemStats || !matches) {
     return (
@@ -141,7 +142,11 @@ function ChampionExpanded({ championId }: { championId: number }) {
 
 export default function Champions() {
   const champData = useChampionData();
-  const { data, loading, refetch } = useIpc<ChampionStats[]>(() => window.api.getChampionStats());
+  const [patch, setPatch] = useState<string | undefined>(undefined);
+  const { data, refetch } = useIpc<ChampionStats[]>(
+    () => window.api.getChampionStats(patch),
+    [patch],
+  );
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("games");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -190,7 +195,7 @@ export default function Champions() {
     return filtered;
   }, [data, search, sortKey, sortDir, champData]);
 
-  if (loading || !data) {
+  if (!data) {
     return <div className="text-lol-text text-center mt-20">Loading...</div>;
   }
 
@@ -207,33 +212,36 @@ export default function Champions() {
     <div className="max-w-5xl space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-lol-text-bright">Champions</h1>
-        <div className="relative">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search champion..."
-            className="bg-lol-card border border-lol-border rounded-lg px-3 py-1.5 text-sm text-lol-text-bright placeholder:text-lol-text/50 focus:outline-none focus:border-lol-gold/50 w-48 pr-7"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-lol-text/50 hover:text-lol-text-bright transition-colors"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 16 16"
-                fill="currentColor"
-                className="w-3.5 h-3.5"
+        <div className="flex items-center gap-2">
+          <PatchSelect value={patch} onChange={setPatch} />
+          <div className="relative">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search champion..."
+              className="bg-lol-card border border-lol-border rounded-lg px-3 py-1.5 text-sm text-lol-text-bright placeholder:text-lol-text/50 focus:outline-none focus:border-lol-gold/50 w-48 pr-7"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-lol-text/50 hover:text-lol-text-bright transition-colors"
               >
-                <path
-                  fillRule="evenodd"
-                  d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm2.78-4.22a.75.75 0 0 1-1.06 0L8 9.06l-1.72 1.72a.75.75 0 1 1-1.06-1.06L6.94 8 5.22 6.28a.75.75 0 0 1 1.06-1.06L8 6.94l1.72-1.72a.75.75 0 1 1 1.06 1.06L9.06 8l1.72 1.72a.75.75 0 0 1 0 1.06Z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </button>
-          )}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className="w-3.5 h-3.5"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm2.78-4.22a.75.75 0 0 1-1.06 0L8 9.06l-1.72 1.72a.75.75 0 1 1-1.06-1.06L6.94 8 5.22 6.28a.75.75 0 0 1 1.06-1.06L8 6.94l1.72-1.72a.75.75 0 1 1 1.06 1.06L9.06 8l1.72 1.72a.75.75 0 0 1 0 1.06Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -307,7 +315,7 @@ export default function Champions() {
                 </tr>
                 {expandedId === c.champion_id && (
                   <tr className="border-t border-lol-border/30 bg-lol-dark/30">
-                    <ChampionExpanded championId={c.champion_id} />
+                    <ChampionExpanded championId={c.champion_id} patch={patch} />
                   </tr>
                 )}
               </Fragment>

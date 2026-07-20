@@ -10,6 +10,7 @@ import type { AugmentStatsDetailed } from "../lib/types";
 import AugmentIcon from "../components/AugmentIcon";
 import ChampionIcon from "../components/ChampionIcon";
 import WinRateBar from "../components/WinRateBar";
+import PatchSelect from "../components/PatchSelect";
 
 type SortKey = "picks" | "winRate" | "name";
 type SortDir = "asc" | "desc";
@@ -45,8 +46,10 @@ const rarityFilters: { key: RarityFilter; label: string; color: string; activeCo
 export default function Augments() {
   const champData = useChampionData();
   const augmentData = useAugmentData();
-  const { data, loading, refetch } = useIpc<AugmentStatsDetailed[]>(() =>
-    window.api.getAugmentStatsDetailed(),
+  const [patch, setPatch] = useState<string | undefined>(undefined);
+  const { data, refetch } = useIpc<AugmentStatsDetailed[]>(
+    () => window.api.getAugmentStatsDetailed(patch),
+    [patch],
   );
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("picks");
@@ -113,7 +116,7 @@ export default function Augments() {
     return filtered;
   }, [data, search, sortKey, sortDir, augmentData, rarityFilter]);
 
-  if (loading || !data) {
+  if (!data) {
     return <div className="text-lol-text text-center mt-20">Loading...</div>;
   }
 
@@ -154,7 +157,10 @@ export default function Augments() {
           </button>
         ))}
         <span className="text-xs text-lol-text self-center ml-2">{sorted.length} augments</span>
-        <div className="relative ml-auto">
+        <div className="ml-auto">
+          <PatchSelect value={patch} onChange={setPatch} />
+        </div>
+        <div className="relative">
           <input
             type="text"
             value={search}
