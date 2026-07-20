@@ -5,8 +5,20 @@ import * as lcu from "./lcu";
 import * as dragon from "./dragon";
 
 export function registerIpcHandlers(win: BrowserWindow) {
-  ipcMain.handle("db:match-history", (_event, limit: number, offset: number) => {
-    return db.getMatchHistory(limit, offset);
+  ipcMain.handle(
+    "db:match-history",
+    (
+      _event,
+      limit: number,
+      offset: number,
+      filters?: { championId?: number; patch?: string; sort?: string },
+    ) => {
+      return db.getMatchHistory(limit, offset, filters);
+    },
+  );
+
+  ipcMain.handle("db:match-filters", () => {
+    return db.getMatchFilterOptions();
   });
 
   ipcMain.handle("db:match-detail", (_event, gameId: number) => {
@@ -96,7 +108,7 @@ export function registerIpcHandlers(win: BrowserWindow) {
         { headers: { "User-Agent": "mayhem-tracker" } },
       );
       if (!res.ok) return { hasUpdate: false, error: "No releases found" };
-      const data = await res.json();
+      const data = (await res.json()) as any;
       const latest = (data.tag_name as string).replace(/^v/, "");
       const current = app.getVersion();
       return {

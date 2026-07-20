@@ -64,9 +64,23 @@ export interface MatchListItem {
   item4: number | null;
   item5: number | null;
   augment_ids: string | null;
+  game_version: string | null;
   game_max_dmg: number;
   game_max_taken: number;
   game_max_heal: number;
+}
+
+export type MatchSort = "newest" | "oldest" | "kda" | "kills" | "duration";
+
+export interface MatchFilters {
+  championId?: number;
+  patch?: string;
+  sort?: MatchSort;
+}
+
+export interface MatchFilterOptions {
+  patches: string[];
+  champions: number[];
 }
 
 export interface MatchDetail {
@@ -194,7 +208,9 @@ export interface ElectronAPI {
   getMatchHistory: (
     limit: number,
     offset: number,
+    filters?: MatchFilters,
   ) => Promise<{ matches: MatchListItem[]; total: number }>;
+  getMatchFilterOptions: () => Promise<MatchFilterOptions>;
   getMatchDetail: (gameId: number) => Promise<MatchDetail>;
   getChampionStats: () => Promise<ChampionStats[]>;
   getAugmentStats: (championId?: number) => Promise<AugmentStats[]>;
@@ -216,6 +232,20 @@ export interface ElectronAPI {
   getAugmentData: () => Promise<AugmentData>;
   onStatusChanged: (callback: (status: LcuStatus) => void) => () => void;
   onGamesUpdated: (callback: () => void) => () => void;
+  getSetting: (key: string) => Promise<string | null>;
+  setSetting: (key: string, value: string) => Promise<void>;
+  exportData: () => Promise<{ success: boolean; path?: string }>;
+  importData: () => Promise<{ success: boolean; imported?: number }>;
+  repairPuuids: () => Promise<{ repairedGames: number; discoveredAccounts: number }>;
+  getVersion: () => Promise<string>;
+  checkForUpdate: () => Promise<{
+    hasUpdate: boolean;
+    latest?: string;
+    current?: string;
+    url?: string;
+    error?: string;
+  }>;
+  openUrl: (url: string) => Promise<void>;
 }
 
 declare global {

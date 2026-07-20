@@ -2,7 +2,14 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useMatches } from "../hooks/useMatches";
 import { useChampionData, getChampionName } from "../hooks/useChampions";
 import { useIpc } from "../hooks/useIpc";
-import type { MatchListItem, MatchDetail, DashboardData, ParsedParticipant } from "../lib/types";
+import type {
+  MatchListItem,
+  MatchDetail,
+  DashboardData,
+  MatchFilterOptions,
+  MatchSort,
+  ParsedParticipant,
+} from "../lib/types";
 import { parseParticipants, groupByTeam } from "../lib/participants";
 import ChampionIcon from "../components/ChampionIcon";
 import AugmentIcon from "../components/AugmentIcon";
@@ -11,12 +18,34 @@ import MultikillBadge from "../components/MultikillBadge";
 import StatCard from "../components/StatCard";
 import { formatDuration, formatTimeAgo, formatKDA, kdaRatio } from "../lib/format";
 
+const SORT_OPTIONS: { value: MatchSort; label: string }[] = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "kda", label: "Best KDA" },
+  { value: "kills", label: "Most Kills" },
+  { value: "duration", label: "Longest Game" },
+];
+
+const SELECT_CLASS =
+  "bg-lol-card border border-lol-border rounded-lg text-sm text-lol-text-bright px-2 py-1.5 focus:outline-none focus:border-lol-gold/50";
+
 export default function MatchHistory() {
-  const { matches, total, loading, hasMore, loadMore } = useMatches();
+  const [championFilter, setChampionFilter] = useState<number | undefined>(undefined);
+  const [patchFilter, setPatchFilter] = useState<string | undefined>(undefined);
+  const [sort, setSort] = useState<MatchSort>("newest");
+  const { matches, loading, hasMore, loadMore } = useMatches({
+    championId: championFilter,
+    patch: patchFilter,
+    sort,
+  });
   const champData = useChampionData();
   const { data: dashboard, refetch: refetchDashboard } = useIpc<DashboardData>(() =>
     window.api.getDashboard(),
   );
+  const [filterOptions, setFilterOptions] = useState<MatchFilterOptions>({
+    patches: [],
+    champions: [],
+  });
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<MatchDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -25,6 +54,7 @@ export default function MatchHistory() {
 
   useEffect(() => {
     window.api.getAllSummonerPuuids().then(setPuuids);
+    window.api.getMatchFilterOptions().then(setFilterOptions);
   }, []);
 
   useEffect(() => {
@@ -41,9 +71,20 @@ export default function MatchHistory() {
   }, [loadMore]);
 
   useEffect(() => {
-    const unsub = window.api.onGamesUpdated(() => refetchDashboard());
+    const unsub = window.api.onGamesUpdated(() => {
+      refetchDashboard();
+      window.api.getMatchFilterOptions().then(setFilterOptions);
+    });
     return unsub;
   }, [refetchDashboard]);
+
+  const championOptions = useMemo(
+    () =>
+      filterOptions.champions
+        .map((id) => ({ id, name: getChampionName(champData, id) }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [filterOptions.champions, champData],
+  );
 
   const toggleExpand = useCallback(
     async (gameId: number) => {
@@ -81,14 +122,23 @@ export default function MatchHistory() {
       ? ((dashboard.wins / dashboard.totalGames) * 100).toFixed(1) + "%"
       : "0%";
 
+  const losses = dashboard ? dashboard.totalGames - dashboard.wins : 0;
+
   return (
     <div className="max-w-7xl space-y-4">
       {/* Stat Cards */}
       {dashboard && (
-        <div className="grid grid-cols-4 gap-4">
-          <StatCard label="Total Games" value={dashboard.totalGames} />
-          <StatCard label="Win Rate" value={winRate} />
-          <StatCard label="Avg KDA" value={`${avgKills} / ${avgDeaths} / ${avgAssists}`} />
+        <div className="grid grid-cols-3 gap-4">
+          <StatCard
+            label="Total Games"
+            value={dashboard.totalGames}
+            subtext={`${dashboard.wins}W ${losses}L · ${winRate} win rate`}
+          />
+          <StatCard
+            label="Avg KDA"
+            value={`${avgKills} / ${avgDeaths} / ${avgAssists}`}
+            subtext={`${dashboard.totalKills} / ${dashboard.totalDeaths} / ${dashboard.totalAssists} total`}
+          />
           <div className="bg-lol-card rounded-xl border border-lol-border p-4">
             <div className="text-xs text-lol-text uppercase tracking-wider mb-1">Multikills</div>
             <div className="grid grid-cols-4 gap-1">
@@ -110,12 +160,52 @@ export default function MatchHistory() {
 
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-lol-text-bright">Match History</h1>
-        <span className="text-sm text-lol-text">{total} games</span>
+        <div className="flex items-center gap-2">
+          <select
+            value={championFilter ?? ""}
+            onChange={(e) =>
+              setChampionFilter(e.target.value === "" ? undefined : Number(e.target.value))
+            }
+            className={SELECT_CLASS}
+          >
+            <option value="">All Champions</option>
+            {championOptions.map(({ id, name }) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={patchFilter ?? ""}
+            onChange={(e) => setPatchFilter(e.target.value === "" ? undefined : e.target.value)}
+            className={SELECT_CLASS}
+          >
+            <option value="">All Patches</option>
+            {filterOptions.patches.map((p) => (
+              <option key={p} value={p}>
+                Patch {p}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as MatchSort)}
+            className={SELECT_CLASS}
+          >
+            {SORT_OPTIONS.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {matches.length === 0 && !loading && (
         <div className="bg-lol-card rounded-xl border border-lol-border p-8 text-center text-lol-text">
-          No ARAM Mayhem games found. Connect to the League client and click Refresh.
+          {championFilter !== undefined || patchFilter !== undefined
+            ? "No games match the current filters."
+            : "No ARAM Mayhem games found. Connect to the League client and click Refresh."}
         </div>
       )}
 

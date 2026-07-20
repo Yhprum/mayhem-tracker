@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import type { MatchListItem } from "../lib/types";
+import type { MatchFilters, MatchListItem } from "../lib/types";
 
 const PAGE_SIZE = 20;
 
-export function useMatches(championId?: number) {
+export function useMatches(filters: MatchFilters = {}) {
+  const { championId, patch, sort } = filters;
   const [matches, setMatches] = useState<MatchListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -14,10 +15,11 @@ export function useMatches(championId?: number) {
       setLoading(true);
       const offset = reset ? 0 : matches.length;
       try {
-        const result =
-          championId !== undefined
-            ? await window.api.getChampionMatchHistory(championId, PAGE_SIZE, offset)
-            : await window.api.getMatchHistory(PAGE_SIZE, offset);
+        const result = await window.api.getMatchHistory(PAGE_SIZE, offset, {
+          championId,
+          patch,
+          sort,
+        });
         if (reset) {
           setMatches(result.matches);
         } else {
@@ -29,7 +31,7 @@ export function useMatches(championId?: number) {
         setLoading(false);
       }
     },
-    [championId, matches.length],
+    [championId, patch, sort, matches.length],
   );
 
   useEffect(() => {
@@ -37,7 +39,7 @@ export function useMatches(championId?: number) {
 
     const unsub = window.api.onGamesUpdated(() => load(true));
     return unsub;
-  }, [championId]);
+  }, [championId, patch, sort]);
 
   const loadMore = useCallback(() => {
     if (!loading && hasMore) load(false);

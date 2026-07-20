@@ -37,6 +37,7 @@ function createTables() {
       game_duration INTEGER NOT NULL,
       is_remake     INTEGER NOT NULL DEFAULT 0,
       puuid         TEXT NOT NULL DEFAULT '',
+      game_version  TEXT,
       raw_json      TEXT
     );
 
@@ -173,6 +174,32 @@ function createTables() {
   } catch {
     // Column already exists
   }
+
+  // Migration: add game_version (patch) column and backfill from raw_json
+  try {
+    db.exec("ALTER TABLE games ADD COLUMN game_version TEXT");
+    const games = db
+      .prepare("SELECT game_id, raw_json FROM games WHERE raw_json IS NOT NULL")
+      .all() as { game_id: number; raw_json: string }[];
+    const updateStmt = db.prepare("UPDATE games SET game_version = ? WHERE game_id = ?");
+    for (const game of games) {
+      try {
+        const raw = JSON.parse(game.raw_json);
+        const patch = parsePatch(raw.gameVersion);
+        if (patch) updateStmt.run(patch, game.game_id);
+      } catch {
+        /* ignore parse errors */
+      }
+    }
+  } catch {
+    // Column already exists
+  }
+}
+
+function parsePatch(version: unknown): string | null {
+  if (typeof version !== "string") return null;
+  const m = version.match(/^(\d+)\.(\d+)/);
+  return m ? `${m[1]}.${m[2]}` : null;
 }
 
 function detectRemake(gameDuration: number, rawJson: string | null): boolean {
@@ -227,11 +254,43 @@ function extractGameMaxStats(rawJson: string | null): {
 
 // ---- Query functions ----
 
-export function getMatchHistory(limit: number, offset: number): { matches: any[]; total: number } {
-  const total = db.prepare("SELECT COUNT(*) as count FROM games").get() as any;
+const MATCH_SORTS: Record<string, string> = {
+  newest: "g.game_creation DESC",
+  oldest: "g.game_creation ASC",
+  kda: "(ps.kills + ps.assists) * 1.0 / MAX(ps.deaths, 1) DESC, g.game_creation DESC",
+  kills: "ps.kills DESC, g.game_creation DESC",
+  duration: "g.game_duration DESC, g.game_creation DESC",
+};
+
+export function getMatchHistory(
+  limit: number,
+  offset: number,
+  filters?: { championId?: number; patch?: string; sort?: string },
+): { matches: any[]; total: number } {
+  const where: string[] = [];
+  const params: any[] = [];
+  if (filters?.championId != null) {
+    where.push("ps.champion_id = ?");
+    params.push(filters.championId);
+  }
+  if (filters?.patch) {
+    where.push("g.game_version = ?");
+    params.push(filters.patch);
+  }
+  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+  const orderBy = MATCH_SORTS[filters?.sort ?? "newest"] ?? MATCH_SORTS.newest;
+
+  const total = db
+    .prepare(`
+    SELECT COUNT(*) as count
+    FROM games g
+    JOIN player_stats ps ON g.game_id = ps.game_id
+    ${whereSql}
+  `)
+    .get(...params) as any;
   const rows = db
     .prepare(`
-    SELECT g.game_id, g.game_creation, g.game_duration, g.is_remake, g.puuid, g.raw_json,
+    SELECT g.game_id, g.game_creation, g.game_duration, g.is_remake, g.puuid, g.game_version, g.raw_json,
            ps.champion_id, ps.win, ps.kills, ps.deaths, ps.assists,
            ps.double_kills, ps.triple_kills, ps.quadra_kills, ps.penta_kills,
            ps.total_damage_dealt, ps.total_damage_taken, ps.total_heal, ps.gold_earned,
@@ -239,16 +298,36 @@ export function getMatchHistory(limit: number, offset: number): { matches: any[]
            (SELECT GROUP_CONCAT(ga.augment_id) FROM game_augments ga WHERE ga.game_id = g.game_id ORDER BY ga.slot) as augment_ids
     FROM games g
     JOIN player_stats ps ON g.game_id = ps.game_id
-    ORDER BY g.game_creation DESC
+    ${whereSql}
+    ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
   `)
-    .all(limit, offset);
+    .all(...params, limit, offset);
   const matches = rows.map((row: any) => {
     const maxStats = extractGameMaxStats(row.raw_json);
     const { raw_json, ...match } = row;
     return { ...match, ...maxStats };
   });
   return { matches, total: total.count };
+}
+
+export function getMatchFilterOptions(): { patches: string[]; champions: number[] } {
+  const patchRows = db
+    .prepare(
+      "SELECT DISTINCT game_version FROM games WHERE game_version IS NOT NULL AND game_version != ''",
+    )
+    .all() as { game_version: string }[];
+  const patches = patchRows
+    .map((r) => r.game_version)
+    .sort((a, b) => {
+      const [aMajor, aMinor] = a.split(".").map(Number);
+      const [bMajor, bMinor] = b.split(".").map(Number);
+      return bMajor - aMajor || bMinor - aMinor;
+    });
+  const champRows = db
+    .prepare("SELECT DISTINCT champion_id FROM player_stats ORDER BY champion_id")
+    .all() as { champion_id: number }[];
+  return { patches, champions: champRows.map((r) => r.champion_id) };
 }
 
 export function getMatchDetail(gameId: number): any {
@@ -501,8 +580,8 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
   const isRemake = detectRemake(gameData.gameDuration, JSON.stringify(gameData)) ? 1 : 0;
 
   const insertGameStmt = db.prepare(`
-    INSERT OR IGNORE INTO games (game_id, queue_id, game_mode, game_creation, game_duration, is_remake, puuid, raw_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO games (game_id, queue_id, game_mode, game_creation, game_duration, is_remake, puuid, game_version, raw_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const insertStatsStmt = db.prepare(`
@@ -527,6 +606,7 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
       gameData.gameDuration,
       isRemake,
       puuid,
+      parsePatch(gameData.gameVersion),
       JSON.stringify(gameData),
     );
 

@@ -1,8 +1,13 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 const api = {
-  getMatchHistory: (limit: number, offset: number) =>
-    ipcRenderer.invoke("db:match-history", limit, offset),
+  getMatchHistory: (
+    limit: number,
+    offset: number,
+    filters?: { championId?: number; patch?: string; sort?: string },
+  ) => ipcRenderer.invoke("db:match-history", limit, offset, filters),
+
+  getMatchFilterOptions: () => ipcRenderer.invoke("db:match-filters"),
 
   getMatchDetail: (gameId: number) => ipcRenderer.invoke("db:match-detail", gameId),
 

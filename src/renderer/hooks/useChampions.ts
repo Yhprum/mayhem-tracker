@@ -4,7 +4,7 @@ import type { ChampionData, AugmentData } from "../lib/types";
 let champCache: ChampionData | null = null;
 let augCache: AugmentData | null = null;
 
-function hasData(obj: Record<string, unknown> | null): obj is Record<string, unknown> {
+function hasData<T extends object>(obj: T | null): obj is T {
   return obj !== null && Object.keys(obj).length > 0;
 }
 
