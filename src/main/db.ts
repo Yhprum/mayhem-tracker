@@ -262,10 +262,17 @@ const MATCH_SORTS: Record<string, string> = {
   duration: "g.game_duration DESC, g.game_creation DESC",
 };
 
+const MULTIKILL_COLUMNS: Record<string, string> = {
+  doubles: "ps.double_kills",
+  triples: "ps.triple_kills",
+  quadras: "ps.quadra_kills",
+  pentas: "ps.penta_kills",
+};
+
 export function getMatchHistory(
   limit: number,
   offset: number,
-  filters?: { championId?: number; patch?: string; sort?: string },
+  filters?: { championId?: number; patch?: string; sort?: string; multikills?: string[] },
 ): { matches: any[]; total: number } {
   const where: string[] = [];
   const params: any[] = [];
@@ -276,6 +283,14 @@ export function getMatchHistory(
   if (filters?.patch) {
     where.push("g.game_version = ?");
     params.push(filters.patch);
+  }
+  if (filters?.multikills && filters.multikills.length > 0) {
+    const cols = filters.multikills
+      .map((k) => MULTIKILL_COLUMNS[k])
+      .filter((col): col is string => !!col);
+    if (cols.length > 0) {
+      where.push(`(${cols.map((col) => `${col} > 0`).join(" OR ")})`);
+    }
   }
   const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
   const orderBy = MATCH_SORTS[filters?.sort ?? "newest"] ?? MATCH_SORTS.newest;

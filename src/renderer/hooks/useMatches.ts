@@ -4,7 +4,9 @@ import type { MatchFilters, MatchListItem } from "../lib/types";
 const PAGE_SIZE = 20;
 
 export function useMatches(filters: MatchFilters = {}) {
-  const { championId, patch, sort } = filters;
+  const { championId, patch, sort, multikills } = filters;
+  // Arrays are recreated each render; use a joined key for stable effect deps
+  const multikillsKey = multikills?.join(",") ?? "";
   const [matches, setMatches] = useState<MatchListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -19,6 +21,7 @@ export function useMatches(filters: MatchFilters = {}) {
           championId,
           patch,
           sort,
+          multikills,
         });
         if (reset) {
           setMatches(result.matches);
@@ -31,7 +34,7 @@ export function useMatches(filters: MatchFilters = {}) {
         setLoading(false);
       }
     },
-    [championId, patch, sort, matches.length],
+    [championId, patch, sort, multikillsKey, matches.length],
   );
 
   useEffect(() => {
@@ -39,7 +42,7 @@ export function useMatches(filters: MatchFilters = {}) {
 
     const unsub = window.api.onGamesUpdated(() => load(true));
     return unsub;
-  }, [championId, patch, sort]);
+  }, [championId, patch, sort, multikillsKey]);
 
   const loadMore = useCallback(() => {
     if (!loading && hasMore) load(false);

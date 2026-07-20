@@ -11,7 +11,7 @@ export function registerIpcHandlers(win: BrowserWindow) {
       _event,
       limit: number,
       offset: number,
-      filters?: { championId?: number; patch?: string; sort?: string },
+      filters?: { championId?: number; patch?: string; sort?: string; multikills?: string[] },
     ) => {
       return db.getMatchHistory(limit, offset, filters);
     },

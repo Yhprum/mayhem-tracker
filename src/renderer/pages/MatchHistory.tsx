@@ -8,6 +8,7 @@ import type {
   DashboardData,
   MatchFilterOptions,
   MatchSort,
+  MultikillType,
   ParsedParticipant,
 } from "../lib/types";
 import { parseParticipants, groupByTeam } from "../lib/participants";
@@ -32,12 +33,20 @@ const SELECT_CLASS =
 export default function MatchHistory() {
   const [championFilter, setChampionFilter] = useState<number | undefined>(undefined);
   const [patchFilter, setPatchFilter] = useState<string | undefined>(undefined);
+  const [multikillFilter, setMultikillFilter] = useState<MultikillType[]>([]);
   const [sort, setSort] = useState<MatchSort>("newest");
   const { matches, loading, hasMore, loadMore } = useMatches({
     championId: championFilter,
     patch: patchFilter,
     sort,
+    multikills: multikillFilter,
   });
+
+  const toggleMultikill = useCallback((kind: MultikillType) => {
+    setMultikillFilter((prev) =>
+      prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind],
+    );
+  }, []);
   const champData = useChampionData();
   const { data: dashboard, refetch: refetchDashboard } = useIpc<DashboardData>(
     () => window.api.getDashboard({ championId: championFilter, patch: patchFilter }),
@@ -159,17 +168,61 @@ export default function MatchHistory() {
           <div className="bg-lol-card rounded-xl border border-lol-border p-4">
             <div className="text-xs text-lol-text uppercase tracking-wider mb-1">Multikills</div>
             <div className="grid grid-cols-4 gap-1">
-              {[
-                { label: "D", value: dashboard.multikills.doubles, color: "text-sky-400" },
-                { label: "T", value: dashboard.multikills.triples, color: "text-amber-400" },
-                { label: "Q", value: dashboard.multikills.quadras, color: "text-purple-400" },
-                { label: "P", value: dashboard.multikills.pentas, color: "text-red-400" },
-              ].map(({ label, value, color }) => (
-                <div key={label} className="text-center">
-                  <div className={`text-lg font-bold ${color}`}>{value}</div>
-                  <div className="text-[10px] text-lol-text">{label}</div>
-                </div>
-              ))}
+              {(
+                [
+                  {
+                    kind: "doubles",
+                    label: "D",
+                    name: "double",
+                    value: dashboard.multikills.doubles,
+                    color: "text-sky-400",
+                  },
+                  {
+                    kind: "triples",
+                    label: "T",
+                    name: "triple",
+                    value: dashboard.multikills.triples,
+                    color: "text-amber-400",
+                  },
+                  {
+                    kind: "quadras",
+                    label: "Q",
+                    name: "quadra",
+                    value: dashboard.multikills.quadras,
+                    color: "text-purple-400",
+                  },
+                  {
+                    kind: "pentas",
+                    label: "P",
+                    name: "penta",
+                    value: dashboard.multikills.pentas,
+                    color: "text-red-400",
+                  },
+                ] as {
+                  kind: MultikillType;
+                  label: string;
+                  name: string;
+                  value: number;
+                  color: string;
+                }[]
+              ).map(({ kind, label, name, value, color }) => {
+                const active = multikillFilter.includes(kind);
+                return (
+                  <button
+                    key={label}
+                    onClick={() => toggleMultikill(kind)}
+                    title={`Only show games with a ${name} kill`}
+                    className={`text-center rounded-md border px-1 py-0.5 transition-colors ${
+                      active
+                        ? "border-lol-gold/60 bg-lol-gold/10"
+                        : "border-transparent hover:border-lol-border hover:bg-white/5"
+                    }`}
+                  >
+                    <div className={`text-lg font-bold ${color}`}>{value}</div>
+                    <div className="text-[10px] text-lol-text">{label}</div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -220,7 +273,7 @@ export default function MatchHistory() {
 
       {matches.length === 0 && !loading && (
         <div className="bg-lol-card rounded-xl border border-lol-border p-8 text-center text-lol-text">
-          {championFilter !== undefined || patchFilter !== undefined
+          {championFilter !== undefined || patchFilter !== undefined || multikillFilter.length > 0
             ? "No games match the current filters."
             : "No ARAM Mayhem games found. Connect to the League client and click Refresh."}
         </div>

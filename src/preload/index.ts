@@ -4,7 +4,7 @@ const api = {
   getMatchHistory: (
     limit: number,
     offset: number,
-    filters?: { championId?: number; patch?: string; sort?: string },
+    filters?: { championId?: number; patch?: string; sort?: string; multikills?: string[] },
   ) => ipcRenderer.invoke("db:match-history", limit, offset, filters),
 
   getMatchFilterOptions: (filters?: { championId?: number; patch?: string }) =>

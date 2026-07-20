@@ -72,10 +72,13 @@ export interface MatchListItem {
 
 export type MatchSort = "newest" | "oldest" | "kda" | "kills" | "duration";
 
+export type MultikillType = "doubles" | "triples" | "quadras" | "pentas";
+
 export interface MatchFilters {
   championId?: number;
   patch?: string;
   sort?: MatchSort;
+  multikills?: MultikillType[];
 }
 
 export interface MatchFilterOptions {
