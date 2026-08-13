@@ -241,10 +241,15 @@ export function registerIpcHandlers() {
       : await dialog.showSaveDialog(options);
     if (result.canceled || !result.filePath) return { success: false };
     try {
-      const data = db.exportAllData();
-      fs.writeFileSync(result.filePath, JSON.stringify(data, null, 2));
-      return { success: true, path: result.filePath };
+      const games = await db.writeExportTo(result.filePath);
+      return { success: true, path: result.filePath, games };
     } catch (err: any) {
+      // A partial file would still look like a backup, so don't leave one
+      try {
+        fs.rmSync(result.filePath, { force: true });
+      } catch {
+        /* nothing more we can do */
+      }
       return { success: false, error: `Export failed: ${err.message}` };
     }
   });
@@ -264,7 +269,7 @@ export function registerIpcHandlers() {
     // JSON and well-formed JSON that isn't a backup all have to come back as
     // messages rather than as a thrown "Error invoking remote method".
     try {
-      const raw = fs.readFileSync(result.filePaths[0], "utf-8");
+      const raw = await fs.promises.readFile(result.filePaths[0], "utf-8");
       const data = JSON.parse(raw);
       if (!data || typeof data !== "object" || !Array.isArray(data.games)) {
         return { success: false, error: "That file isn't a Mayhem Tracker backup" };

@@ -383,7 +383,12 @@ export interface ElectronAPI {
   onGamesUpdated: (callback: () => void) => () => void;
   getSetting: (key: string) => Promise<string | null>;
   setSetting: (key: string, value: string) => Promise<void>;
-  exportData: () => Promise<{ success: boolean; path?: string; error?: string }>;
+  exportData: () => Promise<{
+    success: boolean;
+    path?: string;
+    games?: number;
+    error?: string;
+  }>;
   importData: () => Promise<{ success: boolean; imported?: number; error?: string }>;
   repairPuuids: () => Promise<{
     repairedGames: number;

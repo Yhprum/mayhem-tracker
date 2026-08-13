@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import fs from "fs";
 import path from "path";
 import { SCORE_FORMULA_VERSION, computeMatchScores, scoreInputsFromRaw } from "../shared/opScore";
 import { AUGMENT_SLOTS, QUEUE_ID_MAYHEM_CLASSIC } from "../shared/queues";
@@ -1767,23 +1768,65 @@ export function setSetting(key: string, value: string): void {
 
 // ---- Export / Import ----
 
-export function exportAllData(): {
-  version: number;
-  summoner?: any | null;
-  summoners?: any[];
-  games: any[];
-} {
-  const summoners = db.prepare("SELECT * FROM summoner").all();
-  const rows = db.prepare("SELECT raw_json, puuid FROM games WHERE raw_json IS NOT NULL").all() as {
-    raw_json: string;
-    puuid: string;
-  }[];
-  const games = rows.map((r) => {
-    const game = JSON.parse(r.raw_json);
-    game._ownerPuuid = r.puuid;
-    return game;
-  });
-  return { version: 3, summoners, games };
+// Games are read a page at a time and written straight to disk, rather than
+// building the whole backup in memory and handing one huge string to
+// writeFileSync. Two reasons: a library of a few thousand games is a hundred
+// megabytes-plus of JSON to hold twice over, and every await here returns the
+// main process to the event loop, so exporting no longer freezes the window.
+const EXPORT_PAGE_SIZE = 200;
+
+export async function writeExportTo(filePath: string): Promise<number> {
+  const out = fs.createWriteStream(filePath, { encoding: "utf8" });
+  const write = (chunk: string) =>
+    new Promise<void>((resolve, reject) => {
+      out.write(chunk, (err) => (err ? reject(err) : resolve()));
+    });
+
+  let count = 0;
+  try {
+    const summoners = db.prepare("SELECT * FROM summoner").all();
+    await write(`{"version":3,"summoners":${JSON.stringify(summoners)},"games":[`);
+
+    // Keyset paging, not LIMIT/OFFSET: each query completes before the next
+    // await, so no statement is left open across one — a statement still
+    // running when a poll tries to insert a game would fail as busy. Paging by
+    // last id also stays correct if rows arrive mid-export.
+    const page = db.prepare(`
+      SELECT game_id, raw_json, puuid
+      FROM games
+      WHERE raw_json IS NOT NULL AND game_id > ?
+      ORDER BY game_id
+      LIMIT ?
+    `);
+
+    let lastId = 0;
+    for (;;) {
+      const rows = page.all(lastId, EXPORT_PAGE_SIZE) as {
+        game_id: number;
+        raw_json: string;
+        puuid: string;
+      }[];
+      if (rows.length === 0) break;
+
+      let chunk = "";
+      for (const row of rows) {
+        const game = JSON.parse(row.raw_json);
+        game._ownerPuuid = row.puuid;
+        chunk += (count === 0 ? "" : ",") + JSON.stringify(game);
+        count++;
+      }
+      lastId = rows[rows.length - 1].game_id;
+      await write(chunk);
+    }
+
+    await write("]}");
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      out.on("error", reject);
+      out.end(() => resolve());
+    });
+  }
+  return count;
 }
 
 export function importData(data: any): number {

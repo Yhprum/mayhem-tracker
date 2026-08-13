@@ -40,7 +40,7 @@ export default function Settings() {
     try {
       const result = await window.api.exportData();
       if (result.success) {
-        setExportStatus(`Exported to ${result.path}`);
+        setExportStatus(`Exported ${result.games} game(s) to ${result.path}`);
       } else {
         // No error means the file dialog was dismissed, which needs no message
         setExportStatus(result.error ? `Error: ${result.error}` : null);
