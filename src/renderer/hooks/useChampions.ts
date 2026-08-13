@@ -59,7 +59,9 @@ export function useItemData(patch?: string | null): { items: ItemData; loaded: b
     setState({ items: {}, loaded: false });
     let promise = itemPromises.get(key);
     if (!promise) {
-      promise = window.api.getItemData(patch || undefined);
+      // Derived from key rather than patch so the effect depends on one value.
+      // "latest" is exactly what the main process substitutes for no patch.
+      promise = window.api.getItemData(key === "latest" ? undefined : key);
       itemPromises.set(key, promise);
     }
     let active = true;

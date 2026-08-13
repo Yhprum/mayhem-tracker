@@ -171,7 +171,9 @@ export default function MatchHistory() {
     if (queueFilter !== undefined && !filterOptions.queues.includes(queueFilter)) {
       setQueueFilter(undefined);
     }
-  }, [filterOptions]);
+    // Settles rather than loops: clearing a filter sets it to undefined, and
+    // the undefined branch does nothing on the re-run.
+  }, [filterOptions, championFilter, patchFilter, queueFilter]);
 
   const championOptions = useMemo(
     () =>
