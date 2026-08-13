@@ -42,7 +42,8 @@ export default function Settings() {
       if (result.success) {
         setExportStatus(`Exported to ${result.path}`);
       } else {
-        setExportStatus(null);
+        // No error means the file dialog was dismissed, which needs no message
+        setExportStatus(result.error ? `Error: ${result.error}` : null);
       }
     } catch (err: any) {
       setExportStatus(`Error: ${err.message}`);
@@ -56,7 +57,7 @@ export default function Settings() {
       if (result.success) {
         setImportStatus(`Imported ${result.imported} new game(s)`);
       } else {
-        setImportStatus(null);
+        setImportStatus(result.error ? `Error: ${result.error}` : null);
       }
     } catch (err: any) {
       setImportStatus(`Error: ${err.message}`);

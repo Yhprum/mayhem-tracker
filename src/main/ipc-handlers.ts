@@ -12,7 +12,15 @@ import { openExternalUrl } from "./security";
 // Settings page are exposed.
 const RENDERER_SETTINGS = new Set(["minimize_to_tray", "hide_classic_games"]);
 
-export function registerIpcHandlers(win: BrowserWindow) {
+// Registered once for the lifetime of the app — ipcMain.handle throws on a
+// second registration for the same channel. Anything needing a window resolves
+// it from the sender rather than closing over one, so a window that is replaced
+// doesn't leave handlers pointing at a destroyed instance.
+function senderWindow(event: { sender: Electron.WebContents }): BrowserWindow | null {
+  return BrowserWindow.fromWebContents(event.sender);
+}
+
+export function registerIpcHandlers() {
   ipcMain.handle(
     "db:match-history",
     (
@@ -76,19 +84,19 @@ export function registerIpcHandlers(win: BrowserWindow) {
     },
   );
 
-  ipcMain.handle("lcu:refresh", async () => {
+  ipcMain.handle("lcu:refresh", async (event) => {
     // Return errors as data instead of throwing, so the renderer gets a clean
     // message rather than Electron's "Error invoking remote method" wrapper
     try {
-      return await lcu.fetchNewGames(win);
+      return await lcu.fetchNewGames(senderWindow(event));
     } catch (err) {
       return { error: lcu.friendlyErrorMessage(err) };
     }
   });
 
-  ipcMain.handle("lcu:backfill", async () => {
+  ipcMain.handle("lcu:backfill", async (event) => {
     try {
-      return await lcu.backfillHistory(win);
+      return await lcu.backfillHistory(senderWindow(event));
     } catch (err) {
       return { error: lcu.friendlyErrorMessage(err) };
     }
@@ -179,26 +187,26 @@ export function registerIpcHandlers(win: BrowserWindow) {
     db.setSetting(key, value);
   });
 
-  // Window controls (custom title bar)
-  ipcMain.handle("window:minimize", () => {
-    win.minimize();
+  // Window controls (custom title bar). The maximize/unmaximize events that
+  // pair with these are wired up in createWindow, where the window lives.
+  ipcMain.handle("window:minimize", (event) => {
+    senderWindow(event)?.minimize();
   });
 
-  ipcMain.handle("window:toggle-maximize", () => {
+  ipcMain.handle("window:toggle-maximize", (event) => {
+    const win = senderWindow(event);
+    if (!win) return;
     if (win.isMaximized()) win.unmaximize();
     else win.maximize();
   });
 
-  ipcMain.handle("window:close", () => {
-    win.close();
+  ipcMain.handle("window:close", (event) => {
+    senderWindow(event)?.close();
   });
 
-  ipcMain.handle("window:is-maximized", () => {
-    return win.isMaximized();
+  ipcMain.handle("window:is-maximized", (event) => {
+    return senderWindow(event)?.isMaximized() ?? false;
   });
-
-  win.on("maximize", () => win.webContents.send("window:maximized-changed", true));
-  win.on("unmaximize", () => win.webContents.send("window:maximized-changed", false));
 
   // Version & updates
   ipcMain.handle("app:version", () => {
@@ -209,7 +217,9 @@ export function registerIpcHandlers(win: BrowserWindow) {
     return updater.checkForUpdate();
   });
 
-  ipcMain.handle("app:download-update", (_event, assetUrl: string) => {
+  ipcMain.handle("app:download-update", (event, assetUrl: string) => {
+    const win = senderWindow(event);
+    if (!win) return { success: false, error: "No window to report progress to" };
     return updater.downloadAndInstall(win, assetUrl);
   });
 
@@ -218,29 +228,53 @@ export function registerIpcHandlers(win: BrowserWindow) {
   });
 
   // Data export/import
-  ipcMain.handle("data:export", async () => {
-    const result = await dialog.showSaveDialog(win, {
+  ipcMain.handle("data:export", async (event) => {
+    const win = senderWindow(event);
+    const options = {
       title: "Export Mayhem Data",
       defaultPath: `mayhem-backup-${new Date().toISOString().slice(0, 10)}.json`,
       filters: [{ name: "JSON", extensions: ["json"] }],
-    });
+    };
+    // Parented to the window when there is one, so the dialog is modal
+    const result = win
+      ? await dialog.showSaveDialog(win, options)
+      : await dialog.showSaveDialog(options);
     if (result.canceled || !result.filePath) return { success: false };
-    const data = db.exportAllData();
-    fs.writeFileSync(result.filePath, JSON.stringify(data, null, 2));
-    return { success: true, path: result.filePath };
+    try {
+      const data = db.exportAllData();
+      fs.writeFileSync(result.filePath, JSON.stringify(data, null, 2));
+      return { success: true, path: result.filePath };
+    } catch (err: any) {
+      return { success: false, error: `Export failed: ${err.message}` };
+    }
   });
 
-  ipcMain.handle("data:import", async () => {
-    const result = await dialog.showOpenDialog(win, {
+  ipcMain.handle("data:import", async (event) => {
+    const win = senderWindow(event);
+    const options = {
       title: "Import Mayhem Data",
       filters: [{ name: "JSON", extensions: ["json"] }],
-      properties: ["openFile"],
-    });
+      properties: ["openFile" as const],
+    };
+    const result = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options);
     if (result.canceled || !result.filePaths[0]) return { success: false };
-    const raw = fs.readFileSync(result.filePaths[0], "utf-8");
-    const data = JSON.parse(raw);
-    const imported = db.importData(data);
-    return { success: true, imported };
+    // Anything can be chosen in that dialog, so unreadable files, malformed
+    // JSON and well-formed JSON that isn't a backup all have to come back as
+    // messages rather than as a thrown "Error invoking remote method".
+    try {
+      const raw = fs.readFileSync(result.filePaths[0], "utf-8");
+      const data = JSON.parse(raw);
+      if (!data || typeof data !== "object" || !Array.isArray(data.games)) {
+        return { success: false, error: "That file isn't a Mayhem Tracker backup" };
+      }
+      const imported = db.importData(data);
+      return { success: true, imported };
+    } catch (err: any) {
+      const reason = err instanceof SyntaxError ? "it isn't valid JSON" : err.message;
+      return { success: false, error: `Import failed: ${reason}` };
+    }
   });
 
   ipcMain.handle("data:repair-puuids", async () => {

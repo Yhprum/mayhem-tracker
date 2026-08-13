@@ -11,6 +11,9 @@ let tray: Tray | null = null;
 let isQuitting = false;
 let didFinalFetch = false;
 
+// How long quitting will wait on the last sync before giving up and exiting
+const FINAL_FETCH_TIMEOUT_MS = 5_000;
+
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
@@ -27,7 +30,7 @@ if (!gotTheLock) {
 
 const iconPath = path.join(app.getAppPath(), "assets/icon.png");
 
-function createWindow() {
+function createWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -85,11 +88,14 @@ function createWindow() {
     mainWindow = null;
   });
 
-  // Register IPC handlers
-  registerIpcHandlers(mainWindow);
+  // Paired with the window:is-maximized handler so the custom title bar can
+  // track state it can't observe from the renderer
+  mainWindow.on("maximize", () => mainWindow?.webContents.send("window:maximized-changed", true));
+  mainWindow.on("unmaximize", () =>
+    mainWindow?.webContents.send("window:maximized-changed", false),
+  );
 
-  // Start LCU polling
-  startPolling(mainWindow);
+  return mainWindow;
 }
 
 function createTray() {
@@ -145,8 +151,14 @@ app.whenReady().then(async () => {
     }
   });
 
-  createWindow();
+  // Registered once, outside createWindow: ipcMain.handle throws if the same
+  // channel is claimed twice, which a second createWindow would have done.
+  registerIpcHandlers();
+
+  const win = createWindow();
   createTray();
+
+  startPolling(win);
 });
 
 app.on("before-quit", async (event) => {
@@ -157,7 +169,16 @@ app.on("before-quit", async (event) => {
     didFinalFetch = true;
     try {
       console.log("Fetching games before quit...");
-      await fetchNewGames(mainWindow);
+      // Bounded: the LCU request has no timeout of its own, and a client that
+      // stops answering would otherwise leave the app unable to exit at all.
+      // Losing one last sync is a far better outcome than a process that has
+      // to be killed.
+      await Promise.race([
+        fetchNewGames(mainWindow),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("timed out")), FINAL_FETCH_TIMEOUT_MS),
+        ),
+      ]);
     } catch (err) {
       console.log("Final fetch on quit failed:", err);
     }
