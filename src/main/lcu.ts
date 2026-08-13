@@ -130,6 +130,11 @@ const GAMES_UPDATED_BATCH = 25;
 // transient failure doesn't relaunch a full history walk every poll tick.
 const AUTO_BACKFILL_RETRY_DELAY = 15 * 60 * 1000;
 
+// Shard probing walks candidates in turn, so one unresponsive host must not
+// stall the whole search. Paging gets longer, since those requests do real work.
+const SGP_PROBE_TIMEOUT_MS = 8_000;
+const SGP_PAGE_TIMEOUT_MS = 30_000;
+
 let sgpHost: string | null = null;
 let backfillRunning = false;
 let backfillCancelled = false;
@@ -182,6 +187,7 @@ async function resolveSgpHost(puuid: string, token: string): Promise<string> {
     try {
       const response = await fetch(sgpMatchIdsUrl(host, puuid, 0, 1), {
         headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(SGP_PROBE_TIMEOUT_MS),
       });
       if (response.ok) {
         sgpHost = host;
@@ -207,6 +213,7 @@ async function fetchAllMatchIds(
   for (let page = 0; page < SGP_MAX_PAGES; page++) {
     const response = await fetch(sgpMatchIdsUrl(host, puuid, page * SGP_PAGE_SIZE, SGP_PAGE_SIZE), {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(SGP_PAGE_TIMEOUT_MS),
     });
     if (!response.ok) {
       throw new Error(`Match history service returned ${response.status}`);

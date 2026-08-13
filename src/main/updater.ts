@@ -5,6 +5,12 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
+const CHECK_TIMEOUT_MS = 10_000;
+// Applied per chunk rather than to the whole download: the asset is ~90 MB, so
+// a total-duration cap would abort a slow but perfectly healthy connection.
+// What we actually want to catch is a transfer that has stopped moving.
+const DOWNLOAD_STALL_TIMEOUT_MS = 30_000;
+
 export interface UpdateInfo {
   hasUpdate: boolean;
   latest?: string;
@@ -31,6 +37,7 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
   try {
     const res = await fetch("https://api.github.com/repos/Yhprum/mayhem-tracker/releases/latest", {
       headers: { "User-Agent": "mayhem-tracker" },
+      signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
     });
     if (!res.ok) return { hasUpdate: false, error: "No releases found" };
     const data = (await res.json()) as any;
@@ -87,9 +94,24 @@ export async function downloadAndInstall(
   }
 
   const newExe = path.join(tmpDir, "mayhem-tracker-update.exe");
+  // Rearmed on every chunk, so the download is only abandoned once it has
+  // genuinely stopped rather than merely being slow.
+  const controller = new AbortController();
+  let stallTimer: ReturnType<typeof setTimeout> | undefined;
+  const armStallTimer = () => {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => controller.abort(), DOWNLOAD_STALL_TIMEOUT_MS);
+  };
+
   try {
-    const res = await fetch(assetUrl, { headers: { "User-Agent": "mayhem-tracker" } });
+    armStallTimer();
+    const res = await fetch(assetUrl, {
+      headers: { "User-Agent": "mayhem-tracker" },
+      signal: controller.signal,
+    });
     if (!res.ok || !res.body) {
+      clearTimeout(stallTimer);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
       return { success: false, error: `Download failed (HTTP ${res.status})` };
     }
     const total = Number(res.headers.get("content-length")) || 0;
@@ -100,6 +122,7 @@ export async function downloadAndInstall(
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      armStallTimer();
       received += value.length;
       hash.update(value);
       if (!out.write(Buffer.from(value))) {
@@ -109,6 +132,7 @@ export async function downloadAndInstall(
         win.webContents.send("update:progress", Math.round((received / total) * 100));
       }
     }
+    clearTimeout(stallTimer);
     await new Promise<void>((resolve, reject) => {
       out.end(() => resolve());
       out.on("error", reject);
@@ -131,7 +155,11 @@ export async function downloadAndInstall(
       console.warn("Release asset has no digest; skipping hash verification");
     }
   } catch (err: any) {
+    clearTimeout(stallTimer);
     fs.rmSync(tmpDir, { recursive: true, force: true });
+    if (err?.name === "AbortError" || err?.name === "TimeoutError") {
+      return { success: false, error: "Download stalled, please try again" };
+    }
     return { success: false, error: `Download failed: ${err.message}` };
   }
 

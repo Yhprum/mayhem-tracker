@@ -1,7 +1,11 @@
-import https from "https";
 import fs from "fs";
 import path from "path";
 import { getDataDir } from "./paths";
+
+// Every one of these requests gates something the UI waits on: champion data
+// blocks dragon:champions, db:teammate-detail and data:repair-puuids, and a
+// request that never settles leaves those hanging with no error to show.
+const REQUEST_TIMEOUT_MS = 10_000;
 
 let championCache: Record<number, { name: string; key: string; class?: string }> = {};
 // Data Dragon version the champion cache came from ("none" until any data
@@ -14,34 +18,17 @@ let augmentCache: Record<number, { name: string; desc: string; iconPath: string;
 let championReady: Promise<void> | null = null;
 let augmentReady: Promise<void> | null = null;
 
-function fetchJson(url: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    https
-      .get(url, { headers: { "User-Agent": "MayhemTracker/1.0" } }, (res) => {
-        // Follow redirects
-        if (
-          res.statusCode &&
-          res.statusCode >= 300 &&
-          res.statusCode < 400 &&
-          res.headers.location
-        ) {
-          fetchJson(res.headers.location).then(resolve).catch(reject);
-          return;
-        }
-        let data = "";
-        res.on("data", (chunk) => {
-          data += chunk;
-        });
-        res.on("end", () => {
-          try {
-            resolve(JSON.parse(data));
-          } catch (e) {
-            reject(e);
-          }
-        });
-      })
-      .on("error", reject);
+// fetch follows redirects itself, with its own cap — the hand-rolled version
+// this replaces recursed on Location with no limit and no timeout.
+async function fetchJson(url: string): Promise<any> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": "MayhemTracker/1.0" },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
+  if (!res.ok) {
+    throw new Error(`Request failed: ${res.status} ${url}`);
+  }
+  return res.json();
 }
 
 const championCacheFile = () => path.join(getDataDir(), "champion-cache.json");
