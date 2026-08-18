@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useItemData } from "../hooks/useChampions";
-import { CDRAGON_ASSET_URL, ITEM_ICON_URL } from "../lib/constants";
+import { CDRAGON_ASSET_URL } from "../lib/constants";
 
 interface ItemIconProps {
   itemId: number;
@@ -18,7 +18,7 @@ function stripIconVariant(iconPath: string): string | null {
 }
 
 export default function ItemIcon({ itemId, size = 24, patch }: ItemIconProps) {
-  const { items, loaded } = useItemData(patch);
+  const items = useItemData(patch);
   const [attempt, setAttempt] = useState(0);
 
   const item = items[itemId];
@@ -29,12 +29,10 @@ export default function ItemIcon({ itemId, size = 24, patch }: ItemIconProps) {
       const base = stripIconVariant(item.iconPath);
       if (base) urls.push(CDRAGON_ASSET_URL(item.branch, base));
     }
-    // Held back until the lookup has actually resolved. Reaching for the
-    // legacy host while data is still in flight renders a 404 for every item,
-    // which is the broken-icon flash on first opening a match.
-    if (loaded) urls.push(ITEM_ICON_URL(itemId));
+    // No tier below this: an item with no CommunityDragon mapping, or whose
+    // icons all fail, falls through to the placeholder below.
     return urls;
-  }, [item?.iconPath, item?.branch, itemId, loaded]);
+  }, [item?.iconPath, item?.branch]);
 
   useEffect(() => {
     setAttempt(0);

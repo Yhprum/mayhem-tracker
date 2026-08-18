@@ -13,8 +13,4 @@ export const CDRAGON_ASSET_URL = (branch: string, iconPath: string): string =>
     .replace("/lol-game-data/assets/", "")
     .toLowerCase()}`;
 
-// Legacy fallback for when the CommunityDragon item mapping is unavailable
-export const ITEM_ICON_URL = (itemId: number): string =>
-  `https://www.league-of-data-base.com/upload/16.4.1/item_img/${itemId}.png`;
-
 export { QUEUE_ID_MAYHEM, QUEUE_ID_MAYHEM_CLASSIC, QUEUE_LABELS } from "../../shared/queues";

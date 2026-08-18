@@ -39,24 +39,19 @@ export function useAugmentData() {
 }
 
 // Item data is keyed by patch so icons come from the same patch as the game.
-// `loaded` matters to callers: a patch that hasn't been fetched yet looks
-// exactly like one CommunityDragon has no entry for, and the two want opposite
-// treatment. A cold patch takes a network round trip in the main process, so
-// the gap is long enough to see.
-export function useItemData(patch?: string | null): { items: ItemData; loaded: boolean } {
+// A patch still being fetched yields an empty record, which renders as the same
+// placeholder as an item CommunityDragon has no entry for.
+export function useItemData(patch?: string | null): ItemData {
   const key = patch || "latest";
-  const [state, setState] = useState<{ items: ItemData; loaded: boolean }>(() => {
-    const cached = itemCaches.get(key);
-    return cached ? { items: cached, loaded: true } : { items: {}, loaded: false };
-  });
+  const [items, setItems] = useState<ItemData>(() => itemCaches.get(key) ?? {});
 
   useEffect(() => {
     const cached = itemCaches.get(key);
     if (cached && Object.keys(cached).length > 0) {
-      setState({ items: cached, loaded: true });
+      setItems(cached);
       return;
     }
-    setState({ items: {}, loaded: false });
+    setItems({});
     let promise = itemPromises.get(key);
     if (!promise) {
       // Derived from key rather than patch so the effect depends on one value.
@@ -68,16 +63,14 @@ export function useItemData(patch?: string | null): { items: ItemData; loaded: b
     promise.then((d) => {
       if (Object.keys(d).length > 0) itemCaches.set(key, d);
       else itemPromises.delete(key);
-      // An empty result still counts as loaded — the lookup genuinely failed,
-      // and the legacy icon host is the right fallback for that.
-      if (active) setState({ items: d, loaded: true });
+      if (active) setItems(d);
     });
     return () => {
       active = false;
     };
   }, [key]);
 
-  return state;
+  return items;
 }
 
 export function getChampionName(data: ChampionData, id: number): string {
