@@ -995,10 +995,14 @@ export function getMatchHistory(
     sort?: string;
     sortDir?: string;
     multikills?: string[];
+    favorites?: boolean;
   },
 ): { matches: any[]; total: number } {
   const where: string[] = [];
   const params: any[] = [];
+  if (filters?.favorites) {
+    where.push("g.favorite = 1");
+  }
   if (filters?.championId != null) {
     where.push("ps.champion_id = ?");
     params.push(filters.championId);
@@ -1040,7 +1044,7 @@ ${GAME_MAX_STATS_SQL}
     FROM games g
     JOIN player_stats ps ON g.game_id = ps.game_id
     ${whereSql}
-    ORDER BY g.favorite DESC, ${orderBy}
+    ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
   `)
     .all(...params, limit, offset);
@@ -1055,6 +1059,7 @@ export function getMatchFilterOptions(filters?: {
   patches: string[];
   champions: number[];
   queues: number[];
+  hasFavorites: boolean;
 } {
   // Each list is narrowed by the OTHER filters so a dropdown never hides its own selection
   const patchWhere = ["g.game_version IS NOT NULL AND g.game_version != ''"];
@@ -1118,10 +1123,25 @@ export function getMatchFilterOptions(filters?: {
   `)
     .all(...queueParams) as { queue_id: number }[];
 
+  // Unlike the lists above, this one ignores the other filters: the favorites
+  // toggle should stay put while the user narrows the list rather than blinking
+  // out whenever the current selection happens to hold no favorites.
+  const favoriteRow = db
+    .prepare(`
+    SELECT EXISTS (
+      SELECT 1
+      FROM games g
+      JOIN player_stats ps ON g.game_id = ps.game_id
+      WHERE g.favorite = 1
+    ) as has
+  `)
+    .get() as { has: number };
+
   return {
     patches,
     champions: champRows.map((r) => r.champion_id),
     queues: queueRows.map((r) => r.queue_id),
+    hasFavorites: !!favoriteRow.has,
   };
 }
 

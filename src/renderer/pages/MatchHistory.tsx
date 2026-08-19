@@ -74,6 +74,7 @@ export default function MatchHistory() {
   const [multikillFilter, setMultikillFilter] = useState<MultikillType[]>([]);
   const [sort, setSort] = useState<MatchSort | undefined>(undefined);
   const [sortDir, setSortDir] = useState<MatchSortDir>("desc");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const { matches, loading, hasMore, loadMore, reload } = useMatches({
     championId: championFilter,
     patch: patchFilter,
@@ -81,6 +82,7 @@ export default function MatchHistory() {
     sort,
     sortDir,
     multikills: multikillFilter,
+    favorites: favoritesOnly,
   });
 
   const toggleMultikill = useCallback((kind: MultikillType) => {
@@ -102,6 +104,7 @@ export default function MatchHistory() {
     patches: [],
     champions: [],
     queues: [],
+    hasFavorites: false,
   });
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -144,15 +147,19 @@ export default function MatchHistory() {
     return () => observer.disconnect();
   }, [loadMore]);
 
-  useEffect(() => {
-    const fetchOptions = () =>
+  const fetchOptions = useCallback(
+    () =>
       window.api
         .getMatchFilterOptions({
           championId: championFilter,
           patch: patchFilter,
           queue: queueFilter,
         })
-        .then(setFilterOptions);
+        .then(setFilterOptions),
+    [championFilter, patchFilter, queueFilter],
+  );
+
+  useEffect(() => {
     fetchOptions();
 
     const unsub = window.api.onGamesUpdated(() => {
@@ -160,7 +167,7 @@ export default function MatchHistory() {
       fetchOptions();
     });
     return unsub;
-  }, [championFilter, patchFilter, queueFilter, refetchDashboard]);
+  }, [fetchOptions, refetchDashboard]);
 
   // Clear a selection if new data leaves it without any matching games
   useEffect(() => {
@@ -177,6 +184,12 @@ export default function MatchHistory() {
     // Settles rather than loops: clearing a filter sets it to undefined, and
     // the undefined branch does nothing on the re-run.
   }, [filterOptions, championFilter, patchFilter, queueFilter]);
+
+  // Unfavoriting the last game takes the toggle button away with it, so the
+  // filter can't be left on with no way to turn it off.
+  useEffect(() => {
+    if (!filterOptions.hasFavorites) setFavoritesOnly(false);
+  }, [filterOptions.hasFavorites]);
 
   const championOptions = useMemo(
     () =>
@@ -210,8 +223,10 @@ export default function MatchHistory() {
       setContextMenu(null);
       await window.api.toggleFavorite(match.game_id);
       reload();
+      // The first favorite reveals the toggle button, the last one hides it
+      fetchOptions();
     },
-    [reload],
+    [reload, fetchOptions],
   );
 
   const avgKills =
@@ -364,6 +379,22 @@ export default function MatchHistory() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-lol-text-bright">Match History</h1>
         <div className="flex items-center gap-2">
+          {filterOptions.hasFavorites && (
+            <button
+              onClick={() => setFavoritesOnly((v) => !v)}
+              title={favoritesOnly ? "Showing favorites only" : "Only show favorites"}
+              className={`flex items-center rounded-lg border px-2 py-1.5 transition-colors ${
+                favoritesOnly
+                  ? "border-lol-gold/60 bg-lol-gold/10 text-amber-400"
+                  : "border-lol-border bg-lol-card text-lol-text hover:border-lol-gold/60 hover:text-lol-text-bright"
+              }`}
+            >
+              {/* h-5 matches the selects' line-height so the boxes end up the same height */}
+              <span className="flex h-5 items-center">
+                <StarIcon className="h-3.5 w-3.5" fill={favoritesOnly ? "currentColor" : "none"} />
+              </span>
+            </button>
+          )}
           <select
             value={championFilter ?? ""}
             onChange={(e) =>
@@ -451,7 +482,8 @@ export default function MatchHistory() {
           {championFilter !== undefined ||
           patchFilter !== undefined ||
           queueFilter !== undefined ||
-          multikillFilter.length > 0
+          multikillFilter.length > 0 ||
+          favoritesOnly
             ? "No games match the current filters."
             : emptyStateMessage(lcuStatus, backfill)}
         </div>

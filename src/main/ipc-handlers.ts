@@ -34,6 +34,7 @@ export function registerIpcHandlers() {
         sort?: string;
         sortDir?: string;
         multikills?: string[];
+        favorites?: boolean;
       },
     ) => {
       return db.getMatchHistory(limit, offset, filters);

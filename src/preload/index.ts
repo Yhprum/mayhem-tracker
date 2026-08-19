@@ -11,6 +11,7 @@ const api = {
       sort?: string;
       sortDir?: string;
       multikills?: string[];
+      favorites?: boolean;
     },
   ) => ipcRenderer.invoke("db:match-history", limit, offset, filters),
 

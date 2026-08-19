@@ -95,12 +95,14 @@ export interface MatchFilters {
   sort?: MatchSort;
   sortDir?: MatchSortDir;
   multikills?: MultikillType[];
+  favorites?: boolean;
 }
 
 export interface MatchFilterOptions {
   patches: string[];
   champions: number[];
   queues: number[];
+  hasFavorites: boolean;
 }
 
 // One row per player, straight from match_participants — the scoreboard no
