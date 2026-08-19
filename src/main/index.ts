@@ -2,7 +2,7 @@ import { app, BrowserWindow, Tray, Menu, nativeImage } from "electron";
 import path from "path";
 import { initDatabase, closeDatabase, getSetting, checkScoreBackfill } from "./db";
 import { registerIpcHandlers } from "./ipc-handlers";
-import { startPolling, stopPolling, getStatus, fetchNewGames } from "./lcu";
+import { startPolling, stopPolling, isClientConnected, fetchNewGames } from "./lcu";
 import { loadChampionData, loadAugmentData, waitForChampionData } from "./dragon";
 import { applySecurityPolicy } from "./security";
 
@@ -164,7 +164,7 @@ app.whenReady().then(async () => {
 app.on("before-quit", async (event) => {
   isQuitting = true;
 
-  if (!didFinalFetch && getStatus() === "connected") {
+  if (!didFinalFetch && isClientConnected()) {
     event.preventDefault();
     didFinalFetch = true;
     try {

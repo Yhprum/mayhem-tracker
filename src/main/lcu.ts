@@ -16,6 +16,7 @@ let credentials: Credentials | null = null;
 let status: "disconnected" | "connecting" | "connected" | "ingame" = "disconnected";
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let connectTimer: ReturnType<typeof setInterval> | null = null;
+let pollingStopped = false;
 
 function setStatus(newStatus: typeof status, win?: BrowserWindow | null) {
   status = newStatus;
@@ -26,6 +27,11 @@ function setStatus(newStatus: typeof status, win?: BrowserWindow | null) {
 
 export function getStatus() {
   return status;
+}
+
+// Both of these mean the client is there and answering — only the phase differs
+export function isClientConnected() {
+  return status === "connected" || status === "ingame";
 }
 
 export function friendlyErrorMessage(err: unknown): string {
@@ -521,7 +527,7 @@ const IN_GAME_PHASES = new Set(["InProgress", "Reconnect"]);
 // is reachable at all is the connect loop's business, so a phase arriving late
 // must never talk the status back up out of "disconnected".
 function applyPhase(win: BrowserWindow | null | undefined, phase: string | null) {
-  if (status !== "connected" && status !== "ingame") return;
+  if (!isClientConnected()) return;
   setStatus(phase !== null && IN_GAME_PHASES.has(phase) ? "ingame" : "connected", win);
 }
 
@@ -661,10 +667,15 @@ async function attachEogListener(win: BrowserWindow): Promise<void> {
     // app every time the League client closes.
     socket.on("error", () => socket.close());
     socket.on("close", () => {
-      if (eogSocket === socket) eogSocket = null;
+      // A socket the app replaced, or closed on the way out, isn't news
+      if (eogSocket !== socket) return;
+      eogSocket = null;
+
       // Nothing is left to report the match ending, so holding "in game" would
       // strand the indicator there until the next reconnect
       if (status === "ingame") setStatus("connected", win);
+
+      handleSocketDrop(win);
     });
 
     // Read off the raw frames rather than through league-connect's subscribe(),
@@ -695,6 +706,22 @@ async function attachEogListener(win: BrowserWindow): Promise<void> {
   } finally {
     eogAttaching = false;
   }
+}
+
+// The client shutting down takes the socket with it, and that lands the moment
+// it happens — the poll only finds out on its next tick, up to a minute later.
+// The socket can also drop with the client still there, though, so the status
+// isn't touched until a request confirms it: if one still answers, the poll
+// tick puts the listener back and nothing else needs to change. A request that
+// fails for some passing reason costs a reconnect the loop makes good within
+// five seconds.
+async function handleSocketDrop(win: BrowserWindow) {
+  if ((await fetchGameflowPhase()) !== null) return;
+
+  // Forces the loop to authenticate again, since a client that comes back comes
+  // back on a different port
+  credentials = null;
+  restartConnectLoop(win);
 }
 
 function stopEogListener() {
@@ -758,7 +785,27 @@ async function syncGames(win: BrowserWindow) {
   await fetchNewGames(win, summoner ?? undefined);
 }
 
+// Both timers are cleared before the connect loop starts again, so a restart
+// can come from the poll or from a dropped socket without either one stacking a
+// second interval on top of the one already running.
+function restartConnectLoop(win: BrowserWindow) {
+  // A drop check can still be waiting on a request when the app shuts down, and
+  // restarting the loop then would outlive the database it fetches into
+  if (pollingStopped) return;
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+  if (connectTimer) {
+    clearInterval(connectTimer);
+    connectTimer = null;
+  }
+  startPolling(win, false);
+}
+
 export function startPolling(win: BrowserWindow, firstAttempt = true) {
+  pollingStopped = false;
+
   // Show "connecting" only on the very first attempt after app launch
   setStatus(firstAttempt ? "connecting" : "disconnected", win);
 
@@ -798,11 +845,7 @@ export function startPolling(win: BrowserWindow, firstAttempt = true) {
         } catch (err) {
           console.log("Poll fetch error:", err);
           // Lost connection, restart connect loop
-          if (pollTimer) {
-            clearInterval(pollTimer);
-            pollTimer = null;
-          }
-          startPolling(win, false);
+          restartConnectLoop(win);
         }
       }, 60000);
     } catch {
@@ -816,6 +859,7 @@ export function startPolling(win: BrowserWindow, firstAttempt = true) {
 }
 
 export function stopPolling() {
+  pollingStopped = true;
   if (pollTimer) {
     clearInterval(pollTimer);
     pollTimer = null;
