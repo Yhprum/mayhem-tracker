@@ -13,7 +13,7 @@ import * as db from "./db";
 import { MAYHEM_QUEUE_IDS } from "../shared/queues";
 
 let credentials: Credentials | null = null;
-let status: "disconnected" | "connecting" | "connected" = "disconnected";
+let status: "disconnected" | "connecting" | "connected" | "ingame" = "disconnected";
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let connectTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -513,6 +513,18 @@ const GAMEFLOW_PHASE_PATH = "lol-gameflow/v1/gameflow-phase";
 // gameflow session so the phase change has something to act on.
 let liveGame: { gameId: number; queueId: number } | null = null;
 
+// Reconnect is the phase for rejoining a match already underway, so it counts
+// as being in a game just as much as InProgress does.
+const IN_GAME_PHASES = new Set(["InProgress", "Reconnect"]);
+
+// The phase only decides between the two connected states. Whether the client
+// is reachable at all is the connect loop's business, so a phase arriving late
+// must never talk the status back up out of "disconnected".
+function applyPhase(win: BrowserWindow | null | undefined, phase: string | null) {
+  if (status !== "connected" && status !== "ingame") return;
+  setStatus(phase !== null && IN_GAME_PHASES.has(phase) ? "ingame" : "connected", win);
+}
+
 // The by-id endpoint can still miss for a moment while the match is being
 // written, so a failure is retried on a widening schedule instead of being
 // dropped. Roughly five and a half minutes in all; past that the poll is the
@@ -609,6 +621,8 @@ function handleFrame(win: BrowserWindow, payload: any): void {
   }
 
   if (path === GAMEFLOW_PHASE_PATH) {
+    applyPhase(win, typeof payload.data === "string" ? payload.data : null);
+
     if (payload.data === "EndOfGame" && liveGame) {
       startCapture(win, liveGame.gameId, liveGame.queueId);
     }
@@ -625,7 +639,13 @@ function handleFrame(win: BrowserWindow, payload: any): void {
 async function attachEogListener(win: BrowserWindow): Promise<void> {
   // The guard has to survive the await below, or a poll tick landing mid-attach
   // would open a second socket
-  if (eogSocket || eogAttaching) return;
+  if (eogSocket || eogAttaching) {
+    // A socket outlives a poll that failed, and reconnecting puts the status
+    // back to plain "connected". Nothing else would notice a match that was
+    // already running, since the socket reports changes and misses none.
+    if (eogSocket) applyPhase(win, await fetchGameflowPhase());
+    return;
+  }
   eogAttaching = true;
 
   try {
@@ -642,6 +662,9 @@ async function attachEogListener(win: BrowserWindow): Promise<void> {
     socket.on("error", () => socket.close());
     socket.on("close", () => {
       if (eogSocket === socket) eogSocket = null;
+      // Nothing is left to report the match ending, so holding "in game" would
+      // strand the indicator there until the next reconnect
+      if (status === "ingame") setStatus("connected", win);
     });
 
     // Read off the raw frames rather than through league-connect's subscribe(),
@@ -665,6 +688,10 @@ async function attachEogListener(win: BrowserWindow): Promise<void> {
 
     eogSocket = socket;
     console.log("Listening for post-game results");
+
+    // The socket only carries changes, so a client that was already in a match
+    // when we attached needs the current phase read once.
+    fetchGameflowPhase().then((phase) => applyPhase(win, phase));
   } finally {
     eogAttaching = false;
   }
@@ -685,14 +712,18 @@ function stopEogListener() {
   liveGame = null;
 }
 
-async function isInGame(): Promise<boolean> {
+async function fetchGameflowPhase(): Promise<string | null> {
   try {
     // The endpoint returns a bare JSON string, e.g. "InProgress"
-    const phase = (await lcuRequest("/lol-gameflow/v1/gameflow-phase")) as unknown as string;
-    return phase === "InProgress" || phase === "Reconnect";
+    return (await lcuRequest("/lol-gameflow/v1/gameflow-phase")) as unknown as string;
   } catch {
-    return false;
+    return null;
   }
+}
+
+async function isInGame(): Promise<boolean> {
+  const phase = await fetchGameflowPhase();
+  return phase !== null && IN_GAME_PHASES.has(phase);
 }
 
 // An account that has never been walked gets the full history on its first

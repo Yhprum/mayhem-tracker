@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import { useState, useCallback, useEffect, type ComponentType, type SVGProps } from "react";
 import { useLcuStatus } from "../hooks/useLcuStatus";
 import { useBackfill } from "../hooks/useBackfill";
-import type { UpdateInfo } from "../lib/types";
+import type { LcuStatus, UpdateInfo } from "../lib/types";
 import UpdateDialog from "./UpdateDialog";
 import {
   HourglassIcon,
@@ -25,14 +25,16 @@ const links: { to: string; label: string; icon: IconComponent }[] = [
   { to: "/global", label: "Total Stats", icon: GlobeIcon },
 ];
 
-const statusColors = {
+const statusColors: Record<LcuStatus, string> = {
   connected: "bg-lol-win",
+  ingame: "bg-sky-400",
   connecting: "bg-amber-500",
   disconnected: "bg-lol-loss",
 };
 
-const statusLabels = {
+const statusLabels: Record<LcuStatus, string> = {
   connected: "Connected",
+  ingame: "In Game",
   connecting: "Connecting...",
   disconnected: "Disconnected",
 };

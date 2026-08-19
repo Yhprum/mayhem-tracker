@@ -48,7 +48,7 @@ function emptyStateMessage(
       ? `Importing your match history — ${p.current} of ${p.total} games checked...`
       : "Importing your match history...";
   }
-  if (status !== "connected") {
+  if (status !== "connected" && status !== "ingame") {
     return "Waiting for the League client. Once it's open, your Mayhem games import automatically.";
   }
   return "No ARAM Mayhem games found yet. New games are recorded as you play.";

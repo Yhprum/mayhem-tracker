@@ -302,7 +302,7 @@ export interface ParsedParticipant {
   isSelf: boolean;
 }
 
-export type LcuStatus = "disconnected" | "connecting" | "connected";
+export type LcuStatus = "disconnected" | "connecting" | "connected" | "ingame";
 
 export interface BackfillProgress {
   current: number;
