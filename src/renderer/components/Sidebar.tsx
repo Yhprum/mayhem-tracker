@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { useState, useCallback, useEffect, type ComponentType, type SVGProps } from "react";
+import { useState, useCallback, useEffect, useRef, type ComponentType, type SVGProps } from "react";
 import { useLcuStatus } from "../hooks/useLcuStatus";
 import { useBackfill } from "../hooks/useBackfill";
 import type { LcuStatus, UpdateInfo } from "../lib/types";
@@ -24,6 +24,10 @@ const links: { to: string; label: string; icon: IconComponent }[] = [
   { to: "/friends", label: "Friends", icon: UsersIcon },
   { to: "/global", label: "Total Stats", icon: GlobeIcon },
 ];
+
+// The app is often left open for days, so a launch-only check would never
+// surface a release cut in the meantime.
+const UPDATE_POLL_MS = 6 * 60 * 60 * 1000;
 
 const statusColors: Record<LcuStatus, string> = {
   connected: "bg-lol-win",
@@ -67,9 +71,26 @@ export default function Sidebar() {
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
 
+  // Read inside the poll instead of as an effect dep, so opening the dialog
+  // doesn't restart the interval
+  const dialogOpenRef = useRef(false);
+  dialogOpenRef.current = showUpdateDialog;
+
   useEffect(() => {
     window.api.getVersion().then(setVersion);
-    window.api.checkForUpdate().then(setUpdate);
+
+    const check = () =>
+      window.api.checkForUpdate().then((info) => {
+        // A failed poll shouldn't clear a badge an earlier check earned
+        setUpdate((prev) => (info.error && prev ? prev : info));
+      });
+    check();
+    const timer = setInterval(() => {
+      // Skip while the dialog is up: swapping the release out from under an
+      // in-progress download would invalidate the URL being installed
+      if (!dialogOpenRef.current) check();
+    }, UPDATE_POLL_MS);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
