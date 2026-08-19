@@ -1,8 +1,8 @@
 // Shared between the main process (insert-time scoring + migration backfill)
 // and the renderer (full-scoreboard scoring). Bump SCORE_FORMULA_VERSION when
-// the formula changes — stored scores are recomputed from raw_json on startup
-// (the backfill key also includes the champion data version, so class changes
-// trigger a recompute too).
+// the formula changes — stored scores are recomputed from match_participants on
+// startup (the backfill key also includes the champion data version, so class
+// changes trigger a recompute too).
 export const SCORE_FORMULA_VERSION = 2;
 
 // championId → Data Dragon class tag ("Assassin" | "Fighter" | "Mage" |
@@ -148,31 +148,6 @@ export function computeMatchScores(
 
 // Build score inputs straight from a stored raw game JSON (LCU shape, both
 // old nested-stats and new flat variants).
-export function scoreInputsFromRaw(raw: any): (ScoreInput & { puuid: string | null })[] {
-  if (!raw?.participants) return [];
-  const identities = raw.participantIdentities || [];
-  return raw.participants.map((p: any, i: number) => {
-    const s = p.stats || p;
-    return {
-      participantId: p.participantId ?? i + 1,
-      teamId: p.teamId ?? 100,
-      puuid: p.puuid || identities[i]?.player?.puuid || null,
-      championId: p.championId ?? s.championId ?? 0,
-      kills: s.kills ?? 0,
-      deaths: s.deaths ?? 0,
-      assists: s.assists ?? 0,
-      doubleKills: s.doubleKills ?? 0,
-      tripleKills: s.tripleKills ?? 0,
-      quadraKills: s.quadraKills ?? 0,
-      pentaKills: s.pentaKills ?? 0,
-      totalDamageDealtToChampions: s.totalDamageDealtToChampions ?? s.totalDamageDealt ?? 0,
-      totalDamageTaken: s.totalDamageTaken ?? 0,
-      goldEarned: s.goldEarned ?? 0,
-      totalHeal: s.totalHeal ?? 0,
-      win: !!s.win,
-    };
-  });
-}
 
 export function scoreColor(score: number): string {
   if (score >= 9) return "text-amber-400";

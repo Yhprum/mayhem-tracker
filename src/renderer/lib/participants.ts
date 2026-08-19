@@ -1,58 +1,18 @@
-import type { ParsedParticipant } from "./types";
-import { AUGMENT_SLOTS } from "../../shared/queues";
+import type { MatchParticipantRecord, ParsedParticipant } from "./types";
 
-const AUGMENT_SLOT_NUMBERS = Array.from({ length: AUGMENT_SLOTS }, (_, i) => i + 1);
+// The main process sends participants already unpicked from the match payload,
+// so all that's left is marking which rows are ours.
+export function parseParticipants(
+  participants: MatchParticipantRecord[] | undefined,
+  selfPuuids: string[] | null,
+): ParsedParticipant[] {
+  if (!participants) return [];
 
-export function parseParticipants(raw: any, selfPuuids: string[] | null): ParsedParticipant[] {
-  if (!raw?.participants) return [];
-
-  const participants = raw.participants || [];
-  const identities = raw.participantIdentities || [];
-
-  return participants.map((p: any, i: number) => {
-    const s = p.stats || p;
-    const identity = identities[i];
-    const puuid = p.puuid || identity?.player?.puuid || null;
-    const name =
-      identity?.player?.gameName ||
-      identity?.player?.summonerName ||
-      p.summonerName ||
-      `Player ${i + 1}`;
-
-    return {
-      participantId: p.participantId ?? i + 1,
-      championId: p.championId ?? s.championId ?? 0,
-      teamId: p.teamId ?? 100,
-      puuid,
-      summonerName: name,
-      kills: s.kills ?? 0,
-      deaths: s.deaths ?? 0,
-      assists: s.assists ?? 0,
-      doubleKills: s.doubleKills ?? 0,
-      tripleKills: s.tripleKills ?? 0,
-      quadraKills: s.quadraKills ?? 0,
-      pentaKills: s.pentaKills ?? 0,
-      totalDamageDealtToChampions: s.totalDamageDealtToChampions ?? s.totalDamageDealt ?? 0,
-      totalDamageTaken: s.totalDamageTaken ?? 0,
-      goldEarned: s.goldEarned ?? 0,
-      totalHeal: s.totalHeal ?? 0,
-      largestKillingSpree: s.largestKillingSpree ?? 0,
-      items: [
-        s.item0 ?? 0,
-        s.item1 ?? 0,
-        s.item2 ?? 0,
-        s.item3 ?? 0,
-        s.item4 ?? 0,
-        s.item5 ?? 0,
-        s.item6 ?? 0,
-      ],
-      augments: AUGMENT_SLOT_NUMBERS.map((n) => s[`playerAugment${n}`] ?? 0).filter(
-        (id: number) => id > 0,
-      ),
-      win: !!s.win,
-      isSelf: selfPuuids != null && puuid != null && selfPuuids.includes(puuid),
-    };
-  });
+  return participants.map((p) => ({
+    ...p,
+    summonerName: p.gameName || `Player ${p.participantId}`,
+    isSelf: selfPuuids != null && p.puuid != null && selfPuuids.includes(p.puuid),
+  }));
 }
 
 export function groupByTeam(participants: ParsedParticipant[]): Map<number, ParsedParticipant[]> {

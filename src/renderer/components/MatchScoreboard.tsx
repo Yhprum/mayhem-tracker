@@ -20,7 +20,7 @@ export default function MatchScoreboard({
   puuids: string[] | null;
 }) {
   const participants = useMemo(
-    () => (detail.raw ? parseParticipants(detail.raw, puuids) : []),
+    () => parseParticipants(detail.participants, puuids),
     [detail, puuids],
   );
   const teams = useMemo(() => groupByTeam(participants), [participants]);

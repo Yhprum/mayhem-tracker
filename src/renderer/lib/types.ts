@@ -6,7 +6,6 @@ export interface GameRecord {
   game_duration: number;
   puuid?: string;
   game_version?: string | null;
-  raw_json?: string;
 }
 
 export interface PlayerStatsRecord {
@@ -96,11 +95,37 @@ export interface MatchFilterOptions {
   queues: number[];
 }
 
+// One row per player, straight from match_participants — the scoreboard no
+// longer reconstructs these from a raw match payload.
+export interface MatchParticipantRecord {
+  participantId: number;
+  puuid: string | null;
+  gameName: string | null;
+  tagLine: string | null;
+  championId: number;
+  teamId: number;
+  win: boolean;
+  kills: number;
+  deaths: number;
+  assists: number;
+  doubleKills: number;
+  tripleKills: number;
+  quadraKills: number;
+  pentaKills: number;
+  totalDamageDealtToChampions: number;
+  totalDamageTaken: number;
+  goldEarned: number;
+  totalHeal: number;
+  largestKillingSpree: number;
+  items: number[];
+  augments: number[];
+}
+
 export interface MatchDetail {
   game: GameRecord;
   stats: PlayerStatsRecord;
   augments: GameAugment[];
-  raw: any;
+  participants: MatchParticipantRecord[];
 }
 
 export interface ChampionStats {
