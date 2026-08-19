@@ -55,8 +55,10 @@
     "win": {
       "target": "portable",
       "icon": "assets/icon.png",
-      "artifactName": "MayhemTracker.exe",
-      "signAndEditExecutable": false
+      "artifactName": "MayhemTracker.exe"
+    },
+    "portable": {
+      "unpackDirName": true
     },
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*"

@@ -5,6 +5,7 @@ import { registerIpcHandlers } from "./ipc-handlers";
 import { startPolling, stopPolling, isClientConnected, fetchNewGames } from "./lcu";
 import { loadChampionData, loadAugmentData, waitForChampionData } from "./dragon";
 import { applySecurityPolicy } from "./security";
+import { ensureStartMenuShortcut } from "./shortcut";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -17,7 +18,11 @@ const FINAL_FETCH_TIMEOUT_MS = 5_000;
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
-  app.quit();
+  // exit, not quit: quit() before "ready" is advisory, so this process could still
+  // reach whenReady and stand up a second window, tray, database handle and poller
+  // on its way out. requestSingleInstanceLock has already handed our argv to the
+  // instance that owns the app, leaving nothing here worth shutting down cleanly.
+  app.exit(0);
 } else {
   app.on("second-instance", () => {
     if (mainWindow) {
@@ -132,6 +137,10 @@ app.whenReady().then(async () => {
   // Windows groups taskbar entries and attributes notifications by this id;
   // without it the app is identified by the Electron executable instead.
   app.setAppUserModelId("com.mayhem-tracker.app");
+
+  // Pairs with that id: gives the taskbar a durable shortcut to pin in place of
+  // the temp exe the portable launcher runs from.
+  ensureStartMenuShortcut();
 
   // Before any window exists, so no web contents escapes the policy
   applySecurityPolicy();
