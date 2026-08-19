@@ -60,6 +60,9 @@ const SORT_OPTIONS: { value: MatchSort; label: string }[] = [
   { value: "kda", label: "KDA" },
   { value: "kills", label: "Kills" },
   { value: "duration", label: "Duration" },
+  { value: "damageDealt", label: "Damage Dealt" },
+  { value: "damageTaken", label: "Damage Taken" },
+  { value: "healing", label: "Healing" },
 ];
 
 const SELECT_CLASS = "select";

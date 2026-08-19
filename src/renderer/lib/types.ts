@@ -74,7 +74,15 @@ export interface MatchListItem {
   game_max_heal: number;
 }
 
-export type MatchSort = "date" | "kda" | "kills" | "duration" | "score";
+export type MatchSort =
+  | "date"
+  | "kda"
+  | "kills"
+  | "duration"
+  | "score"
+  | "damageDealt"
+  | "damageTaken"
+  | "healing";
 
 export type MatchSortDir = "asc" | "desc";
 

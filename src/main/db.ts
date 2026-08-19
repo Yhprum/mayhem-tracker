@@ -962,6 +962,9 @@ const MATCH_SORT_COLUMNS: Record<string, string> = {
   kills: "ps.kills",
   duration: "g.game_duration",
   score: "ps.score",
+  damageDealt: "ps.total_damage_dealt",
+  damageTaken: "ps.total_damage_taken",
+  healing: "ps.total_heal",
 };
 
 function matchOrderBy(sort?: string, sortDir?: string): string {
