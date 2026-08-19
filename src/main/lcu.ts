@@ -165,17 +165,22 @@ async function fetchSgpToken(): Promise<string> {
   return token;
 }
 
+// Carries the status through so a caller can tell a shard that has stopped
+// serving this account apart from a service that is merely unhappy.
+class SgpHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`Match history service returned ${status}`);
+  }
+}
+
+// A shard answers this way for a player it doesn't hold, which is what an
+// account transfer or a Riot re-shard leaves us with: the remembered host is
+// now the wrong one, and stays wrong until we go looking again.
+const SGP_REHOME_STATUSES = new Set([401, 403, 404]);
+
 // The service is sharded by geography, not by game region, so the region map is
 // a first guess only. Probe candidates until one answers, then remember it.
-async function resolveSgpHost(puuid: string, token: string): Promise<string> {
-  if (sgpHost) return sgpHost;
-
-  const cached = db.getSetting("sgp_host");
-  if (cached && SGP_HOSTS.includes(cached)) {
-    sgpHost = cached;
-    return cached;
-  }
-
+async function probeSgpHost(puuid: string, token: string, skip?: string): Promise<string | null> {
   let guess: string | undefined;
   try {
     const regionLocale = await lcuRequest("/riotclient/region-locale");
@@ -186,6 +191,7 @@ async function resolveSgpHost(puuid: string, token: string): Promise<string> {
 
   const candidates = guess ? [guess, ...SGP_HOSTS.filter((h) => h !== guess)] : SGP_HOSTS;
   for (const host of candidates) {
+    if (host === skip) continue;
     try {
       const response = await fetch(sgpMatchIdsUrl(host, puuid, 0, 1), {
         headers: { Authorization: `Bearer ${token}` },
@@ -201,7 +207,38 @@ async function resolveSgpHost(puuid: string, token: string): Promise<string> {
     }
   }
 
-  throw new Error("Could not reach Riot's match history service for your region");
+  return null;
+}
+
+async function resolveSgpHost(puuid: string, token: string): Promise<string> {
+  if (sgpHost) return sgpHost;
+
+  const cached = db.getSetting("sgp_host");
+  if (cached && SGP_HOSTS.includes(cached)) {
+    sgpHost = cached;
+    return cached;
+  }
+
+  const host = await probeSgpHost(puuid, token);
+  if (!host) {
+    throw new Error("Could not reach Riot's match history service for your region");
+  }
+  return host;
+}
+
+// Nothing else ever rewrites the remembered host, so a stale one would fail the
+// same way on every future run with no way out short of editing the database.
+// Re-probe instead — but only replace what we have if another shard actually
+// answers, since an expired token fails everywhere and is not the host's fault.
+async function rehomeSgpHost(puuid: string, token: string, failed: string): Promise<string | null> {
+  sgpHost = null;
+  const host = await probeSgpHost(puuid, token, failed);
+  if (!host) {
+    sgpHost = failed;
+    return null;
+  }
+  console.warn(`Match history shard ${failed} no longer serves this account; moved to ${host}`);
+  return host;
 }
 
 async function fetchAllMatchIds(
@@ -218,7 +255,7 @@ async function fetchAllMatchIds(
       signal: AbortSignal.timeout(SGP_PAGE_TIMEOUT_MS),
     });
     if (!response.ok) {
-      throw new Error(`Match history service returned ${response.status}`);
+      throw new SgpHttpError(response.status);
     }
 
     const body = await response.json();
@@ -282,12 +319,27 @@ export async function backfillHistory(win?: BrowserWindow | null): Promise<Backf
     const completedKey = `backfill_complete_${summoner.puuid}`;
     const walkedBefore = db.getSetting(completedKey) === "1";
 
-    const { ids, truncated } = await fetchAllMatchIds(
-      host,
-      summoner.puuid,
-      token,
-      (pageIds) => walkedBefore && pageIds.every((id) => known.has(id)),
-    );
+    const walk = (from: string) =>
+      fetchAllMatchIds(
+        from,
+        summoner.puuid,
+        token,
+        (pageIds) => walkedBefore && pageIds.every((id) => known.has(id)),
+      );
+
+    let walked: { ids: number[]; truncated: boolean };
+    try {
+      walked = await walk(host);
+    } catch (err) {
+      // The remembered shard may simply be the wrong one now. Find the right
+      // one and restart the walk there; if none answers, the original failure
+      // is the honest one to report.
+      if (!(err instanceof SgpHttpError) || !SGP_REHOME_STATUSES.has(err.status)) throw err;
+      const rehomed = await rehomeSgpHost(summoner.puuid, token, host);
+      if (!rehomed) throw err;
+      walked = await walk(rehomed);
+    }
+    const { ids, truncated } = walked;
 
     if (truncated) {
       console.warn(
