@@ -3,8 +3,10 @@ import {
   ClientElevatedPermsError,
   ClientNotFoundError,
   createHttp1Request,
+  createWebSocketConnection,
   Credentials,
   HttpRequestOptions,
+  LeagueWebSocket,
 } from "league-connect";
 import { BrowserWindow } from "electron";
 import * as db from "./db";
@@ -423,6 +425,214 @@ export async function fetchNewGames(
   return { newGames: newGamesCount, totalGames: dashboard.totalGames };
 }
 
+// --- Instant capture from the post-game screen ----------------------------
+//
+// The poll above is at the mercy of the client's match *list* cache, which is
+// never invalidated when a game ends — the LCU can hand back the same stale
+// twenty games for an entire client session, which is why a finished match
+// could take hours to appear here. The end-of-game resource has no such delay:
+// the client is pushed the stats within a second of the game terminating, and
+// what it publishes carries the game id and queue id directly. We take the id
+// from there and hydrate it through the by-id endpoint, which does not go
+// through the list cache and answers in the same shape everything else parses.
+
+// Compared without a leading slash: most LCU resources publish their uri with
+// one, but not all of them do, and missing the event would put us straight back
+// to waiting on the poll.
+const EOG_STATS_PATHS = [
+  // What the client actually publishes. The stats are pushed to it from Riot's
+  // match-history ingest the moment the game terminates and land here. Carries
+  // the game id, but no queue id.
+  "lol-end-of-game/v1/eog-stats-block",
+  // The endpoint the game client posts to itself. Not published during ordinary
+  // play, but it carries the queue id on the occasions it is, which saves us a
+  // request, so it stays in the list.
+  "lol-end-of-game/v1/gameclient-eog-stats-block",
+];
+
+// The gameflow is the trigger that doesn't depend on the stats resource being
+// published at all: the session carries the game id and queue id for the whole
+// match, and the phase reliably reaches EndOfGame afterwards. Between the two
+// sources, a finished game has to go out of its way not to be noticed.
+const GAMEFLOW_SESSION_PATH = "lol-gameflow/v1/session";
+const GAMEFLOW_PHASE_PATH = "lol-gameflow/v1/gameflow-phase";
+
+// Game id and queue of the match currently being played, remembered from the
+// gameflow session so the phase change has something to act on.
+let liveGame: { gameId: number; queueId: number } | null = null;
+
+// The by-id endpoint can still miss for a moment while the match is being
+// written, so a failure is retried on a widening schedule instead of being
+// dropped. Roughly five and a half minutes in all; past that the poll is the
+// safety net, and one missed capture only costs the delay we had before.
+const EOG_RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 60_000, 120_000, 120_000];
+
+let eogSocket: LeagueWebSocket | null = null;
+let eogAttaching = false;
+
+// Games the capture path is already working on. The resource updates more than
+// once while the screen is open, so without this every update would start its
+// own chain of retries for the same match. A null value means an attempt is
+// running right now; a timer means one is scheduled.
+const eogPending = new Map<number, ReturnType<typeof setTimeout> | null>();
+
+async function captureEogGame(
+  win: BrowserWindow | null | undefined,
+  gameId: number,
+  attempt: number,
+): Promise<void> {
+  eogPending.set(gameId, null);
+
+  // A retry can be scheduled minutes out, by which time the ordinary poll may
+  // have picked the game up anyway
+  if (db.gameExists(gameId)) {
+    eogPending.delete(gameId);
+    return;
+  }
+
+  try {
+    // Cheap, and it keeps the stored identity current the same way the poll
+    // does — the capture may well be the first thing to run after a switch.
+    const summoner = await fetchCurrentSummoner();
+    db.upsertSummoner(summoner);
+
+    const game = await fetchGameDetails(gameId);
+
+    if (!MAYHEM_QUEUE_IDS.includes(game.queueId)) {
+      db.markIgnoredGame(gameId);
+      eogPending.delete(gameId);
+      return;
+    }
+
+    if (db.insertGameFull(game, summoner.puuid)) {
+      console.log(`Stored ARAM Mayhem game ${gameId} from the post-game screen`);
+      notifyGamesUpdated(win);
+    }
+    eogPending.delete(gameId);
+  } catch (err) {
+    const delay = EOG_RETRY_DELAYS_MS[attempt];
+    if (delay === undefined) {
+      console.log(`Gave up capturing game ${gameId} from the post-game screen:`, err);
+      eogPending.delete(gameId);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      captureEogGame(win, gameId, attempt + 1);
+    }, delay);
+    // A scheduled retry must never be the reason the app can't exit
+    timer.unref?.();
+    eogPending.set(gameId, timer);
+  }
+}
+
+function startCapture(win: BrowserWindow, gameId: number, queueId: number): void {
+  if (!Number.isFinite(gameId) || gameId <= 0) return;
+  if (eogPending.has(gameId) || db.gameExists(gameId)) return;
+
+  // The queue id rides along whenever the source has one, so a game we don't
+  // track is dismissed without a single request. Sources that omit it leave
+  // this NaN, and the fetched game is what decides instead.
+  if (Number.isFinite(queueId) && queueId > 0 && !MAYHEM_QUEUE_IDS.includes(queueId)) {
+    db.markIgnoredGame(gameId);
+    return;
+  }
+
+  captureEogGame(win, gameId, 0);
+}
+
+function handleFrame(win: BrowserWindow, payload: any): void {
+  const raw = String(payload?.uri ?? "");
+  const path = raw.startsWith("/") ? raw.slice(1) : raw;
+
+  if (path === GAMEFLOW_SESSION_PATH) {
+    // Only ever set, never cleared: the session drops back to an empty game
+    // once the match is over, and by then this is what the phase change needs.
+    const gameData = payload.data?.gameData;
+    const gameId = Number(gameData?.gameId);
+    if (Number.isFinite(gameId) && gameId > 0) {
+      liveGame = { gameId, queueId: Number(gameData?.queue?.id) };
+    }
+    return;
+  }
+
+  if (path === GAMEFLOW_PHASE_PATH) {
+    if (payload.data === "EndOfGame" && liveGame) {
+      startCapture(win, liveGame.gameId, liveGame.queueId);
+    }
+    return;
+  }
+
+  if (EOG_STATS_PATHS.includes(path)) {
+    // The resource is also cleared once the screen is dismissed
+    if (payload.eventType === "Delete" || !payload.data) return;
+    startCapture(win, Number(payload.data.gameId), Number(payload.data.queueId));
+  }
+}
+
+async function attachEogListener(win: BrowserWindow): Promise<void> {
+  // The guard has to survive the await below, or a poll tick landing mid-attach
+  // would open a second socket
+  if (eogSocket || eogAttaching) return;
+  eogAttaching = true;
+
+  try {
+    const socket = await createWebSocketConnection({
+      authenticationOptions: { windowsShell: "powershell" },
+      // The connect loop in startPolling is already the retry policy; a second
+      // one inside the socket would stack reconnect attempts on top of it.
+      maxRetries: 0,
+    });
+
+    // league-connect drops its own error handler once the socket is open, and
+    // an emitter with no 'error' listener throws — which here would crash the
+    // app every time the League client closes.
+    socket.on("error", () => socket.close());
+    socket.on("close", () => {
+      if (eogSocket === socket) eogSocket = null;
+    });
+
+    // Read off the raw frames rather than through league-connect's subscribe(),
+    // which matches the uri as an exact string in one spelling. The socket has
+    // already asked for every event, so this only decides what to keep.
+    socket.on("message", (content) => {
+      let payload: any;
+      try {
+        [payload] = JSON.parse(String(content)).slice(2);
+      } catch {
+        // Includes the empty frame the client sends to acknowledge the request
+        return;
+      }
+
+      try {
+        handleFrame(win, payload);
+      } catch (err) {
+        console.log("Post-game capture failed:", err);
+      }
+    });
+
+    eogSocket = socket;
+    console.log("Listening for post-game results");
+  } finally {
+    eogAttaching = false;
+  }
+}
+
+function stopEogListener() {
+  if (eogSocket) {
+    // Cleared first so the close handler, which checks identity, doesn't race
+    // a listener attached by a later reconnect
+    const socket = eogSocket;
+    eogSocket = null;
+    socket.close();
+  }
+  for (const timer of eogPending.values()) {
+    if (timer) clearTimeout(timer);
+  }
+  eogPending.clear();
+  liveGame = null;
+}
+
 async function isInGame(): Promise<boolean> {
   try {
     // The endpoint returns a bare JSON string, e.g. "InProgress"
@@ -478,11 +688,26 @@ export function startPolling(win: BrowserWindow, firstAttempt = true) {
         connectTimer = null;
       }
 
+      // What actually makes a finished match show up right away. Not awaited:
+      // the sync below shouldn't wait on it, and a client that refuses the
+      // subscription should still get the polled path.
+      attachEogListener(win).catch((err) => {
+        console.log("Could not subscribe to post-game results:", err);
+      });
+
       // Do initial fetch
       await syncGames(win);
 
       // Start polling for new games every 60s
       pollTimer = setInterval(async () => {
+        // A socket that dropped on its own doesn't fail the poll, so without
+        // this the instant capture would stay down for the rest of the session
+        if (!eogSocket) {
+          attachEogListener(win).catch(() => {
+            // Next tick tries again
+          });
+        }
+
         // A manual backfill is already covering everything this would fetch
         if (backfillRunning) return;
         try {
@@ -516,4 +741,5 @@ export function stopPolling() {
     clearInterval(connectTimer);
     connectTimer = null;
   }
+  stopEogListener();
 }
