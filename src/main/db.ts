@@ -2211,6 +2211,81 @@ export function getGlobalChampionDetail(
   };
 }
 
+// Everything the Trends page draws, in one round trip. Days are the finest
+// grain the page uses, so the renderer re-buckets them into weeks or months
+// itself instead of asking again; patches and clock buckets can't be derived
+// from days and come as their own aggregates. All local time — "games per day"
+// means the player's day, not UTC's.
+export function getTrendsData(queue?: number): any {
+  const where = ["g.is_remake = 0"];
+  const params: any[] = [];
+  applyQueueFilter(where, params, queue);
+  const whereSql = `WHERE ${where.join(" AND ")}`;
+  const fromSql = `FROM games g JOIN player_stats ps ON g.game_id = ps.game_id`;
+
+  // SUM/COUNT over ps.score skip NULLs, so score averages stay honest for
+  // days where only some games have a stored score.
+  const daily = db
+    .prepare(`
+      SELECT date(g.game_creation / 1000, 'unixepoch', 'localtime') as day,
+             COUNT(*) as games,
+             SUM(ps.win) as wins,
+             SUM(ps.kills) as kills,
+             SUM(ps.deaths) as deaths,
+             SUM(ps.assists) as assists,
+             SUM(ps.score) as score_sum,
+             COUNT(ps.score) as scored_games
+      ${fromSql}
+      ${whereSql}
+      GROUP BY day
+      ORDER BY day
+    `)
+    .all(...params);
+
+  // Ordered by when the patch was first played rather than by parsing version
+  // strings — chronological is what a trend axis wants anyway.
+  const patches = db
+    .prepare(`
+      SELECT g.game_version as patch,
+             COUNT(*) as games,
+             SUM(ps.win) as wins,
+             AVG(ps.score) as avg_score,
+             MIN(g.game_creation) as first_played
+      ${fromSql}
+      ${whereSql} AND g.game_version IS NOT NULL AND g.game_version != ''
+      GROUP BY g.game_version
+      ORDER BY first_played
+    `)
+    .all(...params);
+
+  const hours = db
+    .prepare(`
+      SELECT CAST(strftime('%H', g.game_creation / 1000, 'unixepoch', 'localtime') AS INTEGER) as hour,
+             COUNT(*) as games,
+             SUM(ps.win) as wins
+      ${fromSql}
+      ${whereSql}
+      GROUP BY hour
+      ORDER BY hour
+    `)
+    .all(...params);
+
+  // strftime('%w'): 0 = Sunday
+  const weekdays = db
+    .prepare(`
+      SELECT CAST(strftime('%w', g.game_creation / 1000, 'unixepoch', 'localtime') AS INTEGER) as weekday,
+             COUNT(*) as games,
+             SUM(ps.win) as wins
+      ${fromSql}
+      ${whereSql}
+      GROUP BY weekday
+      ORDER BY weekday
+    `)
+    .all(...params);
+
+  return { daily, patches, hours, weekdays };
+}
+
 export function getDatabase(): Database.Database {
   return db;
 }

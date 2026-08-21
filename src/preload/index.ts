@@ -83,6 +83,8 @@ const api = {
   getGlobalStats: (patch?: string, queue?: number) =>
     ipcRenderer.invoke("db:global-stats", patch, queue),
 
+  getTrends: (queue?: number) => ipcRenderer.invoke("db:trends", queue),
+
   getGlobalChampionDetail: (championId: number, patch?: string, queue?: number) =>
     ipcRenderer.invoke("db:global-champion-detail", championId, patch, queue),
 

@@ -283,6 +283,37 @@ export interface TeammateDetail {
   matches: TeammateMatch[];
 }
 
+// One row per calendar day with at least one game, local time. The Trends page
+// re-buckets these into weeks/months itself, so this is the only time series
+// the main process has to produce.
+export interface TrendsDay {
+  day: string; // YYYY-MM-DD
+  games: number;
+  wins: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  // Summed over games that have a score; scored_games is that count, so the
+  // average stays honest when only some games are scored
+  score_sum: number | null;
+  scored_games: number;
+}
+
+export interface TrendsData {
+  daily: TrendsDay[];
+  // Chronological by first game played on the patch
+  patches: {
+    patch: string;
+    games: number;
+    wins: number;
+    avg_score: number | null;
+    first_played: number;
+  }[];
+  hours: { hour: number; games: number; wins: number }[];
+  // 0 = Sunday, matching strftime('%w')
+  weekdays: { weekday: number; games: number; wins: number }[];
+}
+
 export interface GlobalStats {
   champions: { champion_id: number; games: number; wins: number }[];
   augments: { augment_id: number; picks: number; wins: number }[];
@@ -396,6 +427,7 @@ export interface ElectronAPI {
   getTeammateStats: () => Promise<TeammateStats[]>;
   getTeammateDetail: (key: string) => Promise<TeammateDetail | null>;
   getGlobalStats: (patch?: string, queue?: number) => Promise<GlobalStats>;
+  getTrends: (queue?: number) => Promise<TrendsData>;
   getGlobalChampionDetail: (
     championId: number,
     patch?: string,
