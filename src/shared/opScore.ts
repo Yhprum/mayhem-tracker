@@ -78,42 +78,105 @@ const CLASS_WEIGHTS: Record<string, ClassWeights> = {
   Support: { kda: 2.2, kp: 2.7, dmg: 1.7, taken: 0.8, heal: 1.8, gold: 0.6 },
 };
 
-function rawScore(
+export type ScoreComponentKey = "kda" | "kp" | "dmg" | "taken" | "heal" | "gold";
+
+// One weighted term of the score. `points` and `weight` are post-SCALE, so
+// across a breakdown they sum to `raw` (with the bonuses) and read as
+// "earned X of a possible Y".
+export interface ScoreComponent {
+  key: ScoreComponentKey;
+  // The player's stat: KDA ratio for "kda", kill-participation fraction for
+  // "kp", raw totals for the rest.
+  value: number;
+  // The value that earns full credit: fixed caps for kda/kp, lobby max for
+  // the rest.
+  reference: number;
+  ratio: number;
+  weight: number;
+  points: number;
+}
+
+export interface ScoreBreakdown {
+  // Class whose weights were used; null means DEFAULT_WEIGHTS.
+  cls: string | null;
+  components: ScoreComponent[];
+  multikill: { label: string; points: number } | null;
+  // Win bonus points (0 on a loss).
+  win: number;
+  // Scaled sum before the 1-10 clamp and 0.1 rounding.
+  raw: number;
+  score: number;
+  badge: ScoreBadge;
+}
+
+function buildBreakdown(
   p: ScoreInput,
   teamKills: number,
   max: { dmg: number; taken: number; heal: number; gold: number },
   classes: ChampionClassMap | undefined,
-): number {
+): ScoreBreakdown {
   const kda = (p.kills + p.assists) / Math.max(p.deaths, 1);
   const kp = teamKills > 0 ? (p.kills + p.assists) / teamKills : 0;
 
   const cls = classes?.[p.championId];
   const w = (cls && CLASS_WEIGHTS[cls]) || DEFAULT_WEIGHTS;
 
-  let score = 0;
-  score += w.kda * clamp01(kda / 8) ** CURVE;
-  score += w.kp * clamp01(kp / 0.9) ** CURVE;
-  score += w.dmg * clamp01(p.totalDamageDealtToChampions / max.dmg) ** CURVE;
-  score += w.taken * clamp01(p.totalDamageTaken / max.taken) ** CURVE;
-  score += w.heal * clamp01(p.totalHeal / max.heal) ** CURVE;
-  score += w.gold * clamp01(p.goldEarned / max.gold) ** CURVE;
+  // Sum unscaled and scale once at the end — same float ordering as when the
+  // formula only produced a total, so stored scores don't shift by an ulp at
+  // a rounding boundary.
+  let sum = 0;
+  const components: ScoreComponent[] = [];
+  const component = (key: ScoreComponentKey, value: number, reference: number, weight: number) => {
+    const ratio = clamp01(value / reference);
+    const unscaled = weight * ratio ** CURVE;
+    sum += unscaled;
+    components.push({
+      key,
+      value,
+      reference,
+      ratio,
+      weight: weight * SCALE,
+      points: unscaled * SCALE,
+    });
+  };
 
-  if (p.pentaKills > 0) score += 0.6;
-  else if (p.quadraKills > 0) score += 0.45;
-  else if (p.tripleKills > 0) score += 0.3;
-  else if (p.doubleKills > 0) score += 0.15;
+  component("kda", kda, 8, w.kda);
+  component("kp", kp, 0.9, w.kp);
+  component("dmg", p.totalDamageDealtToChampions, max.dmg, w.dmg);
+  component("taken", p.totalDamageTaken, max.taken, w.taken);
+  component("heal", p.totalHeal, max.heal, w.heal);
+  component("gold", p.goldEarned, max.gold, w.gold);
 
-  if (p.win) score += 0.6;
+  let multikill: ScoreBreakdown["multikill"] = null;
+  if (p.pentaKills > 0) multikill = { label: "Penta kill", points: 0.6 * SCALE };
+  else if (p.quadraKills > 0) multikill = { label: "Quadra kill", points: 0.45 * SCALE };
+  else if (p.tripleKills > 0) multikill = { label: "Triple kill", points: 0.3 * SCALE };
+  else if (p.doubleKills > 0) multikill = { label: "Double kill", points: 0.15 * SCALE };
 
-  return score * SCALE;
+  if (p.pentaKills > 0) sum += 0.6;
+  else if (p.quadraKills > 0) sum += 0.45;
+  else if (p.tripleKills > 0) sum += 0.3;
+  else if (p.doubleKills > 0) sum += 0.15;
+  if (p.win) sum += 0.6;
+
+  const raw = sum * SCALE;
+  return {
+    cls: cls && CLASS_WEIGHTS[cls] ? cls : null,
+    components,
+    multikill,
+    win: p.win ? 0.6 * SCALE : 0,
+    raw,
+    score: Math.min(10, Math.max(1, Math.round(raw * 10) / 10)),
+    badge: null,
+  };
 }
 
-export function computeMatchScores(
+export function computeMatchScoreBreakdowns(
   participants: ScoreInput[],
   classes?: ChampionClassMap,
-): Map<number, PlayerScore> {
-  const scores = new Map<number, PlayerScore>();
-  if (participants.length === 0) return scores;
+): Map<number, ScoreBreakdown> {
+  const breakdowns = new Map<number, ScoreBreakdown>();
+  if (participants.length === 0) return breakdowns;
 
   const max = { dmg: 1, taken: 1, heal: 1, gold: 1 };
   const teamKills = new Map<number, number>();
@@ -126,23 +189,35 @@ export function computeMatchScores(
   }
 
   for (const p of participants) {
-    const raw = rawScore(p, teamKills.get(p.teamId) ?? 0, max, classes);
-    const score = Math.min(10, Math.max(1, Math.round(raw * 10) / 10));
-    scores.set(p.participantId, { score, badge: null });
+    breakdowns.set(p.participantId, buildBreakdown(p, teamKills.get(p.teamId) ?? 0, max, classes));
   }
 
   // Best player on the winning team gets MVP, best on the losing team gets ACE
   const bestByTeam = new Map<number, ScoreInput>();
   for (const p of participants) {
     const best = bestByTeam.get(p.teamId);
-    if (!best || scores.get(p.participantId)!.score > scores.get(best.participantId)!.score) {
+    if (
+      !best ||
+      breakdowns.get(p.participantId)!.score > breakdowns.get(best.participantId)!.score
+    ) {
       bestByTeam.set(p.teamId, p);
     }
   }
   for (const p of bestByTeam.values()) {
-    scores.get(p.participantId)!.badge = p.win ? "MVP" : "ACE";
+    breakdowns.get(p.participantId)!.badge = p.win ? "MVP" : "ACE";
   }
 
+  return breakdowns;
+}
+
+export function computeMatchScores(
+  participants: ScoreInput[],
+  classes?: ChampionClassMap,
+): Map<number, PlayerScore> {
+  const scores = new Map<number, PlayerScore>();
+  for (const [id, b] of computeMatchScoreBreakdowns(participants, classes)) {
+    scores.set(id, { score: b.score, badge: b.badge });
+  }
   return scores;
 }
 
