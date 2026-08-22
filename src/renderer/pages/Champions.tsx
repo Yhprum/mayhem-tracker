@@ -349,17 +349,25 @@ export default function Champions() {
                     {(c.avg_gold ?? 0).toLocaleString()}
                   </td>
                   <td className="px-3 py-2">
-                    <div className="grid grid-cols-4 gap-1 text-[10px]">
-                      <span className={c.double_kills > 0 ? "text-sky-400" : "text-transparent"}>
+                    <div className="flex gap-1 text-[10px] tabular-nums">
+                      <span
+                        className={`w-7 shrink-0 text-center ${c.double_kills > 0 ? "text-sky-400" : "text-transparent"}`}
+                      >
                         D{c.double_kills}
                       </span>
-                      <span className={c.triple_kills > 0 ? "text-amber-400" : "text-transparent"}>
+                      <span
+                        className={`w-7 shrink-0 text-center ${c.triple_kills > 0 ? "text-amber-400" : "text-transparent"}`}
+                      >
                         T{c.triple_kills}
                       </span>
-                      <span className={c.quadra_kills > 0 ? "text-purple-400" : "text-transparent"}>
+                      <span
+                        className={`w-7 shrink-0 text-center ${c.quadra_kills > 0 ? "text-purple-400" : "text-transparent"}`}
+                      >
                         Q{c.quadra_kills}
                       </span>
-                      <span className={c.penta_kills > 0 ? "text-red-400" : "text-transparent"}>
+                      <span
+                        className={`w-7 shrink-0 text-center ${c.penta_kills > 0 ? "text-red-400" : "text-transparent"}`}
+                      >
                         P{c.penta_kills}
                       </span>
                     </div>
