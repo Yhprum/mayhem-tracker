@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useIpc } from "../hooks/useIpc";
+import { useViewState } from "../hooks/useViewState";
 import {
   useChampionData,
   getChampionName,
@@ -47,17 +48,17 @@ const rarityFilters: { key: RarityFilter; label: string; color: string; activeCo
 export default function Augments() {
   const champData = useChampionData();
   const augmentData = useAugmentData();
-  const [patch, setPatch] = useState<string | undefined>(undefined);
-  const [queue, setQueue] = useState<number | undefined>(undefined);
+  const [patch, setPatch] = useViewState<string | undefined>("augments.patch", undefined);
+  const [queue, setQueue] = useViewState<number | undefined>("augments.queue", undefined);
   const { data, refetch } = useIpc<AugmentStatsDetailed[]>(
     () => window.api.getAugmentStatsDetailed(patch, queue),
     [patch, queue],
   );
-  const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("picks");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [search, setSearch] = useViewState("augments.search", "");
+  const [sortKey, setSortKey] = useViewState<SortKey>("augments.sortKey", "picks");
+  const [sortDir, setSortDir] = useViewState<SortDir>("augments.sortDir", "desc");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
-  const [rarityFilter, setRarityFilter] = useState<RarityFilter>("all");
+  const [rarityFilter, setRarityFilter] = useViewState<RarityFilter>("augments.rarity", "all");
 
   useEffect(() => {
     const unsub = window.api.onGamesUpdated(() => refetch());

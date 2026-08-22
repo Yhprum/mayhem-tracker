@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect } from "react";
+import { useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useIpc } from "../hooks/useIpc";
+import { useViewState } from "../hooks/useViewState";
 import { useChampionData, getChampionName } from "../hooks/useChampions";
 import type { TeammateStats } from "../lib/types";
 import ChampionIcon from "../components/ChampionIcon";
@@ -15,9 +16,9 @@ export default function Friends() {
   const navigate = useNavigate();
   const champData = useChampionData();
   const { data, loading, refetch } = useIpc<TeammateStats[]>(() => window.api.getTeammateStats());
-  const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("games");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [search, setSearch] = useViewState("friends.search", "");
+  const [sortKey, setSortKey] = useViewState<SortKey>("friends.sortKey", "games");
+  const [sortDir, setSortDir] = useViewState<SortDir>("friends.sortDir", "desc");
 
   useEffect(() => {
     const unsub = window.api.onGamesUpdated(() => refetch());

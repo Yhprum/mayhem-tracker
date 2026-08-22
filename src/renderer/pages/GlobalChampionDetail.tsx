@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react";
+import { useMemo, useEffect, useCallback, type ReactNode } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
 import { useIpc } from "../hooks/useIpc";
+import { useViewState } from "../hooks/useViewState";
 import {
   useChampionData,
   getChampionName,
@@ -90,10 +91,11 @@ function SortHeader({
 }
 
 // Sort state shared by the item and augment tables — both rank rows by pick
-// count, win rate, or name.
-function useSort(initial: SortKey) {
-  const [sortKey, setSortKey] = useState<SortKey>(initial);
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+// count, win rate, or name. The key keeps the two tables apart when the choice
+// is remembered across launches.
+function useSort(key: string, initial: SortKey) {
+  const [sortKey, setSortKey] = useViewState<SortKey>(`${key}.sortKey`, initial);
+  const [sortDir, setSortDir] = useViewState<SortDir>(`${key}.sortDir`, "desc");
   const onSort = useCallback(
     (key: SortKey) => {
       if (key === sortKey) {
@@ -103,7 +105,7 @@ function useSort(initial: SortKey) {
         setSortDir(key === "name" ? "asc" : "desc");
       }
     },
-    [sortKey],
+    [sortKey, setSortKey, setSortDir],
   );
   return { sortKey, sortDir, onSort };
 }
@@ -135,7 +137,7 @@ function ItemSection({
   patch?: string;
 }) {
   const itemData = useItemData(patch);
-  const { sortKey, sortDir, onSort } = useSort("picks");
+  const { sortKey, sortDir, onSort } = useSort("globalChampion.items", "picks");
   const sorted = useMemo(
     () =>
       sortRows(items, sortKey, sortDir, (i) => itemData[i.item_id]?.name ?? `Item ${i.item_id}`),
@@ -213,8 +215,8 @@ function ItemSection({
 
 function AugmentSection({ augments, games }: { augments: AugmentStats[]; games: number }) {
   const augmentData = useAugmentData();
-  const { sortKey, sortDir, onSort } = useSort("picks");
-  const [rarity, setRarity] = useState<Rarity>("all");
+  const { sortKey, sortDir, onSort } = useSort("globalChampion.augments", "picks");
+  const [rarity, setRarity] = useViewState<Rarity>("globalChampion.augRarity", "all");
 
   const sorted = useMemo(() => {
     const filtered = augments.filter(

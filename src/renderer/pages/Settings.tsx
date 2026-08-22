@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useBackfill } from "../hooks/useBackfill";
+import { setRemembering } from "../lib/viewState";
 import type { BackupInfo } from "../lib/types";
 
 const BACKUP_REASONS: Record<string, string> = {
@@ -22,12 +23,33 @@ function formatTaken(timestamp: number): string {
   })}`;
 }
 
+function Switch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
+        checked ? "bg-lol-gold" : "bg-lol-border"
+      }`}
+    >
+      <span
+        className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform duration-200 ${
+          checked ? "translate-x-5" : "translate-x-0"
+        }`}
+      />
+    </button>
+  );
+}
+
 export default function Settings() {
   // Shared so a backfill started automatically on first connect shows here too
   const { running: backfilling, progress } = useBackfill();
   const [minimizeToTray, setMinimizeToTray] = useState(true);
   const [hideClassic, setHideClassic] = useState(false);
   const [autoBackup, setAutoBackup] = useState(true);
+  const [rememberFilters, setRememberFilters] = useState(false);
   const [loading, setLoading] = useState(true);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
@@ -44,10 +66,12 @@ export default function Settings() {
       window.api.getSetting("minimize_to_tray"),
       window.api.getSetting("hide_classic_games"),
       window.api.getSetting("auto_backup"),
-    ]).then(([tray, classic, backup]) => {
+      window.api.getSetting("remember_filters"),
+    ]).then(([tray, classic, backup, remember]) => {
       setMinimizeToTray(tray !== "false");
       setHideClassic(classic === "true");
       setAutoBackup(backup !== "false");
+      setRememberFilters(remember === "true");
       setLoading(false);
     });
   }, []);
@@ -75,6 +99,15 @@ export default function Settings() {
     setAutoBackup(next);
     await window.api.setSetting("auto_backup", String(next));
   }, [autoBackup]);
+
+  const handleRememberFiltersToggle = useCallback(async () => {
+    const next = !rememberFilters;
+    setRememberFilters(next);
+    // Takes effect on the pages right away: they read the flag as they mount,
+    // and turning it off drops whatever was already stored.
+    setRemembering(next);
+    await window.api.setSetting("remember_filters", String(next));
+  }, [rememberFilters]);
 
   const handleBackupNow = useCallback(async () => {
     setBackupBusy(true);
@@ -211,21 +244,22 @@ export default function Settings() {
               You can still close the program from the system tray.
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={minimizeToTray}
-            onClick={handleToggle}
-            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
-              minimizeToTray ? "bg-lol-gold" : "bg-lol-border"
-            }`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform duration-200 ${
-                minimizeToTray ? "translate-x-5" : "translate-x-0"
-              }`}
-            />
-          </button>
+          <Switch checked={minimizeToTray} onChange={handleToggle} />
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-lol-card rounded-xl border border-lol-border/60 p-5">
+        <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Filters</h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-lol-text-bright">Remember filters and sorting</p>
+            <p className="text-xs text-lol-text mt-0.5">
+              Reopen every page with the filters, search, and sort order you last used. When off,
+              each page starts on its defaults again every time the program opens.
+            </p>
+          </div>
+          <Switch checked={rememberFilters} onChange={handleRememberFiltersToggle} />
         </div>
       </div>
 
@@ -240,21 +274,7 @@ export default function Settings() {
               history. Games are still recorded either way.
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={hideClassic}
-            onClick={handleHideClassicToggle}
-            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
-              hideClassic ? "bg-lol-gold" : "bg-lol-border"
-            }`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform duration-200 ${
-                hideClassic ? "translate-x-5" : "translate-x-0"
-              }`}
-            />
-          </button>
+          <Switch checked={hideClassic} onChange={handleHideClassicToggle} />
         </div>
       </div>
 
@@ -271,21 +291,7 @@ export default function Settings() {
                 missing or won't open, the newest working copy is restored on startup.
               </p>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={autoBackup}
-              onClick={handleAutoBackupToggle}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
-                autoBackup ? "bg-lol-gold" : "bg-lol-border"
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform duration-200 ${
-                  autoBackup ? "translate-x-5" : "translate-x-0"
-                }`}
-              />
-            </button>
+            <Switch checked={autoBackup} onChange={handleAutoBackupToggle} />
           </div>
 
           <div className="border-t border-lol-border" />

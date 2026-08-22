@@ -12,7 +12,12 @@ import { openExternalUrl } from "./security";
 // per-account backfill_complete_* flags, score_formula_version — none of which
 // the renderer has any business reading or rewriting. Only the keys backing the
 // Settings page are exposed.
-const RENDERER_SETTINGS = new Set(["minimize_to_tray", "hide_classic_games", "auto_backup"]);
+const RENDERER_SETTINGS = new Set([
+  "minimize_to_tray",
+  "hide_classic_games",
+  "auto_backup",
+  "remember_filters",
+]);
 
 // Registered once for the lifetime of the app — ipcMain.handle throws on a
 // second registration for the same channel. Anything needing a window resolves

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, Fragment } from "react";
 import { useIpc } from "../hooks/useIpc";
+import { useViewState } from "../hooks/useViewState";
 import { useChampionData, getChampionName, useAugmentData } from "../hooks/useChampions";
 import type { ChampionStats, AugmentStats, ItemStats, MatchListItem } from "../lib/types";
 import ChampionIcon from "../components/ChampionIcon";
@@ -158,15 +159,15 @@ function ChampionExpanded({
 
 export default function Champions() {
   const champData = useChampionData();
-  const [patch, setPatch] = useState<string | undefined>(undefined);
-  const [queue, setQueue] = useState<number | undefined>(undefined);
+  const [patch, setPatch] = useViewState<string | undefined>("champions.patch", undefined);
+  const [queue, setQueue] = useViewState<number | undefined>("champions.queue", undefined);
   const { data, refetch } = useIpc<ChampionStats[]>(
     () => window.api.getChampionStats(patch, queue),
     [patch, queue],
   );
-  const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("games");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [search, setSearch] = useViewState("champions.search", "");
+  const [sortKey, setSortKey] = useViewState<SortKey>("champions.sortKey", "games");
+  const [sortDir, setSortDir] = useViewState<SortDir>("champions.sortDir", "desc");
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {

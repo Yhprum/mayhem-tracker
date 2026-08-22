@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useIpc } from "../hooks/useIpc";
+import { useViewState } from "../hooks/useViewState";
+import { readViewState, writeViewState } from "../lib/viewState";
 import {
   useChampionData,
   getChampionName,
@@ -92,6 +94,23 @@ export default function GlobalStats() {
   const setQueue = (q: number | undefined) => setParam("queue", q);
   const setTab = (t: Tab) => setParam("tab", t === "champions" ? undefined : t);
 
+  // Those three live in the URL, so remembering them means putting the query
+  // string back on the way in. Arriving with one already set — the back link
+  // from a champion page — wins over whatever was stored.
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    const saved = readViewState("global.params", "");
+    if (saved && !searchParams.toString()) {
+      setSearchParams(new URLSearchParams(saved), { replace: true });
+    }
+    setRestored(true);
+    // Only ever on the way in, so the stored value can't clobber a live edit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (restored) writeViewState("global.params", searchParams.toString());
+  }, [restored, searchParams]);
+
   // Carried into the champion page so it opens with the same filters, and
   // comes back on its back link
   const filterQuery = useMemo(() => {
@@ -108,21 +127,24 @@ export default function GlobalStats() {
   );
 
   // Champion tab state
-  const [champSearch, setChampSearch] = useState("");
-  const [champSortKey, setChampSortKey] = useState<ChampSortKey>("games");
-  const [champSortDir, setChampSortDir] = useState<SortDir>("desc");
+  const [champSearch, setChampSearch] = useViewState("global.champSearch", "");
+  const [champSortKey, setChampSortKey] = useViewState<ChampSortKey>(
+    "global.champSortKey",
+    "games",
+  );
+  const [champSortDir, setChampSortDir] = useViewState<SortDir>("global.champSortDir", "desc");
 
   // Augment tab state
-  const [augSearch, setAugSearch] = useState("");
-  const [augSortKey, setAugSortKey] = useState<AugSortKey>("picks");
-  const [augSortDir, setAugSortDir] = useState<SortDir>("desc");
-  const [rarityFilter, setRarityFilter] = useState<Rarity>("all");
+  const [augSearch, setAugSearch] = useViewState("global.augSearch", "");
+  const [augSortKey, setAugSortKey] = useViewState<AugSortKey>("global.augSortKey", "picks");
+  const [augSortDir, setAugSortDir] = useViewState<SortDir>("global.augSortDir", "desc");
+  const [rarityFilter, setRarityFilter] = useViewState<Rarity>("global.augRarity", "all");
 
   // Item tab state
   const itemData = useItemData(patch);
-  const [itemSearch, setItemSearch] = useState("");
-  const [itemSortKey, setItemSortKey] = useState<ItemSortKey>("picks");
-  const [itemSortDir, setItemSortDir] = useState<SortDir>("desc");
+  const [itemSearch, setItemSearch] = useViewState("global.itemSearch", "");
+  const [itemSortKey, setItemSortKey] = useViewState<ItemSortKey>("global.itemSortKey", "picks");
+  const [itemSortDir, setItemSortDir] = useViewState<SortDir>("global.itemSortDir", "desc");
 
   useEffect(() => {
     const unsub = window.api.onGamesUpdated(() => refetch());

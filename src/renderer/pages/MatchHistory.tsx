@@ -4,6 +4,7 @@ import { useChampionData, getChampionName } from "../hooks/useChampions";
 import { useIpc } from "../hooks/useIpc";
 import { useLcuStatus } from "../hooks/useLcuStatus";
 import { useBackfill } from "../hooks/useBackfill";
+import { useViewState } from "../hooks/useViewState";
 import type {
   MatchListItem,
   MatchDetail,
@@ -162,14 +163,29 @@ function sessionLabel(start: number): string {
 }
 
 export default function MatchHistory() {
-  const [championFilter, setChampionFilter] = useState<number | undefined>(undefined);
-  const [patchFilter, setPatchFilter] = useState<string | undefined>(undefined);
-  const [queueFilter, setQueueFilter] = useState<number | undefined>(undefined);
-  const [accountFilter, setAccountFilter] = useState<string | undefined>(undefined);
-  const [multikillFilter, setMultikillFilter] = useState<MultikillType[]>([]);
-  const [sort, setSort] = useState<MatchSort | undefined>(undefined);
-  const [sortDir, setSortDir] = useState<MatchSortDir>("desc");
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [championFilter, setChampionFilter] = useViewState<number | undefined>(
+    "matches.champion",
+    undefined,
+  );
+  const [patchFilter, setPatchFilter] = useViewState<string | undefined>(
+    "matches.patch",
+    undefined,
+  );
+  const [queueFilter, setQueueFilter] = useViewState<number | undefined>(
+    "matches.queue",
+    undefined,
+  );
+  const [accountFilter, setAccountFilter] = useViewState<string | undefined>(
+    "matches.account",
+    undefined,
+  );
+  const [multikillFilter, setMultikillFilter] = useViewState<MultikillType[]>(
+    "matches.multikills",
+    [],
+  );
+  const [sort, setSort] = useViewState<MatchSort | undefined>("matches.sort", undefined);
+  const [sortDir, setSortDir] = useViewState<MatchSortDir>("matches.sortDir", "desc");
+  const [favoritesOnly, setFavoritesOnly] = useViewState("matches.favorites", false);
   const { matches, loading, hasMore, loadMore, reload } = useMatches({
     championId: championFilter,
     patch: patchFilter,
@@ -181,11 +197,14 @@ export default function MatchHistory() {
     favorites: favoritesOnly,
   });
 
-  const toggleMultikill = useCallback((kind: MultikillType) => {
-    setMultikillFilter((prev) =>
-      prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind],
-    );
-  }, []);
+  const toggleMultikill = useCallback(
+    (kind: MultikillType) => {
+      setMultikillFilter((prev) =>
+        prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind],
+      );
+    },
+    [setMultikillFilter],
+  );
   const champData = useChampionData();
   const { data: dashboard, refetch: refetchDashboard } = useIpc<DashboardData>(
     () =>
@@ -288,13 +307,23 @@ export default function MatchHistory() {
     }
     // Settles rather than loops: clearing a filter sets it to undefined, and
     // the undefined branch does nothing on the re-run.
-  }, [filterOptions, championFilter, patchFilter, queueFilter, accountFilter]);
+  }, [
+    filterOptions,
+    championFilter,
+    patchFilter,
+    queueFilter,
+    accountFilter,
+    setChampionFilter,
+    setPatchFilter,
+    setQueueFilter,
+    setAccountFilter,
+  ]);
 
   // Unfavoriting the last game takes the toggle button away with it, so the
   // filter can't be left on with no way to turn it off.
   useEffect(() => {
     if (!filterOptions.hasFavorites) setFavoritesOnly(false);
-  }, [filterOptions.hasFavorites]);
+  }, [filterOptions.hasFavorites, setFavoritesOnly]);
 
   const championOptions = useMemo(
     () =>
