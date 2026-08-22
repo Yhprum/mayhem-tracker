@@ -71,6 +71,7 @@ export default function MatchHistory() {
   const [championFilter, setChampionFilter] = useState<number | undefined>(undefined);
   const [patchFilter, setPatchFilter] = useState<string | undefined>(undefined);
   const [queueFilter, setQueueFilter] = useState<number | undefined>(undefined);
+  const [accountFilter, setAccountFilter] = useState<string | undefined>(undefined);
   const [multikillFilter, setMultikillFilter] = useState<MultikillType[]>([]);
   const [sort, setSort] = useState<MatchSort | undefined>(undefined);
   const [sortDir, setSortDir] = useState<MatchSortDir>("desc");
@@ -79,6 +80,7 @@ export default function MatchHistory() {
     championId: championFilter,
     patch: patchFilter,
     queue: queueFilter,
+    account: accountFilter,
     sort,
     sortDir,
     multikills: multikillFilter,
@@ -97,13 +99,15 @@ export default function MatchHistory() {
         championId: championFilter,
         patch: patchFilter,
         queue: queueFilter,
+        account: accountFilter,
       }),
-    [championFilter, patchFilter, queueFilter],
+    [championFilter, patchFilter, queueFilter, accountFilter],
   );
   const [filterOptions, setFilterOptions] = useState<MatchFilterOptions>({
     patches: [],
     champions: [],
     queues: [],
+    accounts: [],
     hasFavorites: false,
   });
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -154,9 +158,10 @@ export default function MatchHistory() {
           championId: championFilter,
           patch: patchFilter,
           queue: queueFilter,
+          account: accountFilter,
         })
         .then(setFilterOptions),
-    [championFilter, patchFilter, queueFilter],
+    [championFilter, patchFilter, queueFilter, accountFilter],
   );
 
   useEffect(() => {
@@ -181,9 +186,15 @@ export default function MatchHistory() {
     if (queueFilter !== undefined && !filterOptions.queues.includes(queueFilter)) {
       setQueueFilter(undefined);
     }
+    if (
+      accountFilter !== undefined &&
+      !filterOptions.accounts.some((a) => a.puuid === accountFilter)
+    ) {
+      setAccountFilter(undefined);
+    }
     // Settles rather than loops: clearing a filter sets it to undefined, and
     // the undefined branch does nothing on the re-run.
-  }, [filterOptions, championFilter, patchFilter, queueFilter]);
+  }, [filterOptions, championFilter, patchFilter, queueFilter, accountFilter]);
 
   // Unfavoriting the last game takes the toggle button away with it, so the
   // filter can't be left on with no way to turn it off.
@@ -245,6 +256,15 @@ export default function MatchHistory() {
     dashboard && dashboard.totalDeaths > 0
       ? (dashboard.totalKills + dashboard.totalAssists) / dashboard.totalDeaths
       : Infinity;
+  // With one account selected, the profile card is about that account — not
+  // whichever one played most recently.
+  const selectedAccount = accountFilter
+    ? filterOptions.accounts.find((a) => a.puuid === accountFilter)
+    : undefined;
+  const profileShown = selectedAccount
+    ? { name: selectedAccount.name, profileIcon: selectedAccount.profileIcon }
+    : profile;
+
   const totalMultikills = dashboard
     ? dashboard.multikills.doubles +
       dashboard.multikills.triples +
@@ -257,7 +277,7 @@ export default function MatchHistory() {
       {/* Stat Cards */}
       {dashboard && dashboard.totalGames > 0 && (
         <div className="grid grid-cols-[minmax(0,1.3fr)_repeat(3,minmax(0,1fr))] gap-4 items-stretch">
-          <ProfileCard profile={profile} dashboard={dashboard} />
+          <ProfileCard profile={profileShown} dashboard={dashboard} />
 
           <StatCard
             label="Avg Score"
@@ -395,6 +415,21 @@ export default function MatchHistory() {
               </span>
             </button>
           )}
+          {/* A single-account database doesn't need an account dropdown */}
+          {(filterOptions.accounts.length > 1 || accountFilter !== undefined) && (
+            <select
+              value={accountFilter ?? ""}
+              onChange={(e) => setAccountFilter(e.target.value === "" ? undefined : e.target.value)}
+              className={SELECT_CLASS}
+            >
+              <option value="">All Accounts</option>
+              {filterOptions.accounts.map((a) => (
+                <option key={a.puuid} value={a.puuid}>
+                  {a.name ?? "Unknown account"}
+                </option>
+              ))}
+            </select>
+          )}
           <select
             value={championFilter ?? ""}
             onChange={(e) =>
@@ -482,6 +517,7 @@ export default function MatchHistory() {
           {championFilter !== undefined ||
           patchFilter !== undefined ||
           queueFilter !== undefined ||
+          accountFilter !== undefined ||
           multikillFilter.length > 0 ||
           favoritesOnly
             ? "No games match the current filters."

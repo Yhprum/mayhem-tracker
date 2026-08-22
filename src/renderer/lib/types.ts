@@ -92,16 +92,24 @@ export interface MatchFilters {
   championId?: number;
   patch?: string;
   queue?: number;
+  account?: string;
   sort?: MatchSort;
   sortDir?: MatchSortDir;
   multikills?: MultikillType[];
   favorites?: boolean;
 }
 
+export interface TrackedAccount {
+  puuid: string;
+  name: string | null;
+  profileIcon: number | null;
+}
+
 export interface MatchFilterOptions {
   patches: string[];
   champions: number[];
   queues: number[];
+  accounts: TrackedAccount[];
   hasFavorites: boolean;
 }
 
@@ -449,7 +457,7 @@ export interface ElectronAPI {
     filters?: MatchFilters,
   ) => Promise<{ matches: MatchListItem[]; total: number }>;
   getMatchFilterOptions: (
-    filters?: Pick<MatchFilters, "championId" | "patch" | "queue">,
+    filters?: Pick<MatchFilters, "championId" | "patch" | "queue" | "account">,
   ) => Promise<MatchFilterOptions>;
   getMatchDetail: (gameId: number) => Promise<MatchDetail>;
   toggleFavorite: (gameId: number) => Promise<boolean>;
@@ -457,7 +465,7 @@ export interface ElectronAPI {
   getAugmentStats: (championId?: number, patch?: string, queue?: number) => Promise<AugmentStats[]>;
   getAugmentStatsDetailed: (patch?: string, queue?: number) => Promise<AugmentStatsDetailed[]>;
   getDashboard: (
-    filters?: Pick<MatchFilters, "championId" | "patch" | "queue">,
+    filters?: Pick<MatchFilters, "championId" | "patch" | "queue" | "account">,
   ) => Promise<DashboardData>;
   getChampionMatchHistory: (
     championId: number,

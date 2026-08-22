@@ -8,6 +8,7 @@ const api = {
       championId?: number;
       patch?: string;
       queue?: number;
+      account?: string;
       sort?: string;
       sortDir?: string;
       multikills?: string[];
@@ -15,8 +16,12 @@ const api = {
     },
   ) => ipcRenderer.invoke("db:match-history", limit, offset, filters),
 
-  getMatchFilterOptions: (filters?: { championId?: number; patch?: string; queue?: number }) =>
-    ipcRenderer.invoke("db:match-filters", filters),
+  getMatchFilterOptions: (filters?: {
+    championId?: number;
+    patch?: string;
+    queue?: number;
+    account?: string;
+  }) => ipcRenderer.invoke("db:match-filters", filters),
 
   getMatchDetail: (gameId: number) => ipcRenderer.invoke("db:match-detail", gameId),
 
@@ -31,8 +36,12 @@ const api = {
   getAugmentStatsDetailed: (patch?: string, queue?: number) =>
     ipcRenderer.invoke("db:augment-stats-detailed", patch, queue),
 
-  getDashboard: (filters?: { championId?: number; patch?: string; queue?: number }) =>
-    ipcRenderer.invoke("db:dashboard", filters),
+  getDashboard: (filters?: {
+    championId?: number;
+    patch?: string;
+    queue?: number;
+    account?: string;
+  }) => ipcRenderer.invoke("db:dashboard", filters),
 
   getChampionMatchHistory: (
     championId: number,

@@ -31,6 +31,7 @@ export function registerIpcHandlers() {
         championId?: number;
         patch?: string;
         queue?: number;
+        account?: string;
         sort?: string;
         sortDir?: string;
         multikills?: string[];
@@ -43,7 +44,10 @@ export function registerIpcHandlers() {
 
   ipcMain.handle(
     "db:match-filters",
-    (_event, filters?: { championId?: number; patch?: string; queue?: number }) => {
+    (
+      _event,
+      filters?: { championId?: number; patch?: string; queue?: number; account?: string },
+    ) => {
       return db.getMatchFilterOptions(filters);
     },
   );
@@ -73,7 +77,10 @@ export function registerIpcHandlers() {
 
   ipcMain.handle(
     "db:dashboard",
-    (_event, filters?: { championId?: number; patch?: string; queue?: number }) => {
+    (
+      _event,
+      filters?: { championId?: number; patch?: string; queue?: number; account?: string },
+    ) => {
       return db.getDashboardData(filters);
     },
   );

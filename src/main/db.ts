@@ -992,6 +992,7 @@ export function getMatchHistory(
     championId?: number;
     patch?: string;
     queue?: number;
+    account?: string;
     sort?: string;
     sortDir?: string;
     multikills?: string[];
@@ -1002,6 +1003,10 @@ export function getMatchHistory(
   const params: any[] = [];
   if (filters?.favorites) {
     where.push("g.favorite = 1");
+  }
+  if (filters?.account) {
+    where.push("g.puuid = ?");
+    params.push(filters.account);
   }
   if (filters?.championId != null) {
     where.push("ps.champion_id = ?");
@@ -1055,13 +1060,22 @@ export function getMatchFilterOptions(filters?: {
   championId?: number;
   patch?: string;
   queue?: number;
+  account?: string;
 }): {
   patches: string[];
   champions: number[];
   queues: number[];
+  accounts: { puuid: string; name: string | null; profileIcon: number | null }[];
   hasFavorites: boolean;
 } {
   // Each list is narrowed by the OTHER filters so a dropdown never hides its own selection
+  const applyAccountFilter = (where: string[], params: any[]) => {
+    if (filters?.account) {
+      where.push("g.puuid = ?");
+      params.push(filters.account);
+    }
+  };
+
   const patchWhere = ["g.game_version IS NOT NULL AND g.game_version != ''"];
   const patchParams: any[] = [];
   if (filters?.championId != null) {
@@ -1069,6 +1083,7 @@ export function getMatchFilterOptions(filters?: {
     patchParams.push(filters.championId);
   }
   applyQueueFilter(patchWhere, patchParams, filters?.queue);
+  applyAccountFilter(patchWhere, patchParams);
   const patchRows = db
     .prepare(`
     SELECT DISTINCT g.game_version
@@ -1092,6 +1107,7 @@ export function getMatchFilterOptions(filters?: {
     champParams.push(filters.patch);
   }
   applyQueueFilter(champWhere, champParams, filters?.queue);
+  applyAccountFilter(champWhere, champParams);
   const champRows = db
     .prepare(`
     SELECT DISTINCT ps.champion_id
@@ -1113,6 +1129,7 @@ export function getMatchFilterOptions(filters?: {
     queueParams.push(filters.patch);
   }
   applyQueueFilter(queueWhere, queueParams, undefined);
+  applyAccountFilter(queueWhere, queueParams);
   const queueRows = db
     .prepare(`
     SELECT DISTINCT g.queue_id
@@ -1122,6 +1139,44 @@ export function getMatchFilterOptions(filters?: {
     ORDER BY g.queue_id
   `)
     .all(...queueParams) as { queue_id: number }[];
+
+  // Like the favorites toggle below, this list ignores the other filters: the
+  // set of tracked accounts is stable, and the dropdown shouldn't reshuffle as
+  // the user narrows by champion or patch. Games whose owner was never resolved
+  // carry an empty puuid and aren't an account.
+  const accountRows = db
+    .prepare(`
+    SELECT g.puuid, s.game_name, s.tag_line, s.profile_icon
+    FROM games g
+    LEFT JOIN summoner s ON s.puuid = g.puuid
+    WHERE g.puuid != ''
+    GROUP BY g.puuid
+    ORDER BY MAX(g.game_creation) DESC
+  `)
+    .all() as {
+    puuid: string;
+    game_name: string | null;
+    tag_line: string | null;
+    profile_icon: number | null;
+  }[];
+  // An imported database may have no summoner row for an account — fall back to
+  // the name and icon its most recent game recorded, same as getProfile does.
+  const latestGameStmt = db.prepare(
+    "SELECT game_id FROM games WHERE puuid = ? ORDER BY game_creation DESC LIMIT 1",
+  );
+  const accounts = accountRows.map((r) => {
+    let name = displayName(r.game_name, r.tag_line);
+    let profileIcon = r.profile_icon;
+    if (!name || profileIcon == null) {
+      const latest = latestGameStmt.get(r.puuid) as { game_id: number } | undefined;
+      const fromGame = latest
+        ? identityFromGame(latest.game_id, r.puuid)
+        : { name: null, icon: null };
+      name = name ?? fromGame.name;
+      profileIcon = profileIcon ?? fromGame.icon;
+    }
+    return { puuid: r.puuid, name, profileIcon };
+  });
 
   // Unlike the lists above, this one ignores the other filters: the favorites
   // toggle should stay put while the user narrows the list rather than blinking
@@ -1141,6 +1196,7 @@ export function getMatchFilterOptions(filters?: {
     patches,
     champions: champRows.map((r) => r.champion_id),
     queues: queueRows.map((r) => r.queue_id),
+    accounts,
     hasFavorites: !!favoriteRow.has,
   };
 }
@@ -1292,12 +1348,17 @@ export function getDashboardData(filters?: {
   championId?: number;
   patch?: string;
   queue?: number;
+  account?: string;
 }): any {
   const where: string[] = ["g.is_remake = 0"];
   const params: any[] = [];
   if (filters?.championId != null) {
     where.push("ps.champion_id = ?");
     params.push(filters.championId);
+  }
+  if (filters?.account) {
+    where.push("g.puuid = ?");
+    params.push(filters.account);
   }
   if (filters?.patch) {
     where.push("g.game_version = ?");
