@@ -221,10 +221,7 @@ export default function GlobalStats() {
     return filtered;
   }, [data, augSearch, augSortKey, augSortDir, augmentData, rarityFilter]);
 
-  const getItemName = useCallback(
-    (id: number) => itemData[id]?.name ?? `Item ${id}`,
-    [itemData],
-  );
+  const getItemName = useCallback((id: number) => itemData[id]?.name ?? `Item ${id}`, [itemData]);
 
   const sortedItems = useMemo(() => {
     if (!data) return [];
@@ -420,11 +417,7 @@ export default function GlobalStats() {
         <>
           <div className="flex items-center justify-between">
             <span className="text-xs text-lol-text">{sortedItems.length} items</span>
-            <SearchInput
-              value={itemSearch}
-              onChange={setItemSearch}
-              placeholder="Search item..."
-            />
+            <SearchInput value={itemSearch} onChange={setItemSearch} placeholder="Search item..." />
           </div>
 
           <div className="bg-lol-card rounded-xl border border-lol-border/60 overflow-hidden">
