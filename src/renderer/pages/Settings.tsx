@@ -257,68 +257,145 @@ export default function Settings() {
     <div className="max-w-2xl space-y-6">
       <h1 className="text-xl font-bold text-lol-text-bright">Settings</h1>
 
-      {/* Startup */}
+      {/* General */}
       <div className="bg-lol-card rounded-xl border border-lol-border/60 p-5">
-        <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Startup</h2>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-lol-text-bright">Start with Windows</p>
-            <p className="text-xs text-lol-text mt-0.5">
-              Open the program in the system tray when you sign in to Windows, so your games are
-              recorded without having to remember to start it.
-              {!autoStartSupported && " Only available in the packaged program."}
-            </p>
+        <h2 className="text-sm font-semibold text-lol-text-bright mb-4">General</h2>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-lol-text-bright">Start with Windows</p>
+              <p className="text-xs text-lol-text mt-0.5">
+                Open the program in the system tray when you sign in to Windows, so your games are
+                recorded without having to remember to start it.
+                {!autoStartSupported && " Only available in the packaged program."}
+              </p>
+            </div>
+            <Switch
+              checked={autoStart}
+              onChange={handleAutoStartToggle}
+              disabled={!autoStartSupported}
+            />
           </div>
-          <Switch
-            checked={autoStart}
-            onChange={handleAutoStartToggle}
-            disabled={!autoStartSupported}
-          />
+
+          <div className="border-t border-lol-border" />
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-lol-text-bright">Minimize to tray on close</p>
+              <p className="text-xs text-lol-text mt-0.5">
+                When enabled, the program can keep storing your games even when the window is
+                closed. You can still close the program from the system tray.
+              </p>
+            </div>
+            <Switch checked={minimizeToTray} onChange={handleToggle} />
+          </div>
+
+          <div className="border-t border-lol-border" />
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-lol-text-bright">Remember filters and sorting</p>
+              <p className="text-xs text-lol-text mt-0.5">
+                Reopen every page with the filters, search, and sort order you last used. When off,
+                each page starts on its defaults again every time the program opens.
+              </p>
+            </div>
+            <Switch checked={rememberFilters} onChange={handleRememberFiltersToggle} />
+          </div>
+
+          <div className="border-t border-lol-border" />
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-lol-text-bright">Hide ARAM Mayhem Classic games</p>
+              <p className="text-xs text-lol-text mt-0.5">
+                Exclude games from the limited-time Mayhem Classic queue from all stats and match
+                history. Games are still recorded either way.
+              </p>
+            </div>
+            <Switch checked={hideClassic} onChange={handleHideClassicToggle} />
+          </div>
         </div>
       </div>
 
-      {/* Exit Behavior */}
+      {/* Data Management */}
       <div className="bg-lol-card rounded-xl border border-lol-border/60 p-5">
-        <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Exit Behavior</h2>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-lol-text-bright">Minimize to tray on close</p>
-            <p className="text-xs text-lol-text mt-0.5">
-              When enabled, the program can keep storing your games even when the window is closed.
-              You can still close the program from the system tray.
-            </p>
+        <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Data Management</h2>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-lol-text-bright">Backfill match history</p>
+              <p className="text-xs text-lol-text mt-0.5">
+                Pull your older Mayhem games from Riot and add any that aren't stored yet. This runs
+                automatically the first time an account connects; use this to run it again, or to
+                finish an import you cancelled.
+              </p>
+            </div>
+            <button
+              onClick={handleBackfill}
+              disabled={backfilling}
+              className="px-4 py-1.5 rounded text-sm bg-lol-gold/20 text-lol-gold hover:bg-lol-gold/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {backfilling ? "Working..." : "Backfill"}
+            </button>
           </div>
-          <Switch checked={minimizeToTray} onChange={handleToggle} />
-        </div>
-      </div>
+          {backfillStatus && <p className="text-xs text-lol-text">{backfillStatus}</p>}
 
-      {/* Filters */}
-      <div className="bg-lol-card rounded-xl border border-lol-border/60 p-5">
-        <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Filters</h2>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-lol-text-bright">Remember filters and sorting</p>
-            <p className="text-xs text-lol-text mt-0.5">
-              Reopen every page with the filters, search, and sort order you last used. When off,
-              each page starts on its defaults again every time the program opens.
-            </p>
-          </div>
-          <Switch checked={rememberFilters} onChange={handleRememberFiltersToggle} />
-        </div>
-      </div>
+          <div className="border-t border-lol-border" />
 
-      {/* Stats */}
-      <div className="bg-lol-card rounded-xl border border-lol-border/60 p-5">
-        <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Stats</h2>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-lol-text-bright">Hide ARAM Mayhem Classic games</p>
-            <p className="text-xs text-lol-text mt-0.5">
-              Exclude games from the limited-time Mayhem Classic queue from all stats and match
-              history. Games are still recorded either way.
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-lol-text-bright">Export data</p>
+              <p className="text-xs text-lol-text mt-0.5">
+                Save all match data to a JSON file for backup
+              </p>
+            </div>
+            <button
+              onClick={handleExport}
+              className="px-4 py-1.5 rounded text-sm bg-lol-gold/20 text-lol-gold hover:bg-lol-gold/30 transition-colors"
+            >
+              Export
+            </button>
           </div>
-          <Switch checked={hideClassic} onChange={handleHideClassicToggle} />
+          {exportStatus && <p className="text-xs text-lol-text">{exportStatus}</p>}
+
+          <div className="border-t border-lol-border" />
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-lol-text-bright">Import data</p>
+              <p className="text-xs text-lol-text mt-0.5">
+                Load match data from a previously exported file
+              </p>
+            </div>
+            <button
+              onClick={handleImport}
+              className="px-4 py-1.5 rounded text-sm bg-lol-gold/20 text-lol-gold hover:bg-lol-gold/30 transition-colors"
+            >
+              Import
+            </button>
+          </div>
+          {importStatus && <p className="text-xs text-lol-text">{importStatus}</p>}
+
+          <div className="border-t border-lol-border" />
+
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-lol-text-bright">Repair account data</p>
+              <p className="text-xs text-lol-text mt-0.5">
+                Re-detect which accounts are yours by analyzing game history, then rebuild stored
+                stats, augments, and performance scores from the raw game data. Use this if games
+                are attributed to the wrong account or scores look stale.
+              </p>
+            </div>
+            <button
+              onClick={handleRepair}
+              className="px-4 py-1.5 rounded text-sm bg-lol-gold/20 text-lol-gold hover:bg-lol-gold/30 transition-colors"
+            >
+              Repair
+            </button>
+          </div>
+          {repairStatus && <p className="text-xs text-lol-text">{repairStatus}</p>}
         </div>
       </div>
 
@@ -404,87 +481,6 @@ export default function Settings() {
             </button>
           </div>
           {backupStatus && <p className="text-xs text-lol-text">{backupStatus}</p>}
-        </div>
-      </div>
-
-      {/* Data Management */}
-      <div className="bg-lol-card rounded-xl border border-lol-border/60 p-5">
-        <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Data Management</h2>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-lol-text-bright">Backfill match history</p>
-              <p className="text-xs text-lol-text mt-0.5">
-                Pull your older Mayhem games from Riot and add any that aren't stored yet. This runs
-                automatically the first time an account connects; use this to run it again, or to
-                finish an import you cancelled.
-              </p>
-            </div>
-            <button
-              onClick={handleBackfill}
-              disabled={backfilling}
-              className="px-4 py-1.5 rounded text-sm bg-lol-gold/20 text-lol-gold hover:bg-lol-gold/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {backfilling ? "Working..." : "Backfill"}
-            </button>
-          </div>
-          {backfillStatus && <p className="text-xs text-lol-text">{backfillStatus}</p>}
-
-          <div className="border-t border-lol-border" />
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-lol-text-bright">Export data</p>
-              <p className="text-xs text-lol-text mt-0.5">
-                Save all match data to a JSON file for backup
-              </p>
-            </div>
-            <button
-              onClick={handleExport}
-              className="px-4 py-1.5 rounded text-sm bg-lol-gold/20 text-lol-gold hover:bg-lol-gold/30 transition-colors"
-            >
-              Export
-            </button>
-          </div>
-          {exportStatus && <p className="text-xs text-lol-text">{exportStatus}</p>}
-
-          <div className="border-t border-lol-border" />
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-lol-text-bright">Import data</p>
-              <p className="text-xs text-lol-text mt-0.5">
-                Load match data from a previously exported file
-              </p>
-            </div>
-            <button
-              onClick={handleImport}
-              className="px-4 py-1.5 rounded text-sm bg-lol-gold/20 text-lol-gold hover:bg-lol-gold/30 transition-colors"
-            >
-              Import
-            </button>
-          </div>
-          {importStatus && <p className="text-xs text-lol-text">{importStatus}</p>}
-
-          <div className="border-t border-lol-border" />
-
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-lol-text-bright">Repair account data</p>
-              <p className="text-xs text-lol-text mt-0.5">
-                Re-detect which accounts are yours by analyzing game history, then rebuild stored
-                stats, augments, and performance scores from the raw game data. Use this if games
-                are attributed to the wrong account or scores look stale.
-              </p>
-            </div>
-            <button
-              onClick={handleRepair}
-              className="px-4 py-1.5 rounded text-sm bg-lol-gold/20 text-lol-gold hover:bg-lol-gold/30 transition-colors"
-            >
-              Repair
-            </button>
-          </div>
-          {repairStatus && <p className="text-xs text-lol-text">{repairStatus}</p>}
         </div>
       </div>
     </div>
