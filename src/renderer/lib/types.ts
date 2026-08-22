@@ -314,6 +314,53 @@ export interface TrendsData {
   weekdays: { weekday: number; games: number; wins: number }[];
 }
 
+// Just enough of a game to draw a record's context line and open its match.
+export interface RecordMatchRef {
+  game_id: number;
+  game_creation: number;
+  game_duration: number;
+  queue_id: number;
+  champion_id: number;
+  win: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+}
+
+// A single-game best: the mark itself plus the game it was set in.
+export interface StatRecord {
+  value: number;
+  match: RecordMatchRef;
+}
+
+export interface StreakRecord {
+  length: number;
+  start: number;
+  end: number;
+  // The streak's final game
+  match: RecordMatchRef;
+}
+
+export interface RecordsData {
+  totalGames: number;
+  bests: {
+    kills: StatRecord | null;
+    deaths: StatRecord | null;
+    assists: StatRecord | null;
+    kda: StatRecord | null;
+    score: StatRecord | null;
+    killingSpree: StatRecord | null;
+    damage: StatRecord | null;
+    damageTaken: StatRecord | null;
+    healing: StatRecord | null;
+    gold: StatRecord | null;
+    fastestWin: StatRecord | null;
+    longestGame: StatRecord | null;
+  };
+  winStreak: StreakRecord | null;
+  lossStreak: StreakRecord | null;
+}
+
 export interface GlobalStats {
   champions: { champion_id: number; games: number; wins: number }[];
   augments: { augment_id: number; picks: number; wins: number }[];
@@ -428,6 +475,7 @@ export interface ElectronAPI {
   getTeammateDetail: (key: string) => Promise<TeammateDetail | null>;
   getGlobalStats: (patch?: string, queue?: number) => Promise<GlobalStats>;
   getTrends: (queue?: number) => Promise<TrendsData>;
+  getRecords: (queue?: number) => Promise<RecordsData>;
   getGlobalChampionDetail: (
     championId: number,
     patch?: string,

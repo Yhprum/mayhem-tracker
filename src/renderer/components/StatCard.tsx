@@ -3,8 +3,9 @@ import type { ReactNode } from "react";
 export type StatAccent = "gold" | "win" | "sky" | "purple";
 
 // A soft corner glow and a tinted icon chip, so a row of cards reads as
-// distinct tiles rather than one flat block.
-const ACCENTS: Record<StatAccent, { glow: string; chip: string }> = {
+// distinct tiles rather than one flat block. Exported so the Records page can
+// build its clickable cards out of the same palette.
+export const ACCENTS: Record<StatAccent, { glow: string; chip: string }> = {
   gold: {
     glow: "bg-lol-gold/[0.07]",
     chip: "bg-lol-gold/10 text-lol-gold",

@@ -2286,6 +2286,110 @@ export function getTrendsData(queue?: number): any {
   return { daily, patches, hours, weekdays };
 }
 
+// The trophy case: best single-game marks and longest streaks, from one
+// chronological pass over our own rows — streaks need the ordering anyway, and
+// the maxima fall out of the same loop. On ties the earliest game keeps the
+// record, so a mark has to be strictly beaten to change hands.
+export function getRecords(queue?: number): any {
+  const where = ["g.is_remake = 0"];
+  const params: any[] = [];
+  applyQueueFilter(where, params, queue);
+
+  const rows = db
+    .prepare(`
+      SELECT g.game_id, g.game_creation, g.game_duration, g.queue_id,
+             ps.champion_id, ps.win, ps.kills, ps.deaths, ps.assists,
+             ps.total_damage_dealt, ps.total_damage_taken,
+             ps.gold_earned, ps.total_heal, ps.largest_killing_spree, ps.score
+      FROM games g
+      JOIN player_stats ps ON g.game_id = ps.game_id
+      WHERE ${where.join(" AND ")}
+      ORDER BY g.game_creation ASC
+    `)
+    .all(...params) as any[];
+
+  // Just enough of the game to render a record's context and open its match
+  const matchOf = (r: any) => ({
+    game_id: r.game_id,
+    game_creation: r.game_creation,
+    game_duration: r.game_duration,
+    queue_id: r.queue_id,
+    champion_id: r.champion_id,
+    win: r.win,
+    kills: r.kills,
+    deaths: r.deaths,
+    assists: r.assists,
+  });
+
+  const bests: Record<string, { value: number; match: any } | null> = {
+    kills: null,
+    deaths: null,
+    assists: null,
+    kda: null,
+    score: null,
+    killingSpree: null,
+    damage: null,
+    damageTaken: null,
+    healing: null,
+    gold: null,
+    fastestWin: null,
+    longestGame: null,
+  };
+  const higher = (a: number, b: number) => a > b;
+  const lower = (a: number, b: number) => a < b;
+  const track = (key: string, value: number | null, row: any, better = higher) => {
+    if (value == null) return;
+    const current = bests[key];
+    if (!current || better(value, current.value)) bests[key] = { value, match: matchOf(row) };
+  };
+
+  interface Streak {
+    length: number;
+    start: number;
+    end: number;
+    match: any;
+  }
+  let winStreak: Streak | null = null;
+  let lossStreak: Streak | null = null;
+  let run: { win: number; length: number; start: number } | null = null;
+
+  for (const r of rows) {
+    track("kills", r.kills, r);
+    track("deaths", r.deaths, r);
+    track("assists", r.assists, r);
+    // Deathless games rank by kills+assists rather than dividing by zero; the
+    // renderer still labels them "Perfect"
+    track("kda", (r.kills + r.assists) / Math.max(r.deaths, 1), r);
+    track("score", r.score, r);
+    track("killingSpree", r.largest_killing_spree, r);
+    track("damage", r.total_damage_dealt, r);
+    track("damageTaken", r.total_damage_taken, r);
+    track("healing", r.total_heal, r);
+    track("gold", r.gold_earned, r);
+    if (r.win) track("fastestWin", r.game_duration, r, lower);
+    track("longestGame", r.game_duration, r);
+
+    // Remakes never make it into rows, so they can't break a streak
+    if (!run || run.win !== r.win) {
+      run = { win: r.win, length: 0, start: r.game_creation };
+    }
+    run.length++;
+    const record: Streak = {
+      length: run.length,
+      start: run.start,
+      end: r.game_creation,
+      match: matchOf(r),
+    };
+    if (r.win) {
+      if (!winStreak || run.length > winStreak.length) winStreak = record;
+    } else {
+      if (!lossStreak || run.length > lossStreak.length) lossStreak = record;
+    }
+  }
+
+  return { totalGames: rows.length, bests, winStreak, lossStreak };
+}
+
 export function getDatabase(): Database.Database {
   return db;
 }

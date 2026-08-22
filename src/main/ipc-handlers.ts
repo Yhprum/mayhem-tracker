@@ -158,6 +158,10 @@ export function registerIpcHandlers() {
     return db.getTrendsData(queue);
   });
 
+  ipcMain.handle("db:records", (_event, queue?: number) => {
+    return db.getRecords(queue);
+  });
+
   ipcMain.handle(
     "db:global-champion-detail",
     (_event, championId: number, patch?: string, queue?: number) => {

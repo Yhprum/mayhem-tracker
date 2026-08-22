@@ -12,6 +12,7 @@ import {
   UsersIcon,
   GlobeIcon,
   TrendingUpIcon,
+  MedalIcon,
   SettingsIcon,
   RefreshIcon,
 } from "./icons";
@@ -24,6 +25,7 @@ const links: { to: string; label: string; icon: IconComponent }[] = [
   { to: "/augments", label: "Augments", icon: CrosshairIcon },
   { to: "/friends", label: "Friends", icon: UsersIcon },
   { to: "/trends", label: "Trends", icon: TrendingUpIcon },
+  { to: "/records", label: "Records", icon: MedalIcon },
   { to: "/global", label: "Total Stats", icon: GlobeIcon },
 ];
 
