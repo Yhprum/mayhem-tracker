@@ -1,27 +1,62 @@
 import { useState, useEffect, useCallback } from "react";
 import { useBackfill } from "../hooks/useBackfill";
+import type { BackupInfo } from "../lib/types";
+
+const BACKUP_REASONS: Record<string, string> = {
+  auto: "Scheduled",
+  manual: "Manual",
+  "pre-import": "Before import",
+  "pre-repair": "Before repair",
+  "pre-restore": "Before restore",
+};
+
+function formatSize(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatTaken(timestamp: number): string {
+  const date = new Date(timestamp);
+  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
 
 export default function Settings() {
   // Shared so a backfill started automatically on first connect shows here too
   const { running: backfilling, progress } = useBackfill();
   const [minimizeToTray, setMinimizeToTray] = useState(true);
   const [hideClassic, setHideClassic] = useState(false);
+  const [autoBackup, setAutoBackup] = useState(true);
   const [loading, setLoading] = useState(true);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [repairStatus, setRepairStatus] = useState<string | null>(null);
   const [backfillStatus, setBackfillStatus] = useState<string | null>(null);
+  const [backups, setBackups] = useState<BackupInfo[]>([]);
+  const [backupStatus, setBackupStatus] = useState<string | null>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+  // Restoring replaces the whole database, so the row asks a second time
+  const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       window.api.getSetting("minimize_to_tray"),
       window.api.getSetting("hide_classic_games"),
-    ]).then(([tray, classic]) => {
+      window.api.getSetting("auto_backup"),
+    ]).then(([tray, classic, backup]) => {
       setMinimizeToTray(tray !== "false");
       setHideClassic(classic === "true");
+      setAutoBackup(backup !== "false");
       setLoading(false);
     });
   }, []);
+
+  const refreshBackups = useCallback(() => {
+    window.api.listBackups().then(setBackups);
+  }, []);
+
+  useEffect(refreshBackups, [refreshBackups]);
 
   const handleToggle = useCallback(async () => {
     const next = !minimizeToTray;
@@ -34,6 +69,52 @@ export default function Settings() {
     setHideClassic(next);
     await window.api.setSetting("hide_classic_games", String(next));
   }, [hideClassic]);
+
+  const handleAutoBackupToggle = useCallback(async () => {
+    const next = !autoBackup;
+    setAutoBackup(next);
+    await window.api.setSetting("auto_backup", String(next));
+  }, [autoBackup]);
+
+  const handleBackupNow = useCallback(async () => {
+    setBackupBusy(true);
+    setBackupStatus(null);
+    try {
+      const result = await window.api.createBackup();
+      setBackupStatus(
+        result.success
+          ? `Backed up ${result.backup?.games} game(s)`
+          : `Error: ${result.error ?? "backup failed"}`,
+      );
+      refreshBackups();
+    } catch (err: any) {
+      setBackupStatus(`Error: ${err.message}`);
+    } finally {
+      setBackupBusy(false);
+    }
+  }, [refreshBackups]);
+
+  const handleRestore = useCallback(
+    async (file: string) => {
+      setConfirmRestore(null);
+      setBackupBusy(true);
+      setBackupStatus(null);
+      try {
+        const result = await window.api.restoreBackup(file);
+        setBackupStatus(
+          result.success
+            ? `Restored ${result.games} game(s) from ${file}`
+            : `Error: ${result.error ?? "restore failed"}`,
+        );
+        refreshBackups();
+      } catch (err: any) {
+        setBackupStatus(`Error: ${err.message}`);
+      } finally {
+        setBackupBusy(false);
+      }
+    },
+    [refreshBackups],
+  );
 
   const handleExport = useCallback(async () => {
     setExportStatus(null);
@@ -59,10 +140,12 @@ export default function Settings() {
       } else {
         setImportStatus(result.error ? `Error: ${result.error}` : null);
       }
+      // An import takes a snapshot on its way in
+      refreshBackups();
     } catch (err: any) {
       setImportStatus(`Error: ${err.message}`);
     }
-  }, []);
+  }, [refreshBackups]);
 
   useEffect(() => {
     if (!progress) return;
@@ -104,10 +187,12 @@ export default function Settings() {
       setRepairStatus(
         `Repaired ${result.repairedGames} game(s), found ${result.discoveredAccounts} account(s), rebuilt stats and scores for ${result.rebuiltGames} game(s)`,
       );
+      // A repair takes a snapshot on its way in
+      refreshBackups();
     } catch (err: any) {
       setRepairStatus(`Error: ${err.message}`);
     }
-  }, []);
+  }, [refreshBackups]);
 
   if (loading) return null;
 
@@ -170,6 +255,105 @@ export default function Settings() {
               }`}
             />
           </button>
+        </div>
+      </div>
+
+      {/* Backups */}
+      <div className="bg-lol-card rounded-xl border border-lol-border/60 p-5">
+        <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Backups</h2>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-lol-text-bright">Automatic backups</p>
+              <p className="text-xs text-lol-text mt-0.5">
+                Keep a daily copy of your database on this computer, plus one before any import or
+                repair. Older copies thin out to weekly and monthly. If the database ever goes
+                missing or won't open, the newest working copy is restored on startup.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoBackup}
+              onClick={handleAutoBackupToggle}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
+                autoBackup ? "bg-lol-gold" : "bg-lol-border"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform duration-200 ${
+                  autoBackup ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="border-t border-lol-border" />
+
+          {backups.length === 0 ? (
+            <p className="text-xs text-lol-text">No backups yet.</p>
+          ) : (
+            <div className="space-y-1">
+              {backups.map((backup) => (
+                <div
+                  key={backup.file}
+                  className="flex items-center justify-between gap-3 text-xs py-1"
+                >
+                  <div className="min-w-0">
+                    <p className="text-lol-text-bright">{formatTaken(backup.created)}</p>
+                    <p className="text-lol-text">
+                      {BACKUP_REASONS[backup.reason] ?? backup.reason} ·{" "}
+                      {backup.games === null ? "unreadable" : `${backup.games} games`} ·{" "}
+                      {formatSize(backup.size)}
+                    </p>
+                  </div>
+                  {confirmRestore === backup.file ? (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-lol-text">Replace current data?</span>
+                      <button
+                        onClick={() => handleRestore(backup.file)}
+                        disabled={backupBusy}
+                        className="px-3 py-1 rounded bg-red-500/20 text-red-300 hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                      >
+                        Restore
+                      </button>
+                      <button
+                        onClick={() => setConfirmRestore(null)}
+                        className="px-3 py-1 rounded bg-lol-border/40 text-lol-text hover:bg-lol-border/60 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmRestore(backup.file)}
+                      disabled={backupBusy || backup.games === null}
+                      className="px-3 py-1 rounded shrink-0 bg-lol-gold/20 text-lol-gold hover:bg-lol-gold/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Restore
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleBackupNow}
+              disabled={backupBusy}
+              className="px-4 py-1.5 rounded text-sm bg-lol-gold/20 text-lol-gold hover:bg-lol-gold/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {backupBusy ? "Working..." : "Back up now"}
+            </button>
+            <button
+              onClick={() => window.api.openBackupFolder()}
+              className="px-4 py-1.5 rounded text-sm bg-lol-border/40 text-lol-text hover:bg-lol-border/60 transition-colors"
+            >
+              Open folder
+            </button>
+          </div>
+          {backupStatus && <p className="text-xs text-lol-text">{backupStatus}</p>}
         </div>
       </div>
 

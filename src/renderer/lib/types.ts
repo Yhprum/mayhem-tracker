@@ -464,6 +464,22 @@ export interface UpdateInfo {
   error?: string;
 }
 
+export interface BackupInfo {
+  file: string;
+  created: number;
+  size: number;
+  // null when the snapshot exists but couldn't be read
+  games: number | null;
+  reason: string;
+}
+
+export interface RecoveryReport {
+  problem: "missing" | "corrupt";
+  restoredFrom: string | null;
+  quarantined: string | null;
+  detail?: string;
+}
+
 export interface ElectronAPI {
   getMatchHistory: (
     limit: number,
@@ -533,6 +549,11 @@ export interface ElectronAPI {
     discoveredAccounts: number;
     rebuiltGames: number;
   }>;
+  listBackups: () => Promise<BackupInfo[]>;
+  createBackup: () => Promise<{ success: boolean; backup?: BackupInfo; error?: string }>;
+  restoreBackup: (file: string) => Promise<{ success: boolean; games?: number; error?: string }>;
+  getRecoveryReport: () => Promise<RecoveryReport | null>;
+  openBackupFolder: () => Promise<void>;
   getVersion: () => Promise<string>;
   checkForUpdate: () => Promise<UpdateInfo>;
   downloadUpdate: (assetUrl: string) => Promise<{ success: boolean; error?: string }>;

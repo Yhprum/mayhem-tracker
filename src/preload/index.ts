@@ -129,6 +129,16 @@ const api = {
 
   repairPuuids: () => ipcRenderer.invoke("data:repair-puuids"),
 
+  listBackups: () => ipcRenderer.invoke("backup:list"),
+
+  createBackup: () => ipcRenderer.invoke("backup:create"),
+
+  restoreBackup: (file: string) => ipcRenderer.invoke("backup:restore", file),
+
+  getRecoveryReport: () => ipcRenderer.invoke("backup:recovery-report"),
+
+  openBackupFolder: () => ipcRenderer.invoke("backup:open-folder"),
+
   getVersion: () => ipcRenderer.invoke("app:version"),
 
   checkForUpdate: () => ipcRenderer.invoke("app:check-update"),

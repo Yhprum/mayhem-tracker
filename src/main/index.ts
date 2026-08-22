@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Tray, Menu, nativeImage } from "electron";
 import path from "path";
-import { initDatabase, closeDatabase, getSetting, checkScoreBackfill } from "./db";
+import { closeDatabase, getSetting, checkScoreBackfill } from "./db";
+import { initDatabaseWithRecovery, startBackupSchedule, stopBackupSchedule } from "./backup";
 import { registerIpcHandlers } from "./ipc-handlers";
 import { startPolling, stopPolling, isClientConnected, fetchNewGames } from "./lcu";
 import { loadChampionData, loadAugmentData, waitForChampionData } from "./dragon";
@@ -145,8 +146,10 @@ app.whenReady().then(async () => {
   // Before any window exists, so no web contents escapes the policy
   applySecurityPolicy();
 
-  // Initialize database first
-  initDatabase();
+  // Initialize the database first. Through the backup module rather than
+  // directly: a database that has been deleted or damaged since the last launch
+  // is restored from the newest good snapshot here, before anything reads it.
+  initDatabaseWithRecovery();
 
   // Load assets in background
   loadChampionData();
@@ -168,6 +171,7 @@ app.whenReady().then(async () => {
   createTray();
 
   startPolling(win);
+  startBackupSchedule();
 });
 
 app.on("before-quit", async (event) => {
@@ -201,6 +205,7 @@ app.on("before-quit", async (event) => {
 // Runs after before-quit has settled, so the final fetch has already written
 // whatever it found by the time the database closes.
 app.on("will-quit", () => {
+  stopBackupSchedule();
   closeDatabase();
 });
 

@@ -1,16 +1,18 @@
-import { ipcMain, BrowserWindow, dialog, app } from "electron";
+import { ipcMain, BrowserWindow, dialog, app, shell } from "electron";
 import fs from "fs";
 import * as db from "./db";
 import * as lcu from "./lcu";
 import * as dragon from "./dragon";
 import * as updater from "./updater";
+import * as backup from "./backup";
+import { getBackupDir } from "./paths";
 import { openExternalUrl } from "./security";
 
 // The settings table doubles as internal bookkeeping — sgp_host, the
 // per-account backfill_complete_* flags, score_formula_version — none of which
 // the renderer has any business reading or rewriting. Only the keys backing the
 // Settings page are exposed.
-const RENDERER_SETTINGS = new Set(["minimize_to_tray", "hide_classic_games"]);
+const RENDERER_SETTINGS = new Set(["minimize_to_tray", "hide_classic_games", "auto_backup"]);
 
 // Registered once for the lifetime of the app — ipcMain.handle throws on a
 // second registration for the same channel. Anything needing a window resolves
@@ -298,6 +300,9 @@ export function registerIpcHandlers() {
       if (!data || typeof data !== "object" || !Array.isArray(data.games)) {
         return { success: false, error: "That file isn't a Mayhem Tracker backup" };
       }
+      // Snapshot first: an import writes into every table, and this is the last
+      // moment the database is known to be in the state the user chose it from.
+      await backup.backupQuietly("pre-import");
       const imported = db.importData(data);
       return { success: true, imported };
     } catch (err: any) {
@@ -310,6 +315,43 @@ export function registerIpcHandlers() {
     // Repair rescoring needs champion classes; wait so a repair triggered
     // right after launch doesn't score with default weights.
     await dragon.waitForChampionData();
+    // A repair reassigns game ownership and rewrites every derived stat, so
+    // there is no undo for it short of the snapshot taken here.
+    await backup.backupQuietly("pre-repair");
     return db.repairPuuids();
+  });
+
+  // Backups
+  ipcMain.handle("backup:list", () => {
+    return backup.listBackups();
+  });
+
+  ipcMain.handle("backup:create", async () => {
+    try {
+      return { success: true, backup: await backup.createBackup("manual") };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("backup:restore", async (event, file: string) => {
+    try {
+      const result = await backup.restoreBackup(file);
+      // Everything on screen was read from the database that just got replaced
+      senderWindow(event)?.webContents.send("lcu:games-updated");
+      return { success: true, games: result.games };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("backup:recovery-report", () => {
+    return backup.getRecoveryReport();
+  });
+
+  // No renderer input reaches this: the path is ours, and the folder is the
+  // one place a user needs to reach to copy a backup somewhere safer.
+  ipcMain.handle("backup:open-folder", () => {
+    void shell.openPath(getBackupDir());
   });
 }

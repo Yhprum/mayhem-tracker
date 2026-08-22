@@ -12,7 +12,7 @@ const EXCLUDED_ITEM_IDS = [2052, 220013];
 
 let db: Database.Database;
 
-function getDbPath() {
+export function getDbPath() {
   return path.join(getDataDir(), "matches.db");
 }
 
