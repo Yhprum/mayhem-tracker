@@ -68,6 +68,99 @@ const SORT_OPTIONS: { value: MatchSort; label: string }[] = [
 
 const SELECT_CLASS = "select";
 
+// Games on the same local day play as one session, and a run that spills past
+// midnight stays together as long as the next game starts within this gap.
+const SESSION_GAP_MS = 3 * 60 * 60 * 1000;
+
+interface Session {
+  key: number;
+  start: number; // earliest game in the session — names the session's day
+  matches: MatchListItem[];
+  wins: number;
+  losses: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  avgScore: number | null;
+}
+
+function sameSession(a: MatchListItem, b: MatchListItem): boolean {
+  const [earlier, later] = a.game_creation <= b.game_creation ? [a, b] : [b, a];
+  if (
+    new Date(earlier.game_creation).toDateString() === new Date(later.game_creation).toDateString()
+  ) {
+    return true;
+  }
+  const gap = later.game_creation - (earlier.game_creation + earlier.game_duration * 1000);
+  return gap < SESSION_GAP_MS;
+}
+
+// Expects a date-ordered list (either direction); remakes count toward the
+// session's size but stay out of its record and averages.
+function groupIntoSessions(matches: MatchListItem[]): Session[] {
+  const sessions: Session[] = [];
+  let current: MatchListItem[] = [];
+
+  const flush = () => {
+    if (current.length === 0) return;
+    let wins = 0;
+    let losses = 0;
+    let kills = 0;
+    let deaths = 0;
+    let assists = 0;
+    let scoreSum = 0;
+    let scored = 0;
+    let start = Infinity;
+    for (const m of current) {
+      start = Math.min(start, m.game_creation);
+      if (m.is_remake) continue;
+      if (m.win) wins++;
+      else losses++;
+      kills += m.kills;
+      deaths += m.deaths;
+      assists += m.assists;
+      if (m.score != null) {
+        scoreSum += m.score;
+        scored++;
+      }
+    }
+    sessions.push({
+      key: current[0].game_id,
+      start,
+      matches: current,
+      wins,
+      losses,
+      kills,
+      deaths,
+      assists,
+      avgScore: scored > 0 ? scoreSum / scored : null,
+    });
+    current = [];
+  };
+
+  for (const m of matches) {
+    if (current.length > 0 && !sameSession(current[current.length - 1], m)) flush();
+    current.push(m);
+  }
+  flush();
+  return sessions;
+}
+
+function sessionLabel(start: number): string {
+  const d = new Date(start);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return "Today";
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    ...(d.getFullYear() !== today.getFullYear() && { year: "numeric" }),
+  });
+}
+
 export default function MatchHistory() {
   const [championFilter, setChampionFilter] = useState<number | undefined>(undefined);
   const [patchFilter, setPatchFilter] = useState<string | undefined>(undefined);
@@ -265,6 +358,14 @@ export default function MatchHistory() {
   const profileShown = selectedAccount
     ? { name: selectedAccount.name, profileIcon: selectedAccount.profileIcon }
     : profile;
+
+  // Session headers only make sense when the list reads in time order; any
+  // other sort interleaves days, so those render flat.
+  const isDateSort = !sort || sort === "date";
+  const sessions = useMemo(
+    () => (isDateSort ? groupIntoSessions(matches) : null),
+    [isDateSort, matches],
+  );
 
   const totalMultikills = dashboard
     ? dashboard.multikills.doubles +
@@ -526,8 +627,8 @@ export default function MatchHistory() {
         </div>
       )}
 
-      <div className="space-y-1">
-        {matches.map((m) => (
+      {(() => {
+        const renderMatch = (m: MatchListItem) => (
           <GameRow
             key={m.game_id}
             match={m}
@@ -542,8 +643,20 @@ export default function MatchHistory() {
               setContextMenu({ x: e.clientX, y: e.clientY, match: m });
             }}
           />
-        ))}
-      </div>
+        );
+        return sessions ? (
+          <div className="space-y-4">
+            {sessions.map((s) => (
+              <div key={s.key}>
+                <SessionHeader session={s} />
+                <div className="space-y-1">{s.matches.map(renderMatch)}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-1">{matches.map(renderMatch)}</div>
+        );
+      })()}
 
       {hasMore && <div ref={sentinelRef} className="h-1" />}
       {loading && matches.length > 0 && (
@@ -725,6 +838,46 @@ function ContextMenu({
       className="fixed z-50 min-w-44 py-1 bg-lol-card border border-lol-border rounded-md shadow-lg shadow-black/40"
     >
       {children}
+    </div>
+  );
+}
+
+// One play session's date and combined record, sitting above its rows. A
+// session of nothing but remakes has no record to show, so only the count
+// survives there.
+function SessionHeader({ session }: { session: Session }) {
+  const played = session.wins + session.losses;
+  const ratio = session.deaths > 0 ? (session.kills + session.assists) / session.deaths : Infinity;
+
+  return (
+    <div className="flex items-baseline gap-3 px-1 pb-1.5">
+      <span className="text-sm font-semibold text-lol-text-bright">
+        {sessionLabel(session.start)}
+      </span>
+      <span className="text-xs text-lol-text">
+        {session.matches.length} {session.matches.length === 1 ? "game" : "games"}
+      </span>
+      {played > 0 && (
+        <>
+          <span className="text-xs font-semibold">
+            <span className="text-lol-win">{session.wins}W</span>{" "}
+            <span className="text-lol-loss/70">{session.losses}L</span>
+          </span>
+          <span
+            className={`text-xs ${kdaColor(ratio)}`}
+            title={formatKDA(session.kills, session.deaths, session.assists)}
+          >
+            {kdaRatio(session.kills, session.deaths, session.assists)} KDA
+          </span>
+          {session.avgScore != null && (
+            <span className={`text-xs font-semibold ${scoreColor(session.avgScore)}`}>
+              {session.avgScore.toFixed(1)}
+              <span className="font-normal text-lol-text"> score</span>
+            </span>
+          )}
+        </>
+      )}
+      <span className="flex-1 self-center border-t border-lol-border/40" />
     </div>
   );
 }
