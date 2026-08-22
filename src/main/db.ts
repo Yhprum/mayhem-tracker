@@ -42,6 +42,17 @@ export function initDatabase() {
     backfillAugmentSlots();
     setSetting("augment_slots", String(AUGMENT_SLOTS));
   }
+
+  migrateHiddenQueues();
+}
+
+// The old hide-Mayhem-Classic switch became a per-queue list. Carry the boolean
+// over once; writing the key even when nothing was hidden is what keeps this
+// from firing again after the user switches every queue back on.
+function migrateHiddenQueues() {
+  if (getSetting("hidden_queues") !== null) return;
+  const hidClassic = getSetting("hide_classic_games") === "true";
+  setSetting("hidden_queues", hidClassic ? String(QUEUE_ID_MAYHEM_CLASSIC) : "");
 }
 
 // Checkpoints the WAL and releases the file. Without this a quit leaves the
@@ -853,15 +864,44 @@ function backfillAugmentSlots() {
   `);
 }
 
+// Queues switched off on the Settings page, as stored in hidden_queues. An
+// absent key means the setting was never written; an empty one means the user
+// has everything switched on.
+function getHiddenQueues(): number[] {
+  const raw = getSetting("hidden_queues");
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map(Number)
+    .filter((id) => Number.isFinite(id));
+}
+
+// Every queue with games stored, ignoring which ones are hidden — the Settings
+// page needs the full list to offer a hidden queue's switch back on.
+export function getStoredQueues(): number[] {
+  const rows = db
+    .prepare(`
+      SELECT DISTINCT g.queue_id
+      FROM games g
+      JOIN player_stats ps ON g.game_id = ps.game_id
+      ORDER BY g.queue_id
+    `)
+    .all() as { queue_id: number }[];
+  return rows.map((r) => r.queue_id);
+}
+
 // Appends queue conditions to a query's WHERE list. An explicit queue filter
-// wins; otherwise the hide-classic setting excludes Mayhem Classic everywhere.
+// wins; otherwise the queues switched off in Settings are excluded everywhere.
 function applyQueueFilter(where: string[], params: any[], queue?: number, alias = "g") {
   if (queue != null) {
     where.push(`${alias}.queue_id = ?`);
     params.push(queue);
-  } else if (getSetting("hide_classic_games") === "true") {
-    where.push(`${alias}.queue_id != ?`);
-    params.push(QUEUE_ID_MAYHEM_CLASSIC);
+    return;
+  }
+  const hidden = getHiddenQueues();
+  if (hidden.length > 0) {
+    where.push(`${alias}.queue_id NOT IN (${hidden.map(() => "?").join(", ")})`);
+    params.push(...hidden);
   }
 }
 

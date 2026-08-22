@@ -23,6 +23,8 @@ const api = {
     account?: string;
   }) => ipcRenderer.invoke("db:match-filters", filters),
 
+  getStoredQueues: () => ipcRenderer.invoke("db:stored-queues"),
+
   getMatchDetail: (gameId: number) => ipcRenderer.invoke("db:match-detail", gameId),
 
   toggleFavorite: (gameId: number) => ipcRenderer.invoke("db:toggle-favorite", gameId),

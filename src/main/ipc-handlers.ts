@@ -16,7 +16,7 @@ import { applyAutoStart, isAutoStartSupported } from "./autostart";
 const RENDERER_SETTINGS = new Set([
   "auto_start",
   "minimize_to_tray",
-  "hide_classic_games",
+  "hidden_queues",
   "auto_backup",
   "remember_filters",
 ]);
@@ -60,6 +60,12 @@ export function registerIpcHandlers() {
       return db.getMatchFilterOptions(filters);
     },
   );
+
+  // Unlike the queue list in db:match-filters, this one ignores the hidden
+  // queues — it backs the switches that decide which queues are hidden.
+  ipcMain.handle("db:stored-queues", () => {
+    return db.getStoredQueues();
+  });
 
   ipcMain.handle("db:match-detail", (_event, gameId: number) => {
     return db.getMatchDetail(gameId);
