@@ -536,6 +536,7 @@ export interface ElectronAPI {
   onStatusChanged: (callback: (status: LcuStatus) => void) => () => void;
   onGamesUpdated: (callback: () => void) => () => void;
   getSetting: (key: string) => Promise<string | null>;
+  isAutoStartSupported: () => Promise<boolean>;
   setSetting: (key: string, value: string) => Promise<void>;
   exportData: () => Promise<{
     success: boolean;

@@ -7,6 +7,7 @@ import { startPolling, stopPolling, isClientConnected, fetchNewGames } from "./l
 import { loadChampionData, loadAugmentData, waitForChampionData } from "./dragon";
 import { applySecurityPolicy } from "./security";
 import { ensureStartMenuShortcut } from "./shortcut";
+import { syncAutoStart, HIDDEN_FLAG } from "./autostart";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -36,6 +37,9 @@ if (!gotTheLock) {
 
 const iconPath = path.join(app.getAppPath(), "assets/icon.png");
 
+// Set by the login item when auto-start is on: come up in the tray only.
+const launchedHidden = process.argv.includes(HIDDEN_FLAG);
+
 function createWindow(): BrowserWindow {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -43,6 +47,7 @@ function createWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 600,
     icon: iconPath,
+    show: !launchedHidden,
     frame: false,
     backgroundColor: "#0b0e14",
     webPreferences: {
@@ -150,6 +155,10 @@ app.whenReady().then(async () => {
   // directly: a database that has been deleted or damaged since the last launch
   // is restored from the newest good snapshot here, before anything reads it.
   initDatabaseWithRecovery();
+
+  // Needs the database, which holds the answer. Keeps the login item pointing at
+  // the portable exe wherever it has been moved to since the last launch.
+  syncAutoStart();
 
   // Load assets in background
   loadChampionData();

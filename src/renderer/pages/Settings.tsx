@@ -23,16 +23,25 @@ function formatTaken(timestamp: number): string {
   })}`;
 }
 
-function Switch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+function Switch({
+  checked,
+  onChange,
+  disabled = false,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      disabled={disabled}
       onClick={onChange}
-      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${
-        checked ? "bg-lol-gold" : "bg-lol-border"
-      }`}
+      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ${
+        disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer"
+      } ${checked ? "bg-lol-gold" : "bg-lol-border"}`}
     >
       <span
         className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform duration-200 ${
@@ -46,6 +55,10 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: () => void 
 export default function Settings() {
   // Shared so a backfill started automatically on first connect shows here too
   const { running: backfilling, progress } = useBackfill();
+  const [autoStart, setAutoStart] = useState(false);
+  // Only the packaged program has a path worth registering, so the switch says
+  // so instead of pretending in a dev build
+  const [autoStartSupported, setAutoStartSupported] = useState(false);
   const [minimizeToTray, setMinimizeToTray] = useState(true);
   const [hideClassic, setHideClassic] = useState(false);
   const [autoBackup, setAutoBackup] = useState(true);
@@ -63,11 +76,15 @@ export default function Settings() {
 
   useEffect(() => {
     Promise.all([
+      window.api.getSetting("auto_start"),
+      window.api.isAutoStartSupported(),
       window.api.getSetting("minimize_to_tray"),
       window.api.getSetting("hide_classic_games"),
       window.api.getSetting("auto_backup"),
       window.api.getSetting("remember_filters"),
-    ]).then(([tray, classic, backup, remember]) => {
+    ]).then(([startup, startupSupported, tray, classic, backup, remember]) => {
+      setAutoStart(startup === "true");
+      setAutoStartSupported(startupSupported);
       setMinimizeToTray(tray !== "false");
       setHideClassic(classic === "true");
       setAutoBackup(backup !== "false");
@@ -81,6 +98,13 @@ export default function Settings() {
   }, []);
 
   useEffect(refreshBackups, [refreshBackups]);
+
+  const handleAutoStartToggle = useCallback(async () => {
+    const next = !autoStart;
+    setAutoStart(next);
+    // The main process registers or clears the login item off the back of this
+    await window.api.setSetting("auto_start", String(next));
+  }, [autoStart]);
 
   const handleToggle = useCallback(async () => {
     const next = !minimizeToTray;
@@ -232,6 +256,26 @@ export default function Settings() {
   return (
     <div className="max-w-2xl space-y-6">
       <h1 className="text-xl font-bold text-lol-text-bright">Settings</h1>
+
+      {/* Startup */}
+      <div className="bg-lol-card rounded-xl border border-lol-border/60 p-5">
+        <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Startup</h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-lol-text-bright">Start with Windows</p>
+            <p className="text-xs text-lol-text mt-0.5">
+              Open the program in the system tray when you sign in to Windows, so your games are
+              recorded without having to remember to start it.
+              {!autoStartSupported && " Only available in the packaged program."}
+            </p>
+          </div>
+          <Switch
+            checked={autoStart}
+            onChange={handleAutoStartToggle}
+            disabled={!autoStartSupported}
+          />
+        </div>
+      </div>
 
       {/* Exit Behavior */}
       <div className="bg-lol-card rounded-xl border border-lol-border/60 p-5">

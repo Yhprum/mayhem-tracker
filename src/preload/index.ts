@@ -121,6 +121,8 @@ const api = {
 
   getSetting: (key: string) => ipcRenderer.invoke("settings:get", key),
 
+  isAutoStartSupported: () => ipcRenderer.invoke("autostart:supported"),
+
   setSetting: (key: string, value: string) => ipcRenderer.invoke("settings:set", key, value),
 
   exportData: () => ipcRenderer.invoke("data:export"),

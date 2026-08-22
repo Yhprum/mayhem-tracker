@@ -7,12 +7,14 @@ import * as updater from "./updater";
 import * as backup from "./backup";
 import { getBackupDir } from "./paths";
 import { openExternalUrl } from "./security";
+import { applyAutoStart, isAutoStartSupported } from "./autostart";
 
 // The settings table doubles as internal bookkeeping — sgp_host, the
 // per-account backfill_complete_* flags, score_formula_version — none of which
 // the renderer has any business reading or rewriting. Only the keys backing the
 // Settings page are exposed.
 const RENDERER_SETTINGS = new Set([
+  "auto_start",
   "minimize_to_tray",
   "hide_classic_games",
   "auto_backup",
@@ -216,7 +218,16 @@ export function registerIpcHandlers() {
       return;
     }
     db.setSetting(key, value);
+
+    // The one setting with a home outside the database: the login item has to be
+    // rewritten to match, and only this handler knows the answer just changed.
+    if (key === "auto_start") applyAutoStart(value === "true");
   });
+
+  // Auto-start registers the app by its own path, which an unpackaged run does
+  // not have — the Settings page reads this to say so rather than offering a
+  // switch that would quietly do nothing.
+  ipcMain.handle("autostart:supported", () => isAutoStartSupported());
 
   // Window controls (custom title bar). The maximize/unmaximize events that
   // pair with these are wired up in createWindow, where the window lives.
