@@ -299,7 +299,10 @@ function ScoreBreakdownTooltip({
   anchor: DOMRect;
 }) {
   const rows =
-    breakdown.components.length + (breakdown.multikill ? 1 : 0) + (breakdown.win > 0 ? 1 : 0);
+    breakdown.components.length +
+    (breakdown.multikill ? 1 : 0) +
+    (breakdown.carry ? 1 : 0) +
+    (breakdown.win > 0 ? 1 : 0);
   const width = 288;
   const height = 74 + rows * 20;
   // Fixed positioning escapes the team card's overflow-hidden; clamp to the
@@ -339,6 +342,19 @@ function ScoreBreakdownTooltip({
           <span className="text-[11px] text-lol-text">{breakdown.multikill.label} bonus</span>
           <span className="text-[11px] tabular-nums text-lol-text-bright">
             +{breakdown.multikill.points.toFixed(1)}
+          </span>
+        </div>
+      )}
+      {breakdown.carry && (
+        <div className="grid grid-cols-[1fr_auto] gap-2 items-baseline leading-5">
+          <span className="text-[11px] text-lol-text">
+            Carry bonus
+            <span className="ml-1.5 text-[10px] text-lol-text/70">
+              {breakdown.carry.lead.toFixed(2)}× next best
+            </span>
+          </span>
+          <span className="text-[11px] tabular-nums text-lol-text-bright">
+            +{breakdown.carry.points.toFixed(1)}
           </span>
         </div>
       )}

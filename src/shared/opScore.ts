@@ -3,7 +3,7 @@
 // the formula changes — stored scores are recomputed from match_participants on
 // startup (the backfill key also includes the champion data version, so class
 // changes trigger a recompute too).
-export const SCORE_FORMULA_VERSION = 2;
+export const SCORE_FORMULA_VERSION = 3;
 
 // championId → Data Dragon class tag ("Assassin" | "Fighter" | "Mage" |
 // "Marksman" | "Support" | "Tank"). Supplied by the caller from live champion
@@ -45,6 +45,21 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 // category — a dominant low-death carry game gets there.
 const CURVE = 1.3;
 const SCALE = 1.04;
+
+// Every weighted component is a ratio clamped to 1, so the lobby's best damage
+// dealer maxes `dmg` whether they led by 1% or by 120% — the component asks
+// "were you first", never "by how much". The carry bonus is the margin that
+// clamp throws away: the lobby damage leader is compared against the SECOND
+// best damage in the game and earns up to CARRY_MAX for running away with it.
+// Calibrated on the same sample as the weights: a 20% lead is the floor (4.1%
+// of player-games clear it, so it stays a distinction rather than a
+// participation award) and a 70% lead earns the whole bonus. It sits outside
+// the 9.8 class weights, like the multikill and win bonuses, so per-class sums
+// stay comparable — with it, 9+ holds at ~5.0% of player-games while 10s move
+// from 0.65% to ~1.0%.
+const CARRY_KNEE = 1.2;
+const CARRY_SPAN = 0.5;
+const CARRY_MAX = 0.6;
 
 // Per-class component weights so champions are graded on their job: tanks on
 // soaking damage, supports on healing and participation, assassins/mages/
@@ -101,6 +116,10 @@ export interface ScoreBreakdown {
   cls: string | null;
   components: ScoreComponent[];
   multikill: { label: string; points: number } | null;
+  // Damage-dominance bonus. Null for everyone but the lobby's top damage
+  // dealer, and for a leader whose margin doesn't reach CARRY_KNEE. `lead` is
+  // the multiple of the second-best damage in the lobby.
+  carry: { lead: number; points: number } | null;
   // Win bonus points (0 on a loss).
   win: number;
   // Scaled sum before the 1-10 clamp and 0.1 rounding.
@@ -113,6 +132,9 @@ function buildBreakdown(
   p: ScoreInput,
   teamKills: number,
   max: { dmg: number; taken: number; heal: number; gold: number },
+  // Highest damage in the lobby that isn't the leader's own, so the leader has
+  // something to be measured against. 0 when there's nobody else.
+  runnerUpDmg: number,
   classes: ChampionClassMap | undefined,
 ): ScoreBreakdown {
   const kda = (p.kills + p.assists) / Math.max(p.deaths, 1);
@@ -153,10 +175,21 @@ function buildBreakdown(
   else if (p.tripleKills > 0) multikill = { label: "Triple kill", points: 0.3 * SCALE };
   else if (p.doubleKills > 0) multikill = { label: "Double kill", points: 0.15 * SCALE };
 
+  // A tie for top damage doesn't count as leading: runnerUpDmg then equals the
+  // leader's own damage, putting `lead` at 1 — already below the knee.
+  let carry: ScoreBreakdown["carry"] = null;
+  let carryPoints = 0;
+  if (p.totalDamageDealtToChampions >= max.dmg && runnerUpDmg > 0) {
+    const lead = p.totalDamageDealtToChampions / runnerUpDmg;
+    carryPoints = clamp01((lead - CARRY_KNEE) / CARRY_SPAN) * CARRY_MAX;
+    if (carryPoints > 0) carry = { lead, points: carryPoints * SCALE };
+  }
+
   if (p.pentaKills > 0) sum += 0.6;
   else if (p.quadraKills > 0) sum += 0.45;
   else if (p.tripleKills > 0) sum += 0.3;
   else if (p.doubleKills > 0) sum += 0.15;
+  sum += carryPoints;
   if (p.win) sum += 0.6;
 
   const raw = sum * SCALE;
@@ -164,6 +197,7 @@ function buildBreakdown(
     cls: cls && CLASS_WEIGHTS[cls] ? cls : null,
     components,
     multikill,
+    carry,
     win: p.win ? 0.6 * SCALE : 0,
     raw,
     score: Math.min(10, Math.max(1, Math.round(raw * 10) / 10)),
@@ -179,8 +213,19 @@ export function computeMatchScoreBreakdowns(
   if (participants.length === 0) return breakdowns;
 
   const max = { dmg: 1, taken: 1, heal: 1, gold: 1 };
+  // Top two damage totals in the lobby; runnerUpDmg is what the leader's carry
+  // bonus is measured against.
+  let topDmg = 0;
+  let runnerUpDmg = 0;
   const teamKills = new Map<number, number>();
   for (const p of participants) {
+    const dmg = p.totalDamageDealtToChampions;
+    if (dmg > topDmg) {
+      runnerUpDmg = topDmg;
+      topDmg = dmg;
+    } else if (dmg > runnerUpDmg) {
+      runnerUpDmg = dmg;
+    }
     max.dmg = Math.max(max.dmg, p.totalDamageDealtToChampions);
     max.taken = Math.max(max.taken, p.totalDamageTaken);
     max.heal = Math.max(max.heal, p.totalHeal);
@@ -189,17 +234,21 @@ export function computeMatchScoreBreakdowns(
   }
 
   for (const p of participants) {
-    breakdowns.set(p.participantId, buildBreakdown(p, teamKills.get(p.teamId) ?? 0, max, classes));
+    breakdowns.set(
+      p.participantId,
+      buildBreakdown(p, teamKills.get(p.teamId) ?? 0, max, runnerUpDmg, classes),
+    );
   }
 
-  // Best player on the winning team gets MVP, best on the losing team gets ACE
+  // Best player on the winning team gets MVP, best on the losing team gets ACE.
+  // Ranked on `raw`, not `score`: score is rounded to 0.1 and clamped at 10, so
+  // comparing it leaves every near-tie to participant order — two teammates over
+  // 10 both read as exactly 10 and the badge lands on whoever the client listed
+  // first, regardless of who actually played better.
   const bestByTeam = new Map<number, ScoreInput>();
   for (const p of participants) {
     const best = bestByTeam.get(p.teamId);
-    if (
-      !best ||
-      breakdowns.get(p.participantId)!.score > breakdowns.get(best.participantId)!.score
-    ) {
+    if (!best || breakdowns.get(p.participantId)!.raw > breakdowns.get(best.participantId)!.raw) {
       bestByTeam.set(p.teamId, p);
     }
   }
