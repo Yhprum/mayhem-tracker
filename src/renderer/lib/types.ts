@@ -67,6 +67,8 @@ export interface MatchListItem {
   item5: number | null;
   score: number | null;
   score_badge: "MVP" | "ACE" | null;
+  spell1: number | null;
+  spell2: number | null;
   augment_ids: string | null;
   game_version: string | null;
   game_max_dmg: number;
@@ -135,6 +137,8 @@ export interface MatchParticipantRecord {
   goldEarned: number;
   totalHeal: number;
   largestKillingSpree: number;
+  spell1Id: number | null;
+  spell2Id: number | null;
   items: number[];
   augments: number[];
 }
@@ -236,6 +240,13 @@ export interface ItemData {
     name: string;
     iconPath: string;
     branch: string;
+  };
+}
+
+export interface SummonerSpellData {
+  [id: number]: {
+    name: string;
+    iconPath: string;
   };
 }
 
@@ -418,6 +429,8 @@ export interface ParsedParticipant {
   goldEarned: number;
   totalHeal: number;
   largestKillingSpree: number;
+  spell1Id: number | null;
+  spell2Id: number | null;
   items: number[];
   augments: number[];
   win: boolean;
@@ -503,6 +516,7 @@ export interface ElectronAPI {
   getChampionData: () => Promise<ChampionData>;
   getAugmentData: () => Promise<AugmentData>;
   getItemData: (patch?: string) => Promise<ItemData>;
+  getSummonerSpellData: () => Promise<SummonerSpellData>;
   onStatusChanged: (callback: (status: LcuStatus) => void) => () => void;
   onGamesUpdated: (callback: () => void) => () => void;
   getSetting: (key: string) => Promise<string | null>;

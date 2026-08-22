@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import type { ChampionData, AugmentData, ItemData } from "../lib/types";
+import type { ChampionData, AugmentData, ItemData, SummonerSpellData } from "../lib/types";
 
 let champCache: ChampionData | null = null;
 let augCache: AugmentData | null = null;
+let spellCache: SummonerSpellData | null = null;
 const itemCaches = new Map<string, ItemData>();
 const itemPromises = new Map<string, Promise<ItemData>>();
 
@@ -31,6 +32,20 @@ export function useAugmentData() {
     if (hasData(augCache)) return;
     window.api.getAugmentData().then((d) => {
       if (Object.keys(d).length > 0) augCache = d;
+      setData(d);
+    });
+  }, []);
+
+  return data;
+}
+
+export function useSummonerSpellData() {
+  const [data, setData] = useState<SummonerSpellData>(spellCache || {});
+
+  useEffect(() => {
+    if (hasData(spellCache)) return;
+    window.api.getSummonerSpellData().then((d) => {
+      if (Object.keys(d).length > 0) spellCache = d;
       setData(d);
     });
   }, []);

@@ -184,6 +184,38 @@ export function loadItemData(patch?: string): Promise<Record<number, ItemInfo>> 
   return promise;
 }
 
+export type SummonerSpellInfo = { name: string; iconPath: string };
+
+let spellCache: Record<number, SummonerSpellInfo> | null = null;
+let spellPromise: Promise<Record<number, SummonerSpellInfo>> | null = null;
+
+// Summoner spell art doesn't change patch to patch the way item art does, so
+// one "latest" fetch serves every game.
+export function loadSummonerSpellData(): Promise<Record<number, SummonerSpellInfo>> {
+  if (spellCache) return Promise.resolve(spellCache);
+  if (!spellPromise) {
+    spellPromise = (async () => {
+      const data = await fetchJson(
+        "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/summoner-spells.json",
+      );
+      const spells: Record<number, SummonerSpellInfo> = {};
+      if (Array.isArray(data)) {
+        for (const spell of data) {
+          spells[spell.id] = { name: spell.name || "", iconPath: spell.iconPath || "" };
+        }
+      }
+      spellCache = spells;
+      console.log(`Loaded ${Object.keys(spells).length} summoner spells from CommunityDragon`);
+      return spells;
+    })();
+    // Drop failed loads so a later request can retry
+    spellPromise.catch(() => {
+      spellPromise = null;
+    });
+  }
+  return spellPromise;
+}
+
 export async function waitForChampionData() {
   if (championReady) await championReady;
 }

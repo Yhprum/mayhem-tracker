@@ -13,8 +13,9 @@ import {
 import ChampionIcon from "./ChampionIcon";
 import AugmentIcon from "./AugmentIcon";
 import ItemIcon from "./ItemIcon";
+import SummonerSpellIcon from "./SummonerSpellIcon";
 
-const GRID_COLS = "grid-cols-[40px_minmax(80px,1fr)_52px_76px_110px_110px_56px_56px_176px_100px]";
+const GRID_COLS = "grid-cols-[52px_minmax(80px,1fr)_52px_76px_110px_110px_56px_56px_176px_100px]";
 
 export default function MatchScoreboard({
   detail,
@@ -165,8 +166,14 @@ function PlayerRow({
         p.isSelf ? "border-l-2 border-l-lol-gold bg-lol-gold/5" : ""
       }`}
     >
-      {/* Champion */}
-      <ChampionIcon championId={p.championId} size={32} />
+      {/* Champion + spells; two 15px spells and the 2px gap match the 32px portrait */}
+      <div className="flex items-center gap-0.5">
+        <ChampionIcon championId={p.championId} size={32} />
+        <div className="flex flex-col gap-0.5">
+          <SummonerSpellIcon spellId={p.spell1Id} size={15} />
+          <SummonerSpellIcon spellId={p.spell2Id} size={15} />
+        </div>
+      </div>
 
       {/* Player name */}
       <div className="min-w-0">

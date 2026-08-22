@@ -82,6 +82,8 @@ const api = {
 
   getItemData: (patch?: string) => ipcRenderer.invoke("dragon:items", patch),
 
+  getSummonerSpellData: () => ipcRenderer.invoke("dragon:summoner-spells"),
+
   getChampionItemStats: (championId: number, patch?: string, queue?: number) =>
     ipcRenderer.invoke("db:champion-item-stats", championId, patch, queue),
 

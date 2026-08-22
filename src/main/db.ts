@@ -112,6 +112,7 @@ function createTables() {
       is_remake      INTEGER NOT NULL DEFAULT 0,
       queue_id       INTEGER,
       game_version   TEXT,
+      spell1 INTEGER, spell2 INTEGER,
       item0 INTEGER, item1 INTEGER, item2 INTEGER,
       item3 INTEGER, item4 INTEGER, item5 INTEGER, item6 INTEGER,
       PRIMARY KEY (game_id, participant_id)
@@ -151,6 +152,7 @@ function createTables() {
       largest_killing_spree INTEGER NOT NULL DEFAULT 0,
       score                REAL,
       score_badge          TEXT,
+      spell1 INTEGER, spell2 INTEGER,
       item0 INTEGER, item1 INTEGER, item2 INTEGER,
       item3 INTEGER, item4 INTEGER, item5 INTEGER, item6 INTEGER
     );
@@ -275,6 +277,8 @@ interface RawParticipantRow {
   total_heal: number;
   largest_killing_spree: number;
   early_surrender: number;
+  spell1: number | null;
+  spell2: number | null;
   items: (number | null)[];
   augments: { slot: number; augment_id: number }[];
 }
@@ -330,6 +334,8 @@ function participantRowsFromRaw(raw: any): RawParticipantRow[] {
       total_heal: s.totalHeal ?? 0,
       largest_killing_spree: s.largestKillingSpree ?? 0,
       early_surrender: s.gameEndedInEarlySurrender ? 1 : 0,
+      spell1: p.spell1Id ?? s.spell1Id ?? null,
+      spell2: p.spell2Id ?? s.spell2Id ?? null,
       items: [s.item0, s.item1, s.item2, s.item3, s.item4, s.item5, s.item6].map((it) =>
         typeof it === "number" ? it : null,
       ),
@@ -361,14 +367,14 @@ function participantStatements() {
           double_kills, triple_kills, quadra_kills, penta_kills,
           total_damage_dealt, total_damage_taken, gold_earned, total_heal,
           largest_killing_spree, early_surrender, is_remake, queue_id, game_version,
-          item0, item1, item2, item3, item4, item5, item6
+          spell1, spell2, item0, item1, item2, item3, item4, item5, item6
         ) VALUES (
           @game_id, @participant_id, @puuid, @game_name, @tag_line, @profile_icon,
           @team_id, @champion_id, @win, @kills, @deaths, @assists,
           @double_kills, @triple_kills, @quadra_kills, @penta_kills,
           @total_damage_dealt, @total_damage_taken, @gold_earned, @total_heal,
           @largest_killing_spree, @early_surrender, @is_remake, @queue_id, @game_version,
-          @item0, @item1, @item2, @item3, @item4, @item5, @item6
+          @spell1, @spell2, @item0, @item1, @item2, @item3, @item4, @item5, @item6
         )
       `),
       augment: db.prepare(`
@@ -419,6 +425,8 @@ function writeParticipants(gameId: number, meta: GameDenorm, rows: RawParticipan
       is_remake: meta.is_remake,
       queue_id: meta.queue_id,
       game_version: meta.game_version,
+      spell1: row.spell1,
+      spell2: row.spell2,
       item0: row.items[0],
       item1: row.items[1],
       item2: row.items[2],
@@ -450,7 +458,7 @@ function writeParticipants(gameId: number, meta: GameDenorm, rows: RawParticipan
 // versioning, so it could be missing any subset of the columns v1 adds — which
 // is why each step checks for its column rather than assuming. A database that
 // createTables just built is also version 0, and lands on the same no-op path.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 function tableColumns(table: string): Set<string> {
   const rows = db.pragma(`table_info(${table})`) as { name: string }[];
@@ -463,6 +471,7 @@ function runMigrations() {
 
   if (current < 1) migrateToV1();
   if (current < 2) migrateToV2();
+  if (current < 3) migrateToV3();
 
   db.pragma(`user_version = ${SCHEMA_VERSION}`);
 }
@@ -644,6 +653,74 @@ function migrateToV2() {
     `Normalized ${normalized} games into match_participants` +
       (unusable > 0 ? ` (${unusable} payloads unreadable)` : ""),
   );
+}
+
+// Adds the summoner spell columns and fills them from the stored payloads.
+function migrateToV3() {
+  for (const table of ["match_participants", "player_stats"]) {
+    const cols = tableColumns(table);
+    if (!cols.has("spell1")) db.exec(`ALTER TABLE ${table} ADD COLUMN spell1 INTEGER`);
+    if (!cols.has("spell2")) db.exec(`ALTER TABLE ${table} ADD COLUMN spell2 INTEGER`);
+  }
+  // Re-deriving the participant rows wholesale is how spells reach
+  // match_participants; the copy below then narrows them to the game's owner.
+  rebuildParticipantsFromPayloads();
+  backfillPlayerStatsSpells();
+}
+
+// Copies each game owner's spells from their participant row onto player_stats.
+// Owner resolution mirrors rebuildDerivedStats: puuid first, then the stored
+// stats line for old imports whose owner puuid was never recovered.
+function backfillPlayerStatsSpells() {
+  const games = db
+    .prepare(`
+      SELECT g.game_id, g.puuid, ps.champion_id, ps.kills, ps.deaths, ps.assists
+      FROM games g
+      JOIN player_stats ps ON g.game_id = ps.game_id
+    `)
+    .all() as {
+    game_id: number;
+    puuid: string;
+    champion_id: number;
+    kills: number;
+    deaths: number;
+    assists: number;
+  }[];
+
+  const participants = groupByGame(
+    db
+      .prepare(`
+        SELECT game_id, puuid, champion_id, kills, deaths, assists, spell1, spell2
+        FROM match_participants
+      `)
+      .all() as {
+      game_id: number;
+      puuid: string | null;
+      champion_id: number;
+      kills: number;
+      deaths: number;
+      assists: number;
+      spell1: number | null;
+      spell2: number | null;
+    }[],
+  );
+
+  const updateStmt = db.prepare("UPDATE player_stats SET spell1 = ?, spell2 = ? WHERE game_id = ?");
+  const tx = db.transaction(() => {
+    for (const game of games) {
+      const rows = participants.get(game.game_id) ?? [];
+      let owner = game.puuid ? rows.find((p) => p.puuid === game.puuid) : undefined;
+      owner ??= rows.find(
+        (p) =>
+          p.champion_id === game.champion_id &&
+          p.kills === game.kills &&
+          p.deaths === game.deaths &&
+          p.assists === game.assists,
+      );
+      if (owner) updateStmt.run(owner.spell1, owner.spell2, game.game_id);
+    }
+  });
+  tx();
 }
 
 // Retroactively detect remakes for games stored before the flag existed
@@ -1042,7 +1119,7 @@ export function getMatchHistory(
            ps.champion_id, ps.win, ps.kills, ps.deaths, ps.assists,
            ps.double_kills, ps.triple_kills, ps.quadra_kills, ps.penta_kills,
            ps.total_damage_dealt, ps.total_damage_taken, ps.total_heal, ps.gold_earned,
-           ps.score, ps.score_badge,
+           ps.score, ps.score_badge, ps.spell1, ps.spell2,
            ps.item0, ps.item1, ps.item2, ps.item3, ps.item4, ps.item5,
            (SELECT GROUP_CONCAT(ga.augment_id) FROM game_augments ga WHERE ga.game_id = g.game_id ORDER BY ga.slot) as augment_ids,
 ${GAME_MAX_STATS_SQL}
@@ -1210,7 +1287,8 @@ function getMatchParticipants(gameId: number): any[] {
       SELECT participant_id, puuid, game_name, tag_line, team_id, champion_id, win,
              kills, deaths, assists, double_kills, triple_kills, quadra_kills, penta_kills,
              total_damage_dealt, total_damage_taken, gold_earned, total_heal,
-             largest_killing_spree, item0, item1, item2, item3, item4, item5, item6
+             largest_killing_spree, spell1, spell2,
+             item0, item1, item2, item3, item4, item5, item6
       FROM match_participants
       WHERE game_id = ?
       ORDER BY participant_id
@@ -1253,6 +1331,8 @@ function getMatchParticipants(gameId: number): any[] {
     goldEarned: r.gold_earned,
     totalHeal: r.total_heal,
     largestKillingSpree: r.largest_killing_spree,
+    spell1Id: r.spell1,
+    spell2Id: r.spell2,
     items: [r.item0, r.item1, r.item2, r.item3, r.item4, r.item5, r.item6].map((i) => i ?? 0),
     augments: augments.get(r.participant_id) ?? [],
   }));
@@ -1541,7 +1621,7 @@ export function getChampionMatchHistory(
            ps.champion_id, ps.win, ps.kills, ps.deaths, ps.assists,
            ps.double_kills, ps.triple_kills, ps.quadra_kills, ps.penta_kills,
            ps.total_damage_dealt, ps.total_damage_taken, ps.total_heal, ps.gold_earned,
-           ps.score, ps.score_badge,
+           ps.score, ps.score_badge, ps.spell1, ps.spell2,
            ps.item0, ps.item1, ps.item2, ps.item3, ps.item4, ps.item5,
            (SELECT GROUP_CONCAT(ga.augment_id) FROM game_augments ga WHERE ga.game_id = g.game_id ORDER BY ga.slot) as augment_ids,
 ${GAME_MAX_STATS_SQL}
@@ -1618,9 +1698,10 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
       game_id, champion_id, win, kills, deaths, assists,
       double_kills, triple_kills, quadra_kills, penta_kills,
       total_damage_dealt, total_damage_taken, gold_earned, total_heal,
-      largest_killing_spree, item0, item1, item2, item3, item4, item5, item6,
+      largest_killing_spree, spell1, spell2,
+      item0, item1, item2, item3, item4, item5, item6,
       score, score_badge
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const insertAugmentStmt = db.prepare(`
@@ -1664,6 +1745,8 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
       owner.gold_earned,
       owner.total_heal,
       owner.largest_killing_spree,
+      owner.spell1,
+      owner.spell2,
       owner.items[0],
       owner.items[1],
       owner.items[2],
@@ -1947,7 +2030,7 @@ export function getTeammateDetail(key: string): { player: any; matches: any[] } 
              ps.champion_id, ps.win, ps.kills, ps.deaths, ps.assists,
              ps.double_kills, ps.triple_kills, ps.quadra_kills, ps.penta_kills,
              ps.total_damage_dealt, ps.total_damage_taken, ps.total_heal, ps.gold_earned,
-             ps.score, ps.score_badge,
+             ps.score, ps.score_badge, ps.spell1, ps.spell2,
              ps.item0, ps.item1, ps.item2, ps.item3, ps.item4, ps.item5,
              (SELECT GROUP_CONCAT(ga.augment_id) FROM game_augments ga WHERE ga.game_id = g.game_id ORDER BY ga.slot) as augment_ids,
 ${GAME_MAX_STATS_SQL}
@@ -2612,13 +2695,15 @@ function rebuildDerivedStats(): number {
     db
       .prepare(`
         SELECT game_id, ${SCORE_ROW_COLUMNS}, early_surrender, largest_killing_spree,
-               item0, item1, item2, item3, item4, item5, item6
+               spell1, spell2, item0, item1, item2, item3, item4, item5, item6
         FROM match_participants
       `)
       .all() as (ScoreRow & {
       game_id: number;
       early_surrender: number;
       largest_killing_spree: number;
+      spell1: number | null;
+      spell2: number | null;
       item0: number | null;
       item1: number | null;
       item2: number | null;
@@ -2645,9 +2730,10 @@ function rebuildDerivedStats(): number {
       game_id, champion_id, win, kills, deaths, assists,
       double_kills, triple_kills, quadra_kills, penta_kills,
       total_damage_dealt, total_damage_taken, gold_earned, total_heal,
-      largest_killing_spree, item0, item1, item2, item3, item4, item5, item6,
+      largest_killing_spree, spell1, spell2,
+      item0, item1, item2, item3, item4, item5, item6,
       score, score_badge
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const updateRemake = db.prepare("UPDATE games SET is_remake = ? WHERE game_id = ?");
   const deleteAugments = db.prepare("DELETE FROM game_augments WHERE game_id = ?");
@@ -2706,6 +2792,8 @@ function rebuildDerivedStats(): number {
         owner.gold_earned,
         owner.total_heal,
         owner.largest_killing_spree,
+        owner.spell1,
+        owner.spell2,
         owner.item0,
         owner.item1,
         owner.item2,

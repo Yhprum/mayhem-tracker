@@ -23,6 +23,7 @@ import MultikillBadge from "../components/MultikillBadge";
 import StatBars from "../components/StatBars";
 import StatCard from "../components/StatCard";
 import SummonerIcon from "../components/SummonerIcon";
+import SummonerSpellIcon from "../components/SummonerSpellIcon";
 import WinRateBar from "../components/WinRateBar";
 import { ArrowDownIcon, StarIcon, SwordsIcon, ZapIcon } from "../components/icons";
 import {
@@ -804,6 +805,11 @@ function GameRow({
           {isRemake ? "RMK" : isWin ? "WIN" : "LOSS"}
         </div>
         <ChampionIcon championId={match.champion_id} size={36} />
+        {/* Two 17px spells + the 2px gap match the portrait's 36px height */}
+        <div className="flex flex-col gap-0.5 shrink-0">
+          <SummonerSpellIcon spellId={match.spell1} size={17} />
+          <SummonerSpellIcon spellId={match.spell2} size={17} />
+        </div>
         <div className="w-24 shrink-0">
           <div className="text-sm text-lol-text-bright truncate">
             {getChampionName(champData, match.champion_id)}

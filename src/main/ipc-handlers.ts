@@ -140,6 +140,14 @@ export function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle("dragon:summoner-spells", async () => {
+    try {
+      return await dragon.loadSummonerSpellData();
+    } catch {
+      return {};
+    }
+  });
+
   ipcMain.handle(
     "db:champion-item-stats",
     (_event, championId: number, patch?: string, queue?: number) => {
