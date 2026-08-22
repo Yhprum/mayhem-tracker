@@ -372,6 +372,7 @@ export interface RecordsData {
 export interface GlobalStats {
   champions: { champion_id: number; games: number; wins: number }[];
   augments: { augment_id: number; picks: number; wins: number }[];
+  items: { item_id: number; picks: number; wins: number }[];
   totalParticipantSlots: number;
 }
 

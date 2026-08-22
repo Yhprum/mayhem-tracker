@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useIpc } from "../hooks/useIpc";
 import {
@@ -6,18 +6,21 @@ import {
   getChampionName,
   useAugmentData,
   getAugmentName,
+  useItemData,
 } from "../hooks/useChampions";
 import type { GlobalStats } from "../lib/types";
 import ChampionIcon from "../components/ChampionIcon";
 import AugmentIcon from "../components/AugmentIcon";
+import ItemIcon from "../components/ItemIcon";
 import WinRateBar from "../components/WinRateBar";
 import PatchSelect from "../components/PatchSelect";
 import QueueSelect from "../components/QueueSelect";
 import RarityFilter, { type Rarity } from "../components/RarityFilter";
 
-type Tab = "champions" | "augments";
+type Tab = "champions" | "augments" | "items";
 type ChampSortKey = "games" | "winRate" | "pickRate" | "name";
 type AugSortKey = "picks" | "winRate" | "pickRate" | "name";
+type ItemSortKey = "picks" | "winRate" | "name";
 type SortDir = "asc" | "desc";
 
 function SearchInput({
@@ -71,7 +74,8 @@ export default function GlobalStats() {
   const patch = searchParams.get("patch") ?? undefined;
   const queueParam = searchParams.get("queue");
   const queue = queueParam ? Number(queueParam) : undefined;
-  const tab: Tab = searchParams.get("tab") === "augments" ? "augments" : "champions";
+  const tabParam = searchParams.get("tab");
+  const tab: Tab = tabParam === "augments" || tabParam === "items" ? tabParam : "champions";
 
   const setParam = (key: string, value: string | number | undefined) => {
     setSearchParams(
@@ -114,6 +118,12 @@ export default function GlobalStats() {
   const [augSortDir, setAugSortDir] = useState<SortDir>("desc");
   const [rarityFilter, setRarityFilter] = useState<Rarity>("all");
 
+  // Item tab state
+  const itemData = useItemData(patch);
+  const [itemSearch, setItemSearch] = useState("");
+  const [itemSortKey, setItemSortKey] = useState<ItemSortKey>("picks");
+  const [itemSortDir, setItemSortDir] = useState<SortDir>("desc");
+
   useEffect(() => {
     const unsub = window.api.onGamesUpdated(() => refetch());
     return unsub;
@@ -136,6 +146,15 @@ export default function GlobalStats() {
     } else {
       setAugSortKey(key);
       setAugSortDir(key === "name" ? "asc" : "desc");
+    }
+  };
+
+  const handleItemSort = (key: ItemSortKey) => {
+    if (itemSortKey === key) {
+      setItemSortDir(itemSortDir === "desc" ? "asc" : "desc");
+    } else {
+      setItemSortKey(key);
+      setItemSortDir(key === "name" ? "asc" : "desc");
     }
   };
 
@@ -202,6 +221,36 @@ export default function GlobalStats() {
     return filtered;
   }, [data, augSearch, augSortKey, augSortDir, augmentData, rarityFilter]);
 
+  const getItemName = useCallback(
+    (id: number) => itemData[id]?.name ?? `Item ${id}`,
+    [itemData],
+  );
+
+  const sortedItems = useMemo(() => {
+    if (!data) return [];
+    const filtered = data.items.filter((it) =>
+      getItemName(it.item_id).toLowerCase().includes(itemSearch.toLowerCase()),
+    );
+
+    filtered.sort((a, b) => {
+      if (itemSortKey === "name") {
+        const cmp = getItemName(a.item_id).localeCompare(getItemName(b.item_id));
+        return itemSortDir === "asc" ? cmp : -cmp;
+      }
+      let av: number, bv: number;
+      if (itemSortKey === "winRate") {
+        av = a.picks > 0 ? a.wins / a.picks : 0;
+        bv = b.picks > 0 ? b.wins / b.picks : 0;
+      } else {
+        av = a.picks;
+        bv = b.picks;
+      }
+      return itemSortDir === "desc" ? bv - av : av - bv;
+    });
+
+    return filtered;
+  }, [data, itemSearch, itemSortKey, itemSortDir, getItemName]);
+
   if (!data) {
     return <div className="text-lol-text text-center mt-20">Loading...</div>;
   }
@@ -240,6 +289,23 @@ export default function GlobalStats() {
     </th>
   );
 
+  const ItemSortHeader = ({
+    label,
+    field,
+    className,
+  }: {
+    label: string;
+    field: ItemSortKey;
+    className?: string;
+  }) => (
+    <th
+      onClick={() => handleItemSort(field)}
+      className={`px-3 py-2 text-left text-xs font-medium text-lol-text uppercase tracking-wider cursor-pointer hover:text-lol-gold select-none ${className ?? ""}`}
+    >
+      {label} {itemSortKey === field ? (itemSortDir === "desc" ? "\u25BC" : "\u25B2") : ""}
+    </th>
+  );
+
   return (
     <div className="max-w-7xl space-y-4">
       <div className="flex items-center justify-between">
@@ -247,7 +313,7 @@ export default function GlobalStats() {
         <div className="flex items-center gap-3">
           <span className="text-xs text-lol-text">
             {totalGames} games &middot; {data.champions.length} champions &middot;{" "}
-            {data.augments.length} augments
+            {data.augments.length} augments &middot; {data.items.length} items
           </span>
           <QueueSelect value={queue} onChange={setQueue} />
           <PatchSelect value={patch} onChange={setPatch} />
@@ -275,6 +341,16 @@ export default function GlobalStats() {
           }`}
         >
           Augments
+        </button>
+        <button
+          onClick={() => setTab("items")}
+          className={`px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
+            tab === "items"
+              ? "bg-lol-gold/20 text-lol-gold border-lol-gold/50"
+              : "text-lol-text border-lol-border bg-lol-card hover:border-lol-border/80"
+          }`}
+        >
+          Items
         </button>
       </div>
 
@@ -335,6 +411,65 @@ export default function GlobalStats() {
             </table>
             {sortedChampions.length === 0 && (
               <div className="py-8 text-center text-sm text-lol-text">No champions found</div>
+            )}
+          </div>
+        </>
+      )}
+
+      {tab === "items" && (
+        <>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-lol-text">{sortedItems.length} items</span>
+            <SearchInput
+              value={itemSearch}
+              onChange={setItemSearch}
+              placeholder="Search item..."
+            />
+          </div>
+
+          <div className="bg-lol-card rounded-xl border border-lol-border/60 overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-lol-dark/50">
+                <tr>
+                  <ItemSortHeader label="Item" field="name" />
+                  <ItemSortHeader label="Picks" field="picks" />
+                  <th className="px-3 py-2 text-left text-xs font-medium text-lol-text uppercase tracking-wider">
+                    Pick Rate
+                  </th>
+                  <ItemSortHeader label="Win Rate" field="winRate" className="w-32" />
+                </tr>
+              </thead>
+              <tbody>
+                {sortedItems.map((item) => {
+                  const pickRate =
+                    data.totalParticipantSlots > 0
+                      ? ((item.picks / data.totalParticipantSlots) * 100).toFixed(1)
+                      : "0.0";
+                  return (
+                    <tr
+                      key={item.item_id}
+                      className="border-t border-lol-border/50 hover:bg-lol-card-hover transition-colors"
+                    >
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <ItemIcon itemId={item.item_id} size={28} patch={patch} />
+                          <span className="text-sm text-lol-text-bright">
+                            {getItemName(item.item_id)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-sm text-lol-text-bright">{item.picks}</td>
+                      <td className="px-3 py-2 text-sm text-lol-text">{pickRate}%</td>
+                      <td className="px-3 py-2 w-32">
+                        <WinRateBar wins={item.wins} total={item.picks} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {sortedItems.length === 0 && (
+              <div className="py-8 text-center text-sm text-lol-text">No items found</div>
             )}
           </div>
         </>

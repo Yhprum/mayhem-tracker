@@ -2096,6 +2096,7 @@ export function getGlobalStats(
 ): {
   champions: { champion_id: number; games: number; wins: number }[];
   augments: { augment_id: number; picks: number; wins: number }[];
+  items: { item_id: number; picks: number; wins: number }[];
   totalParticipantSlots: number;
 } {
   const mp = participantFilter(patch, queue);
@@ -2121,6 +2122,30 @@ export function getGlobalStats(
     `)
     .all(...mpa.params) as { augment_id: number; picks: number; wins: number }[];
 
+  const itemCols = [0, 1, 2, 3, 4, 5, 6];
+  const excludedList = EXCLUDED_ITEM_IDS.join(", ");
+  const items = db
+    .prepare(`
+      SELECT item_id, COUNT(*) as picks, SUM(win) as wins
+      FROM (
+        ${itemCols
+          .map(
+            (i) => `SELECT mp.item${i} as item_id, mp.win as win
+                FROM match_participants mp
+                WHERE ${mp.sql}
+                  AND mp.item${i} > 0 AND mp.item${i} NOT IN (${excludedList})`,
+          )
+          .join("\n        UNION ALL\n        ")}
+      )
+      GROUP BY item_id
+      ORDER BY picks DESC
+    `)
+    .all(...itemCols.flatMap(() => mp.params)) as {
+    item_id: number;
+    picks: number;
+    wins: number;
+  }[];
+
   const slots = db
     .prepare(`
       SELECT COUNT(*) as count
@@ -2129,7 +2154,7 @@ export function getGlobalStats(
     `)
     .get(...mp.params) as { count: number };
 
-  return { champions, augments, totalParticipantSlots: slots.count };
+  return { champions, augments, items, totalParticipantSlots: slots.count };
 }
 
 // Everything we know about one champion across every stored game, counting all
