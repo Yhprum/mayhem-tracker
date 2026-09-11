@@ -154,7 +154,15 @@ app.whenReady().then(async () => {
   // Initialize the database first. Through the backup module rather than
   // directly: a database that has been deleted or damaged since the last launch
   // is restored from the newest good snapshot here, before anything reads it.
-  initDatabaseWithRecovery();
+  try {
+    initDatabaseWithRecovery();
+  } catch (err: unknown) {
+    // Recovery handles expected missing/corrupt databases. Keep an unexpected
+    // migration failure from becoming an unhandled rejection in whenReady.
+    console.error("Database initialization failed:", err);
+    app.quit();
+    return;
+  }
 
   // Needs the database, which holds the answer. Keeps the login item pointing at
   // the portable exe wherever it has been moved to since the last launch.
