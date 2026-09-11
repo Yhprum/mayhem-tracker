@@ -327,7 +327,15 @@ export function loadItemData(patch?: string): Promise<Record<number, ItemInfo>> 
         data = await fetchJson(itemsJsonUrl(branch));
       } catch (err) {
         if (branch === "latest") throw err;
-        data = await fetchJson(itemsJsonUrl("latest"));
+        try {
+          data = await fetchJson(itemsJsonUrl("latest"));
+        } catch (fallbackError) {
+          console.error(
+            `Failed to load item data from ${branch} and latest fallback`,
+            fallbackError,
+          );
+          throw fallbackError;
+        }
         usedBranch = "latest";
       }
       let dataDragon: any = null;
