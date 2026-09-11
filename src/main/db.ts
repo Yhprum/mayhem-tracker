@@ -118,9 +118,12 @@ function createTables() {
       penta_kills    INTEGER NOT NULL DEFAULT 0,
       total_damage_dealt INTEGER NOT NULL DEFAULT 0,
       total_damage_taken INTEGER NOT NULL DEFAULT 0,
+      true_damage    INTEGER NOT NULL DEFAULT 0,
       gold_earned    INTEGER NOT NULL DEFAULT 0,
       total_heal     INTEGER NOT NULL DEFAULT 0,
       largest_killing_spree INTEGER NOT NULL DEFAULT 0,
+      largest_critical_strike INTEGER NOT NULL DEFAULT 0,
+      cs             INTEGER NOT NULL DEFAULT 0,
       early_surrender INTEGER NOT NULL DEFAULT 0,
       -- Copied down from games so an aggregate over every participant never
       -- has to join back. Kept honest by trg_games_denorm_*, since these are
@@ -291,9 +294,12 @@ interface RawParticipantRow {
   penta_kills: number;
   total_damage_dealt: number;
   total_damage_taken: number;
+  true_damage: number;
   gold_earned: number;
   total_heal: number;
   largest_killing_spree: number;
+  largest_critical_strike: number;
+  cs: number;
   early_surrender: number;
   spell1: number | null;
   spell2: number | null;
@@ -348,9 +354,12 @@ function participantRowsFromRaw(raw: any): RawParticipantRow[] {
       penta_kills: s.pentaKills ?? 0,
       total_damage_dealt: s.totalDamageDealtToChampions ?? s.totalDamageDealt ?? 0,
       total_damage_taken: s.totalDamageTaken ?? 0,
+      true_damage: s.trueDamageDealtToChampions ?? 0,
       gold_earned: s.goldEarned ?? 0,
       total_heal: s.totalHeal ?? 0,
       largest_killing_spree: s.largestKillingSpree ?? 0,
+      largest_critical_strike: s.largestCriticalStrike ?? 0,
+      cs: s.totalMinionsKilled ?? s.minionsKilled ?? 0,
       early_surrender: s.gameEndedInEarlySurrender ? 1 : 0,
       spell1: p.spell1Id ?? s.spell1Id ?? null,
       spell2: p.spell2Id ?? s.spell2Id ?? null,
@@ -383,15 +392,17 @@ function participantStatements() {
           game_id, participant_id, puuid, game_name, tag_line, profile_icon,
           team_id, champion_id, win, kills, deaths, assists,
           double_kills, triple_kills, quadra_kills, penta_kills,
-          total_damage_dealt, total_damage_taken, gold_earned, total_heal,
-          largest_killing_spree, early_surrender, is_remake, queue_id, game_version,
+          total_damage_dealt, total_damage_taken, true_damage, gold_earned, total_heal,
+          largest_killing_spree, largest_critical_strike, cs, early_surrender,
+          is_remake, queue_id, game_version,
           spell1, spell2, item0, item1, item2, item3, item4, item5, item6
         ) VALUES (
           @game_id, @participant_id, @puuid, @game_name, @tag_line, @profile_icon,
           @team_id, @champion_id, @win, @kills, @deaths, @assists,
           @double_kills, @triple_kills, @quadra_kills, @penta_kills,
-          @total_damage_dealt, @total_damage_taken, @gold_earned, @total_heal,
-          @largest_killing_spree, @early_surrender, @is_remake, @queue_id, @game_version,
+          @total_damage_dealt, @total_damage_taken, @true_damage, @gold_earned, @total_heal,
+          @largest_killing_spree, @largest_critical_strike, @cs, @early_surrender,
+          @is_remake, @queue_id, @game_version,
           @spell1, @spell2, @item0, @item1, @item2, @item3, @item4, @item5, @item6
         )
       `),
@@ -436,9 +447,12 @@ function writeParticipants(gameId: number, meta: GameDenorm, rows: RawParticipan
       penta_kills: row.penta_kills,
       total_damage_dealt: row.total_damage_dealt,
       total_damage_taken: row.total_damage_taken,
+      true_damage: row.true_damage,
       gold_earned: row.gold_earned,
       total_heal: row.total_heal,
       largest_killing_spree: row.largest_killing_spree,
+      largest_critical_strike: row.largest_critical_strike,
+      cs: row.cs,
       early_surrender: row.early_surrender,
       is_remake: meta.is_remake,
       queue_id: meta.queue_id,
@@ -476,7 +490,7 @@ function writeParticipants(gameId: number, meta: GameDenorm, rows: RawParticipan
 // versioning, so it could be missing any subset of the columns v1 adds — which
 // is why each step checks for its column rather than assuming. A database that
 // createTables just built is also version 0, and lands on the same no-op path.
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 6;
 
 function tableColumns(table: string): Set<string> {
   const rows = db.pragma(`table_info(${table})`) as { name: string }[];
@@ -491,6 +505,8 @@ function runMigrations() {
   if (current < 2) migrateToV2();
   if (current < 3) migrateToV3();
   if (current < 4) migrateToV4();
+  if (current < 5) migrateToV5();
+  if (current < 6) migrateToV6();
 
   db.pragma(`user_version = ${SCHEMA_VERSION}`);
 }
@@ -612,6 +628,9 @@ function migrateToV2() {
   if (!games.has("raw_gz")) {
     db.exec("ALTER TABLE games ADD COLUMN raw_gz BLOB");
   }
+  // The v2 rebuild uses the current participant writer, so old unversioned
+  // databases need the current participant columns before payload replay.
+  migrateToV5();
 
   // Pass one moves the payloads across as-is. The stored text is compressed
   // rather than reserialized, so a backup taken after this migration is byte
@@ -694,6 +713,32 @@ function migrateToV4() {
   if (!tableColumns("player_stats").has("score_raw")) {
     db.exec("ALTER TABLE player_stats ADD COLUMN score_raw REAL");
   }
+}
+
+// Adds the participant combat statistics introduced after the original
+// normalized schema. Existing rows keep a safe zero until their raw payload is
+// replayed by v6.
+function migrateToV5() {
+  const participants = tableColumns("match_participants");
+  if (!participants.has("true_damage")) {
+    db.exec("ALTER TABLE match_participants ADD COLUMN true_damage INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!participants.has("largest_critical_strike")) {
+    db.exec(
+      "ALTER TABLE match_participants ADD COLUMN largest_critical_strike INTEGER NOT NULL DEFAULT 0",
+    );
+  }
+  if (!participants.has("cs")) {
+    db.exec("ALTER TABLE match_participants ADD COLUMN cs INTEGER NOT NULL DEFAULT 0");
+  }
+}
+
+// Rebuild after the columns exist. This ordering is important: rebuilding uses
+// the same prepared writer as normal ingestion and therefore must never run
+// against the pre-v6 table shape.
+function migrateToV6() {
+  migrateToV5();
+  rebuildParticipantsFromPayloads();
 }
 
 // Copies each game owner's spells from their participant row onto player_stats.

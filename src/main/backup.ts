@@ -382,11 +382,12 @@ export function initDatabaseWithRecovery(): void {
         throw new Error(result[0]?.quick_check ?? "integrity check failed");
       }
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Damage can surface either on open or on the first statements migrations
     // run, so the check and the init it follows share one handler.
     console.error("Database failed to open:", err);
-    recoveryReport = recover("corrupt", err.message);
+    const detail = err instanceof Error ? err.message : String(err);
+    recoveryReport = recover("corrupt", detail);
     return;
   }
 
