@@ -1,0 +1,11 @@
+scripts:
+  - name: Install dependencies
+    command: npm ci
+    triggers:
+      - session.create
+  - name: Typecheck
+    command: npm run typecheck
+  - name: Lint
+    command: npm run lint
+  - name: Build
+    command: npm run build
