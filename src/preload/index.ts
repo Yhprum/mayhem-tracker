@@ -5,6 +5,8 @@ import type {
   ElectronAPI,
   LcuStatus,
   MatchFilters,
+  RiotSyncResult,
+  RiotAccountConfig,
 } from "../shared/api";
 
 // Annotated rather than inferred, so the compiler checks this object against
@@ -50,6 +52,13 @@ const api: ElectronAPI = {
 
   refreshGames: () => ipcRenderer.invoke("lcu:refresh"),
 
+  syncRiotHistory: (): Promise<RiotSyncResult | { error: string }> =>
+    ipcRenderer.invoke("riot:sync"),
+  getRiotAccounts: (): Promise<RiotAccountConfig[]> => ipcRenderer.invoke("riot:accounts"),
+  saveRiotAccount: (account: RiotAccountConfig & { apiKey?: string }) =>
+    ipcRenderer.invoke("riot:save-account", account),
+  removeRiotAccount: (id: string) => ipcRenderer.invoke("riot:remove-account", id),
+
   backfillHistory: () => ipcRenderer.invoke("lcu:backfill"),
 
   cancelBackfill: () => ipcRenderer.invoke("lcu:cancel-backfill"),
@@ -84,12 +93,22 @@ const api: ElectronAPI = {
   getChampionItemStats: (championId: number, patch?: string, queue?: number) =>
     ipcRenderer.invoke("db:champion-item-stats", championId, patch, queue),
 
-  getTeammateStats: () => ipcRenderer.invoke("db:teammate-stats"),
+  getTeammateStats: (queue?: number, relation?: "friends" | "enemies") =>
+    ipcRenderer.invoke("db:teammate-stats", queue, relation),
 
-  getTeammateDetail: (key: string) => ipcRenderer.invoke("db:teammate-detail", key),
+  getTeammateDetail: (key: string, queue?: number, relation?: "friends" | "enemies") =>
+    ipcRenderer.invoke("db:teammate-detail", key, queue, relation),
 
   getGlobalStats: (patch?: string, queue?: number) =>
     ipcRenderer.invoke("db:global-stats", patch, queue),
+  getOwnedItemStats: (patch?: string, queue?: number) =>
+    ipcRenderer.invoke("db:owned-item-stats", patch, queue),
+  getOwnedRuneStats: (queue?: number, patch?: string) =>
+    ipcRenderer.invoke("db:owned-rune-stats", queue, patch),
+  getRuneData: () => ipcRenderer.invoke("dragon:runes"),
+  getRuneTrees: () => ipcRenderer.invoke("dragon:rune-trees"),
+  getOwnedItemDetail: (itemId: number, patch?: string, queue?: number) =>
+    ipcRenderer.invoke("db:owned-item-detail", itemId, patch, queue),
 
   getTrends: (queue?: number) => ipcRenderer.invoke("db:trends", queue),
 

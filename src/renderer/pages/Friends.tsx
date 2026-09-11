@@ -1,5 +1,5 @@
 import { useMemo, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useIpc } from "../hooks/useIpc";
 import { useViewState } from "../hooks/useViewState";
 import { useChampionData, getChampionName } from "../hooks/useChampions";
@@ -8,14 +8,32 @@ import ChampionIcon from "../components/ChampionIcon";
 import SummonerIcon from "../components/SummonerIcon";
 import WinRateBar from "../components/WinRateBar";
 import { formatTimeAgo, kdaRatio, kdaColor } from "../lib/format";
+import { useHistoryScopeQueue } from "../lib/historyScope";
 
 type SortKey = "games" | "winRate" | "kda" | "lastPlayed";
 type SortDir = "asc" | "desc";
 
-export default function Friends() {
+export default function Friends({
+  relation,
+  historyScope,
+  historySection,
+}: {
+  relation?: "friends" | "enemies";
+  historyScope?: string;
+  historySection?: string;
+}) {
   const navigate = useNavigate();
+  const { section } = useParams<{ section?: string }>();
+  const enemies = relation === "enemies" || section === "enemies";
+  const { scope } = useParams<{ scope?: string }>();
+  const activeScope = historyScope ?? scope;
+  const activeSection = historySection ?? section;
   const champData = useChampionData();
-  const { data, loading, refetch } = useIpc<TeammateStats[]>(() => window.api.getTeammateStats());
+  const scopedQueue = useHistoryScopeQueue(activeScope);
+  const { data, loading, refetch } = useIpc<TeammateStats[]>(
+    () => window.api.getTeammateStats(scopedQueue, enemies ? "enemies" : "friends"),
+    [scopedQueue, enemies],
+  );
   const [search, setSearch] = useViewState("friends.search", "");
   const [sortKey, setSortKey] = useViewState<SortKey>("friends.sortKey", "games");
   const [sortDir, setSortDir] = useViewState<SortDir>("friends.sortDir", "desc");
@@ -36,7 +54,9 @@ export default function Friends() {
 
   const sorted = useMemo(() => {
     if (!data) return [];
-    let filtered = data.filter((t) => t.name.toLowerCase().includes(search.toLowerCase()));
+    let filtered = data.filter(
+      (t) => t.games >= (enemies ? 1 : 2) && t.name.toLowerCase().includes(search.toLowerCase()),
+    );
 
     filtered.sort((a, b) => {
       let av: number, bv: number;
@@ -61,7 +81,7 @@ export default function Friends() {
     });
 
     return filtered;
-  }, [data, search, sortKey, sortDir]);
+  }, [data, search, sortKey, sortDir, enemies]);
 
   if (loading || !data) {
     return <div className="text-lol-text text-center mt-20">Loading...</div>;
@@ -88,8 +108,12 @@ export default function Friends() {
     <div className="max-w-7xl space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold text-lol-text-bright">Friends</h1>
-          <span className="text-sm text-lol-text">{sorted.length} players · 2+ games together</span>
+          <h1 className="text-xl font-bold text-lol-text-bright">
+            {enemies ? "Enemies" : "Friends"}
+          </h1>
+          <span className="text-sm text-lol-text">
+            {sorted.length} players · {enemies ? "1+ games against" : "2+ games together"}
+          </span>
         </div>
         <div className="relative">
           <input
@@ -152,7 +176,13 @@ export default function Friends() {
               return (
                 <tr
                   key={t.key}
-                  onClick={() => navigate(`/friends/${encodeURIComponent(t.key)}`)}
+                  onClick={() =>
+                    navigate(
+                      activeScope && activeSection
+                        ? `/history/${activeScope}/${activeSection}/${encodeURIComponent(t.key)}`
+                        : `/friends/${encodeURIComponent(t.key)}`,
+                    )
+                  }
                   className="border-t border-lol-border/50 hover:bg-lol-card-hover cursor-pointer transition-colors"
                 >
                   <td className="px-3 py-2 text-xs text-lol-text">{i + 1}</td>

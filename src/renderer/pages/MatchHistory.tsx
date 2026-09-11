@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useMatches } from "../hooks/useMatches";
-import { useChampionData, getChampionName } from "../hooks/useChampions";
+import { useChampionData, getChampionName, useRuneData } from "../hooks/useChampions";
 import { useIpc } from "../hooks/useIpc";
 import { useLcuStatus } from "../hooks/useLcuStatus";
 import { useBackfill } from "../hooks/useBackfill";
@@ -19,6 +19,7 @@ import type {
 import ChampionIcon from "../components/ChampionIcon";
 import AugmentIcon from "../components/AugmentIcon";
 import ItemIcon from "../components/ItemIcon";
+import { RuneCompact } from "../components/RuneSetup";
 import MatchScoreboard from "../components/MatchScoreboard";
 import MultikillBadge from "../components/MultikillBadge";
 import StatBars from "../components/StatBars";
@@ -38,6 +39,16 @@ import {
 } from "../lib/format";
 import { queueLabel } from "../components/QueueSelect";
 import { scoreColor } from "../../shared/opScore";
+import {
+  QUEUE_GROUP_ARENA,
+  QUEUE_SCOPE_MAYHEM,
+  QUEUE_SCOPE_NORMAL,
+  QUEUE_SCOPE_RANKED,
+  QUEUE_SCOPE_ARAM,
+  QUEUE_SCOPE_ARENA,
+  isAugmentQueue,
+} from "../../shared/queues";
+import { parseRuneIds } from "../lib/runes";
 
 // An empty list means something different depending on whether we're still
 // waiting on the client, mid-import, or genuinely out of games.
@@ -52,9 +63,9 @@ function emptyStateMessage(
       : "Importing your match history...";
   }
   if (status !== "connected" && status !== "ingame") {
-    return "Waiting for the League client. Once it's open, your Mayhem games import automatically.";
+    return "Waiting for the League client. Once it's open, recent games import automatically.";
   }
-  return "No ARAM Mayhem games found yet. New games are recorded as you play.";
+  return "No League games found yet. Use Settings to sync your Riot match history.";
 }
 
 // The unselected state is the default sort (date), so it isn't listed here
@@ -161,7 +172,11 @@ function sessionLabel(day: number): string {
   });
 }
 
-export default function MatchHistory() {
+export default function MatchHistory({
+  scope,
+}: {
+  scope?: "mayhem" | "rest" | "ranked" | "normal" | "aram" | "arena";
+}) {
   const [championFilter, setChampionFilter] = useViewState<number | undefined>(
     "matches.champion",
     undefined,
@@ -171,9 +186,21 @@ export default function MatchHistory() {
     undefined,
   );
   const [queueFilter, setQueueFilter] = useViewState<number | undefined>(
-    "matches.queue",
+    `matches.queue.${scope ?? "full"}`,
     undefined,
   );
+  const scopedQueue =
+    scope === "mayhem"
+      ? (queueFilter ?? QUEUE_SCOPE_MAYHEM)
+      : scope === "ranked"
+        ? (queueFilter ?? QUEUE_SCOPE_RANKED)
+        : scope === "normal"
+          ? (queueFilter ?? QUEUE_SCOPE_NORMAL)
+          : scope === "aram"
+            ? (queueFilter ?? QUEUE_SCOPE_ARAM)
+            : scope === "arena"
+              ? (queueFilter ?? QUEUE_SCOPE_ARENA)
+              : queueFilter;
   const [accountFilter, setAccountFilter] = useViewState<string | undefined>(
     "matches.account",
     undefined,
@@ -188,7 +215,7 @@ export default function MatchHistory() {
   const { matches, loading, hasMore, loadMore, reload } = useMatches({
     championId: championFilter,
     patch: patchFilter,
-    queue: queueFilter,
+    queue: scopedQueue,
     account: accountFilter,
     sort,
     sortDir,
@@ -210,10 +237,10 @@ export default function MatchHistory() {
       window.api.getDashboard({
         championId: championFilter,
         patch: patchFilter,
-        queue: queueFilter,
+        queue: scopedQueue,
         account: accountFilter,
       }),
-    [championFilter, patchFilter, queueFilter, accountFilter],
+    [championFilter, patchFilter, scopedQueue, accountFilter],
   );
   const [filterOptions, setFilterOptions] = useState<MatchFilterOptions>({
     patches: [],
@@ -269,11 +296,11 @@ export default function MatchHistory() {
         .getMatchFilterOptions({
           championId: championFilter,
           patch: patchFilter,
-          queue: queueFilter,
+          queue: scopedQueue,
           account: accountFilter,
         })
         .then(setFilterOptions),
-    [championFilter, patchFilter, queueFilter, accountFilter],
+    [championFilter, patchFilter, scopedQueue, accountFilter],
   );
 
   useEffect(() => {
@@ -295,7 +322,11 @@ export default function MatchHistory() {
     if (patchFilter !== undefined && !filterOptions.patches.includes(patchFilter)) {
       setPatchFilter(undefined);
     }
-    if (queueFilter !== undefined && !filterOptions.queues.includes(queueFilter)) {
+    if (
+      scope === undefined &&
+      queueFilter !== undefined &&
+      !filterOptions.queues.includes(queueFilter)
+    ) {
       setQueueFilter(undefined);
     }
     if (
@@ -311,6 +342,7 @@ export default function MatchHistory() {
     championFilter,
     patchFilter,
     queueFilter,
+    scope,
     accountFilter,
     setChampionFilter,
     setPatchFilter,
@@ -527,7 +559,21 @@ export default function MatchHistory() {
       )}
 
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-lol-text-bright">Match History</h1>
+        <h1 className="text-xl font-bold text-lol-text-bright">
+          {scope === "mayhem"
+            ? "ARAM MAYHEM MATCHES"
+            : scope === "ranked"
+              ? "RANKED MATCHES"
+              : scope === "normal"
+                ? "NORMAL MATCHES"
+                : scope === "aram"
+                  ? "ARAM MATCHES"
+                  : scope === "arena"
+                    ? "ARENA MATCHES"
+                    : scope === "rest"
+                      ? "FULL MATCH HISTORY"
+                      : "FULL MATCH HISTORY"}
+        </h1>
         <div className="flex items-center gap-2">
           {filterOptions.hasFavorites && (
             <button
@@ -586,22 +632,22 @@ export default function MatchHistory() {
               </option>
             ))}
           </select>
-          {(filterOptions.queues.length > 1 || queueFilter !== undefined) && (
-            <select
-              value={queueFilter ?? ""}
-              onChange={(e) =>
-                setQueueFilter(e.target.value === "" ? undefined : Number(e.target.value))
-              }
-              className={SELECT_CLASS}
-            >
-              <option value="">All Queues</option>
-              {filterOptions.queues.map((q) => (
-                <option key={q} value={q}>
-                  {queueLabel(q)}
-                </option>
-              ))}
-            </select>
-          )}
+          <select
+            aria-label="Filter by queue type"
+            title="Filter by queue type"
+            value={queueFilter ?? ""}
+            onChange={(e) =>
+              setQueueFilter(e.target.value === "" ? undefined : Number(e.target.value))
+            }
+            className={SELECT_CLASS}
+          >
+            <option value="">Queue Type</option>
+            {filterOptions.queues.map((q) => (
+              <option key={q} value={q}>
+                {q === QUEUE_GROUP_ARENA ? "All Arena" : queueLabel(q)}
+              </option>
+            ))}
+          </select>
           <div className="flex items-center gap-1">
             <select
               value={sort ?? ""}
@@ -646,7 +692,7 @@ export default function MatchHistory() {
         <div className="bg-lol-card rounded-xl border border-lol-border/60 p-8 text-center text-lol-text">
           {championFilter !== undefined ||
           patchFilter !== undefined ||
-          queueFilter !== undefined ||
+          (scope === undefined && queueFilter !== undefined) ||
           accountFilter !== undefined ||
           multikillFilter.length > 0 ||
           favoritesOnly
@@ -956,6 +1002,9 @@ function GameRow({
   const isFavorite = !!match.favorite;
   const kda = kdaRatio(match.kills, match.deaths, match.assists);
   const augmentIds = parseAugmentIds(match.augment_ids);
+  const runeIds = parseRuneIds(match.rune_ids);
+  const runeData = useRuneData();
+  const statShardIds = parseRuneIds(match.stat_shard_ids);
 
   const accent = isFavorite
     ? "bg-amber-400"
@@ -982,9 +1031,15 @@ function GameRow({
         <span className={`absolute left-0 inset-y-0 w-[3px] ${accent}`} />
         <span className={`absolute inset-0 pointer-events-none bg-gradient-to-r ${tint}`} />
         <div
-          className={`text-xs font-bold shrink-0 ${isRemake ? "text-gray-500 w-8" : isWin ? "text-lol-win w-8" : "text-lol-loss w-8"}`}
+          className={`flex w-20 shrink-0 flex-col text-xs font-bold ${isRemake ? "text-gray-500" : isWin ? "text-lol-win" : "text-lol-loss"}`}
         >
-          {isRemake ? "RMK" : isWin ? "WIN" : "LOSS"}
+          <span>{isRemake ? "RMK" : isWin ? "WIN" : "LOSS"}</span>
+          <span
+            className="mt-0.5 truncate text-[10px] font-normal text-lol-text"
+            title={queueLabel(match.queue_id)}
+          >
+            {queueLabel(match.queue_id)}
+          </span>
         </div>
         <ChampionIcon championId={match.champion_id} size={36} />
         {/* Two 17px spells + the 2px gap match the portrait's 36px height */}
@@ -992,12 +1047,21 @@ function GameRow({
           <SummonerSpellIcon spellId={match.spell1} size={17} />
           <SummonerSpellIcon spellId={match.spell2} size={17} />
         </div>
-        <div className="w-24 shrink-0">
+        <div className="w-28 shrink-0 text-center">
           <div className="text-sm text-lol-text-bright truncate">
             {getChampionName(champData, match.champion_id)}
           </div>
         </div>
-        <div className="w-24 shrink-0">
+        <div className="w-16 shrink-0 text-center text-[10px] text-lol-text">
+          <div className="text-sm text-lol-text-bright">{match.cs ?? 0}</div>
+          <div>
+            {match.game_duration > 0
+              ? ((match.cs ?? 0) / (match.game_duration / 60)).toFixed(1)
+              : "0.0"}{" "}
+            CS/min
+          </div>
+        </div>
+        <div className="w-24 shrink-0 text-center">
           <div className="text-sm text-lol-text-bright">
             {formatKDA(match.kills, match.deaths, match.assists)}
           </div>
@@ -1045,9 +1109,20 @@ function GameRow({
           className="w-40"
         />
 
-        {/* Augments – reserve 3 columns so mixed-queue lists stay aligned */}
-        <div className="w-[70px] shrink-0">
-          <AugmentGrid augmentIds={augmentIds} patch={match.game_version} />
+        {/* Runes for standard queues; Arena/Mayhem show Augments instead. */}
+        <div className="flex w-[70px] shrink-0 items-center justify-center gap-1">
+          {isAugmentQueue(match.queue_id) ? (
+            <AugmentGrid augmentIds={augmentIds} patch={match.game_version} />
+          ) : (
+            <RuneCompact
+              runeIds={runeIds}
+              primaryStyle={match.primary_style}
+              secondaryStyle={match.secondary_style}
+              statShardIds={statShardIds}
+              runeData={runeData}
+              version={match.game_version}
+            />
+          )}
         </div>
 
         {/* Items – 3x2 grid, no trinket (slot 6) */}

@@ -6,6 +6,7 @@
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
+    "postinstall": "electron-rebuild -w better-sqlite3",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "rebuild": "electron-builder install-app-deps",
@@ -27,6 +28,7 @@
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@electron/rebuild": "^4.2.0",
     "@tailwindcss/vite": "^4.2.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.3.1",
@@ -41,6 +43,10 @@
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"
+  },
+  "allowScripts": {
+    "electron@40.6.1": true,
+    "better-sqlite3@12.6.2": true
   },
   "build": {
     "appId": "com.mayhem-tracker.app",

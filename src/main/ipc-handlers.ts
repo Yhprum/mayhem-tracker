@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow, dialog, app, shell } from "electron";
 import fs from "fs";
 import * as db from "./db";
 import * as lcu from "./lcu";
+import * as riot from "./riot-api";
 import * as dragon from "./dragon";
 import * as updater from "./updater";
 import * as backup from "./backup";
@@ -20,6 +21,9 @@ const RENDERER_SETTINGS = new Set([
   "hide_remakes",
   "auto_backup",
   "remember_filters",
+  "riot_game_name",
+  "riot_tag_line",
+  "riot_platform",
 ]);
 
 // Registered once for the lifetime of the app — ipcMain.handle throws on a
@@ -118,6 +122,19 @@ export function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle("riot:sync", async (event) => {
+    try {
+      const result = await riot.syncRiotHistory();
+      senderWindow(event)?.webContents.send("lcu:games-updated");
+      return result;
+    } catch (err) {
+      return { error: riot.friendlyRiotError(err) };
+    }
+  });
+  ipcMain.handle("riot:accounts", () => riot.getRiotAccounts());
+  ipcMain.handle("riot:save-account", (_event, account) => riot.saveRiotAccount(account));
+  ipcMain.handle("riot:remove-account", (_event, id: string) => riot.removeRiotAccount(id));
+
   ipcMain.handle("lcu:backfill", async (event) => {
     try {
       return await lcu.backfillHistory(senderWindow(event));
@@ -174,6 +191,8 @@ export function registerIpcHandlers() {
       return {};
     }
   });
+  ipcMain.handle("dragon:runes", async () => dragon.loadRuneData());
+  ipcMain.handle("dragon:rune-trees", async () => dragon.loadRuneTreeLayout());
 
   ipcMain.handle(
     "db:champion-item-stats",
@@ -182,19 +201,37 @@ export function registerIpcHandlers() {
     },
   );
 
-  ipcMain.handle("db:teammate-stats", () => {
-    return db.getTeammateStats();
-  });
+  ipcMain.handle(
+    "db:teammate-stats",
+    (_event, queue?: number, relation?: "friends" | "enemies") => {
+      return db.getTeammateStats(queue, relation);
+    },
+  );
 
-  ipcMain.handle("db:teammate-detail", async (_event, key: string) => {
-    // Teammate scores are computed on the fly and need champion classes
-    await dragon.waitForChampionData();
-    return db.getTeammateDetail(key);
-  });
+  ipcMain.handle(
+    "db:teammate-detail",
+    async (_event, key: string, queue?: number, relation?: "friends" | "enemies") => {
+      // Teammate scores are computed on the fly and need champion classes
+      await dragon.waitForChampionData();
+      return db.getTeammateDetail(key, queue, relation);
+    },
+  );
 
   ipcMain.handle("db:global-stats", (_event, patch?: string, queue?: number) => {
     return db.getGlobalStats(patch, queue);
   });
+  ipcMain.handle("db:owned-item-stats", (_event, patch?: string, queue?: number) => {
+    return db.getOwnedItemStats(patch, queue);
+  });
+  ipcMain.handle("db:owned-rune-stats", (_event, queue?: number, patch?: string) => {
+    return db.getOwnedRuneStats(queue, patch);
+  });
+  ipcMain.handle(
+    "db:owned-item-detail",
+    (_event, itemId: number, patch?: string, queue?: number) => {
+      return db.getOwnedItemDetail(itemId, patch, queue);
+    },
+  );
 
   ipcMain.handle("db:trends", (_event, queue?: number) => {
     return db.getTrendsData(queue);

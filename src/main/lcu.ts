@@ -10,7 +10,6 @@ import {
 } from "league-connect";
 import { BrowserWindow } from "electron";
 import * as db from "./db";
-import { MAYHEM_QUEUE_IDS } from "../shared/queues";
 import type { LcuStatus } from "../shared/api";
 
 let credentials: Credentials | null = null;
@@ -67,6 +66,13 @@ async function lcuRequest(url: string, method: HttpRequestOptions["method"] = "G
 
 async function fetchCurrentSummoner(): Promise<any> {
   return lcuRequest("/lol-summoner/v1/current-summoner");
+}
+
+// Used by the Riot API sync as a best-effort account detector. Historical
+// syncing never depends on this endpoint; configured Riot ID settings remain
+// the fallback when the client is closed.
+export async function getCurrentSummoner(): Promise<any> {
+  return fetchCurrentSummoner();
 }
 
 async function fetchMatchHistoryByPuuid(puuid: string, begIndex = 0, endIndex = 19): Promise<any> {
@@ -390,11 +396,9 @@ export async function backfillHistory(win?: BrowserWindow | null): Promise<Backf
         continue;
       }
 
-      if (!MAYHEM_QUEUE_IDS.includes(game.queueId)) {
-        db.markIgnoredGame(gameId);
-      } else if (db.insertGameFull(game, summoner.puuid)) {
+      if (db.insertGameFull(game, summoner.puuid)) {
         added++;
-        console.log(`Backfilled ARAM Mayhem game ${gameId}`);
+        console.log(`Backfilled League game ${gameId}`);
       }
 
       // Let the app fill in as it goes rather than staying empty for minutes
@@ -472,8 +476,6 @@ export async function fetchNewGames(
 
   for (const game of games) {
     if (db.gameExists(game.gameId)) continue;
-    if (!MAYHEM_QUEUE_IDS.includes(game.queueId)) continue;
-
     let fullGame: any;
     try {
       fullGame = await fetchGameDetails(game.gameId);
@@ -484,7 +486,7 @@ export async function fetchNewGames(
     const inserted = db.insertGameFull(fullGame, summoner.puuid);
     if (inserted) {
       newGamesCount++;
-      console.log(`Stored ARAM Mayhem game ${fullGame.gameId}`);
+      console.log(`Stored League game ${fullGame.gameId}`);
     }
   }
 
@@ -581,14 +583,8 @@ async function captureEogGame(
 
     const game = await fetchGameDetails(gameId);
 
-    if (!MAYHEM_QUEUE_IDS.includes(game.queueId)) {
-      db.markIgnoredGame(gameId);
-      eogPending.delete(gameId);
-      return;
-    }
-
     if (db.insertGameFull(game, summoner.puuid)) {
-      console.log(`Stored ARAM Mayhem game ${gameId} from the post-game screen`);
+      console.log(`Stored League game ${gameId} from the post-game screen`);
       notifyGamesUpdated(win);
     }
     eogPending.delete(gameId);
@@ -609,17 +605,9 @@ async function captureEogGame(
   }
 }
 
-function startCapture(win: BrowserWindow, gameId: number, queueId: number): void {
+function startCapture(win: BrowserWindow, gameId: number, _queueId: number): void {
   if (!Number.isFinite(gameId) || gameId <= 0) return;
   if (eogPending.has(gameId) || db.gameExists(gameId)) return;
-
-  // The queue id rides along whenever the source has one, so a game we don't
-  // track is dismissed without a single request. Sources that omit it leave
-  // this NaN, and the fetched game is what decides instead.
-  if (Number.isFinite(queueId) && queueId > 0 && !MAYHEM_QUEUE_IDS.includes(queueId)) {
-    db.markIgnoredGame(gameId);
-    return;
-  }
 
   captureEogGame(win, gameId, 0);
 }

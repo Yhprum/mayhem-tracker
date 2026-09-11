@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useBackfill } from "../hooks/useBackfill";
 import { queueLabel } from "../components/QueueSelect";
 import { setRemembering } from "../lib/viewState";
-import type { BackupInfo } from "../lib/types";
+import type { BackupInfo, RiotAccountConfig } from "../lib/types";
 
 const BACKUP_REASONS: Record<string, string> = {
   auto: "Scheduled",
@@ -67,6 +67,20 @@ export default function Settings() {
   const [hideRemakes, setHideRemakes] = useState(false);
   const [autoBackup, setAutoBackup] = useState(true);
   const [rememberFilters, setRememberFilters] = useState(false);
+  const [riotGameName, setRiotGameName] = useState("");
+  const [riotTagLine, setRiotTagLine] = useState("");
+  const [riotPlatform, setRiotPlatform] = useState("na1");
+  const [riotApiKey, setRiotApiKey] = useState("");
+  const [riotSyncStatus, setRiotSyncStatus] = useState<string | null>(null);
+  const [riotSyncing, setRiotSyncing] = useState(false);
+  const [riotAccounts, setRiotAccounts] = useState<RiotAccountConfig[]>([]);
+  const [accountDraft, setAccountDraft] = useState({
+    id: "",
+    gameName: "",
+    tagLine: "",
+    platform: "na1",
+    apiKey: "",
+  });
   const [loading, setLoading] = useState(true);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
@@ -87,16 +101,100 @@ export default function Settings() {
       window.api.getSetting("hide_remakes"),
       window.api.getSetting("auto_backup"),
       window.api.getSetting("remember_filters"),
-    ]).then(([startup, startupSupported, tray, hidden, remakes, backup, remember]) => {
-      setAutoStart(startup === "true");
-      setAutoStartSupported(startupSupported);
-      setMinimizeToTray(tray !== "false");
-      setHiddenQueues(new Set(hidden ? hidden.split(",").map(Number) : []));
-      setHideRemakes(remakes === "true");
-      setAutoBackup(backup !== "false");
-      setRememberFilters(remember === "true");
-      setLoading(false);
-    });
+      window.api.getSetting("riot_game_name"),
+      window.api.getSetting("riot_tag_line"),
+      window.api.getSetting("riot_platform"),
+    ]).then(
+      ([
+        startup,
+        startupSupported,
+        tray,
+        hidden,
+        remakes,
+        backup,
+        remember,
+        gameName,
+        tagLine,
+        platform,
+      ]) => {
+        setAutoStart(startup === "true");
+        setAutoStartSupported(startupSupported);
+        setMinimizeToTray(tray !== "false");
+        setHiddenQueues(new Set(hidden ? hidden.split(",").map(Number) : []));
+        setHideRemakes(remakes === "true");
+        setAutoBackup(backup !== "false");
+        setRememberFilters(remember === "true");
+        setRiotGameName(gameName ?? "");
+        setRiotTagLine(tagLine ?? "");
+        setRiotPlatform(platform ?? "na1");
+        setLoading(false);
+      },
+    );
+  }, []);
+
+  useEffect(() => {
+    window.api.getRiotAccounts().then(setRiotAccounts);
+  }, []);
+
+  const saveRiotSetting = useCallback(async (key: string, value: string) => {
+    await window.api.setSetting(key, value.trim());
+  }, []);
+
+  const handleRiotSync = useCallback(async () => {
+    setRiotSyncing(true);
+    setRiotSyncStatus(null);
+    try {
+      const gameName = riotGameName.trim();
+      const tagLine = riotTagLine.trim();
+      const platform = riotPlatform.trim() || "na1";
+      if (!gameName || !tagLine) {
+        setRiotSyncStatus("Enter a Riot ID name and tag before syncing");
+        return;
+      }
+
+      // Saving the account does not require an API key. The main process
+      // preserves an existing encrypted key when apiKey is omitted.
+      await window.api.saveRiotAccount({
+        id: "primary",
+        gameName,
+        tagLine,
+        platform,
+        hasApiKey: Boolean(riotApiKey.trim()),
+        apiKey: riotApiKey.trim() || undefined,
+      });
+      setRiotAccounts(await window.api.getRiotAccounts());
+
+      const result = await window.api.syncRiotHistory();
+      setRiotSyncStatus(
+        "error" in result
+          ? `Error: ${result.error}`
+          : result.added > 0
+            ? `Imported ${result.added} new League game(s)`
+            : `No new games found (${result.scanned} match IDs checked)`,
+      );
+    } finally {
+      setRiotSyncing(false);
+    }
+  }, [riotApiKey, riotGameName, riotPlatform, riotTagLine]);
+
+  const saveAccount = useCallback(async () => {
+    if (!accountDraft.gameName.trim() || !accountDraft.tagLine.trim()) return;
+    const account = {
+      id: accountDraft.id || crypto.randomUUID(),
+      gameName: accountDraft.gameName,
+      tagLine: accountDraft.tagLine,
+      platform: accountDraft.platform,
+      hasApiKey: true,
+      apiKey: accountDraft.apiKey,
+    };
+    await window.api.saveRiotAccount(account);
+    setRiotAccounts(await window.api.getRiotAccounts());
+    setAccountDraft({ id: "", gameName: "", tagLine: "", platform: "na1", apiKey: "" });
+  }, [accountDraft]);
+
+  const removeAccount = useCallback(async (id: string) => {
+    await window.api.removeRiotAccount(id);
+    setRiotAccounts(await window.api.getRiotAccounts());
   }, []);
 
   // Kept current the same way the queue dropdown is: a game from a queue that
@@ -280,6 +378,131 @@ export default function Settings() {
   return (
     <div className="max-w-2xl space-y-6">
       <h1 className="text-xl font-bold text-lol-text-bright">Settings</h1>
+
+      <div className="bg-lol-card rounded-xl border border-lol-border/60 p-5">
+        <h2 className="text-sm font-semibold text-lol-text-bright mb-2">League history sync</h2>
+        <p className="text-xs text-lol-text mb-4">
+          Riot API sync imports every queue and keeps it available offline. The League client is
+          detected automatically when running; these values are the fallback.
+        </p>
+        <div className="grid grid-cols-[1fr_1fr_100px] gap-2">
+          <input
+            className="input"
+            placeholder="Riot ID name"
+            value={riotGameName}
+            onChange={(e) => setRiotGameName(e.target.value)}
+            onBlur={() => saveRiotSetting("riot_game_name", riotGameName)}
+          />
+          <input
+            className="input"
+            placeholder="Tag (without #)"
+            value={riotTagLine}
+            onChange={(e) => setRiotTagLine(e.target.value)}
+            onBlur={() => saveRiotSetting("riot_tag_line", riotTagLine)}
+          />
+          <input
+            className="input"
+            placeholder="na1"
+            value={riotPlatform}
+            onChange={(e) => setRiotPlatform(e.target.value)}
+            onBlur={() => saveRiotSetting("riot_platform", riotPlatform)}
+          />
+        </div>
+        <input
+          className="input mt-2 w-full"
+          type="password"
+          placeholder="Riot API key for sync (optional for saving the account)"
+          value={riotApiKey}
+          onChange={(e) => setRiotApiKey(e.target.value)}
+        />
+        <div className="flex items-center gap-3 mt-3">
+          <button
+            className="rounded-md bg-lol-gold/15 border border-lol-gold/40 px-3 py-1.5 text-xs text-lol-gold disabled:opacity-50"
+            type="button"
+            disabled={riotSyncing}
+            onClick={handleRiotSync}
+          >
+            {riotSyncing ? "Syncing..." : "Sync all League games"}
+          </button>
+          {riotSyncStatus && <span className="text-xs text-lol-text">{riotSyncStatus}</span>}
+        </div>
+        <p className="text-[11px] text-lol-text/70 mt-3">
+          API keys are encrypted with the operating system credential store and are only used by the
+          Electron main process. They are never returned to the renderer after saving. You can still
+          use <code>RIOT_API_KEY</code> for a single account in development.
+        </p>
+        {riotAccounts.length > 0 && (
+          <div className="space-y-2 mt-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-lol-text-bright">
+                Saved accounts ({riotAccounts.length})
+              </span>
+              <button
+                className="rounded-md border border-lol-gold/40 bg-lol-gold/10 px-3 py-1.5 text-xs text-lol-gold disabled:opacity-50"
+                type="button"
+                disabled={riotSyncing}
+                onClick={handleRiotSync}
+              >
+                {riotSyncing ? "Syncing saved accounts..." : "Sync saved accounts"}
+              </button>
+            </div>
+            {riotAccounts.map((account) => (
+              <div
+                key={account.id}
+                className="flex items-center justify-between rounded-md border border-lol-border px-3 py-2"
+              >
+                <span className="text-xs text-lol-text-bright">
+                  {account.gameName}#{account.tagLine} · {account.platform} ·{" "}
+                  {account.hasApiKey ? "API key saved" : "API key missing"}
+                </span>
+                <button
+                  className="text-xs text-lol-loss"
+                  type="button"
+                  onClick={() => removeAccount(account.id)}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="grid grid-cols-[1fr_1fr_90px] gap-2 mt-4">
+          <input
+            className="input"
+            placeholder="Additional Riot ID"
+            value={accountDraft.gameName}
+            onChange={(e) => setAccountDraft((v) => ({ ...v, gameName: e.target.value }))}
+          />
+          <input
+            className="input"
+            placeholder="Tag"
+            value={accountDraft.tagLine}
+            onChange={(e) => setAccountDraft((v) => ({ ...v, tagLine: e.target.value }))}
+          />
+          <input
+            className="input"
+            placeholder="na1"
+            value={accountDraft.platform}
+            onChange={(e) => setAccountDraft((v) => ({ ...v, platform: e.target.value }))}
+          />
+        </div>
+        <div className="flex gap-2 mt-2">
+          <input
+            className="input flex-1"
+            type="password"
+            placeholder="Riot API key for this account"
+            value={accountDraft.apiKey}
+            onChange={(e) => setAccountDraft((v) => ({ ...v, apiKey: e.target.value }))}
+          />
+          <button
+            className="rounded-md border border-lol-border px-3 text-xs text-lol-text"
+            type="button"
+            onClick={saveAccount}
+          >
+            Save account
+          </button>
+        </div>
+      </div>
 
       {/* General */}
       <div className="bg-lol-card rounded-xl border border-lol-border/60 p-5">

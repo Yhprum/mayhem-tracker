@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
-import type { ChampionData, AugmentData, ItemData, SummonerSpellData } from "../lib/types";
+import type { ChampionData, AugmentData, ItemData, SummonerSpellData, RuneData } from "../lib/types";
+import type { RuneTreeLayout } from "../../shared/api";
 
 let champCache: ChampionData | null = null;
 let spellCache: SummonerSpellData | null = null;
+let runeCache: RuneData | null = null;
+let runeTreeCache: RuneTreeLayout | null = null;
 const augCaches = new Map<string, AugmentData>();
 const augPromises = new Map<string, Promise<AugmentData>>();
 const itemCaches = new Map<string, ItemData>();
@@ -111,10 +114,44 @@ export function useItemData(patch?: string | null): ItemData {
   return items;
 }
 
+export function useRuneData(): RuneData {
+  const [data, setData] = useState<RuneData>(runeCache || {});
+
+  useEffect(() => {
+    if (hasData(runeCache)) return;
+    window.api.getRuneData().then((d) => {
+      if (Object.keys(d).length > 0) runeCache = d;
+      setData(d);
+    });
+  }, []);
+
+  return data;
+}
+
+// Full per-tree slot layout (all rune options per row), used by the rune
+// tooltip to grey out everything the player didn't pick.
+export function useRuneTreeData(): RuneTreeLayout {
+  const [data, setData] = useState<RuneTreeLayout>(runeTreeCache || {});
+
+  useEffect(() => {
+    if (hasData(runeTreeCache)) return;
+    window.api.getRuneTrees().then((d) => {
+      if (Object.keys(d).length > 0) runeTreeCache = d;
+      setData(d);
+    });
+  }, []);
+
+  return data;
+}
+
 export function getChampionName(data: ChampionData, id: number): string {
   return data[id]?.name || `Champion ${id}`;
 }
 
 export function getAugmentName(data: AugmentData, id: number): string {
   return data[id]?.name || `Augment ${id}`;
+}
+
+export function getItemName(data: ItemData, id: number): string {
+  return data[id]?.name || `Item ${id}`;
 }

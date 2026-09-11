@@ -10,6 +10,11 @@ export function parseParticipants(
 
   return participants.map((p) => ({
     ...p,
+    cs: p.cs ?? 0,
+    runeIds: p.runeIds ?? [],
+    primaryStyle: p.primaryStyle ?? null,
+    secondaryStyle: p.secondaryStyle ?? null,
+    statShardIds: p.statShardIds ?? [],
     summonerName: p.gameName || `Player ${p.participantId}`,
     isSelf: selfPuuids != null && p.puuid != null && selfPuuids.includes(p.puuid),
   }));

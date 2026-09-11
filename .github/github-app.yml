@@ -9,3 +9,64 @@ scripts:
     command: npm run lint
   - name: Build
     command: npm run build
+  - name: Start development app
+    command: npm run dev
+instructions: |-
+  # Mayhem Tracker – GitHub Copilot Instructions
+
+  ## Project Overview
+  Mayhem Tracker is a desktop application (Windows) for tracking League of Legends match history (ARAM Mayhem mode). The application connects to the game client and Riot API, and stores data locally in a SQLite database. It is a fork of Yhprum/mayhem-tracker.
+
+  ## Tech Stack
+  - Electron (desktop app)
+  - React 18 + TypeScript (UI)
+  - Tailwind CSS (styling)
+  - better-sqlite3 (local database)
+  - league-connect (LoL client communication)
+  - Vite / electron-vite (build)
+
+  ## General Rules
+  - Always use TypeScript in strict mode. Do not use the `any` type.
+  - Prefer functional React components with hooks (useState, useEffect, useCallback).
+  - Do not mix business logic with Electron IPC code.
+  - Perform all database operations synchronously (better-sqlite3 is not asynchronous).
+  - Use Tailwind CSS for styling – avoid inline styles and external CSS files unless necessary.
+
+  ## Naming Conventions
+  - React components: PascalCase (e.g., `MatchHistory.tsx`).
+  - Functions and variables: camelCase (e.g., `fetchMatchHistory`).
+  - Constants: UPPER_SNAKE_CASE (e.g., `MAX_RETRY_COUNT`).
+  - Files: PascalCase for components, kebab-case for others (e.g., `database-utils.ts`).
+
+  ## Electron – Main Process
+  - All logic related to the database, league-connect, and Riot API should be in the main process, not in the renderer.
+  - Use `ipcMain.handle` and `ipcRenderer.invoke` for communication between processes.
+  - Always handle errors in asynchronous operations (try/catch or .catch()).
+  - Do not use `fs.readFileSync` in a loop – if you must, do it once.
+
+  ## React – Renderer
+  - Components should be small and focused on one thing.
+  - Keep local state in `useState`, and global state in context or a simple store (if the project uses one).
+  - Avoid `useEffect` without a dependency array.
+  - For rendering lists, use a `key` based on a unique ID, not on the index.
+
+  ## better-sqlite3 – Database
+  - Always use prepared statements (`db.prepare(...)`) instead of building SQL by string concatenation – this protects against SQL injection.
+  - Use transactions for multiple write operations: `db.transaction(() => { ... })()`.
+  - Enable WAL mode for better performance: `db.pragma('journal_mode = WAL')`.
+  - For migrations, use `user_version` in SQLite to track schema versions.
+
+  ## league-connect – LoL Client Communication
+  - Use `authenticate()` to retrieve credentials.
+  - Use `LeagueWebSocket` to listen for events.
+  - Use `createHttp1Request` or `createHttp2Request` for HTTP requests.
+  - Always check if the LoL client is running before making a request.
+
+  ## Security
+  - Never log credentials (passwords, tokens).
+  - Sanitize all input from the renderer before using it in the main process.
+  - Do not expose filesystem access in the renderer.
+server_ready_pattern: "(?i)(https?://localhost:\\d+)"
+automation:
+  auto_issue_session: true
+  remote_control: false

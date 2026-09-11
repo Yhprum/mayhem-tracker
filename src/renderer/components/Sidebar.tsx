@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { useState, useCallback, useEffect, useRef, type ComponentType, type SVGProps } from "react";
 import { useLcuStatus } from "../hooks/useLcuStatus";
 import { useBackfill } from "../hooks/useBackfill";
@@ -19,14 +19,25 @@ import {
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
-const links: { to: string; label: string; icon: IconComponent }[] = [
-  { to: "/", label: "Match History", icon: SwordsIcon },
-  { to: "/champions", label: "Champions", icon: TrophyIcon },
-  { to: "/augments", label: "Augments", icon: CrosshairIcon },
-  { to: "/friends", label: "Friends", icon: UsersIcon },
-  { to: "/trends", label: "Trends", icon: TrendingUpIcon },
-  { to: "/records", label: "Records", icon: MedalIcon },
-  { to: "/global", label: "Total Stats", icon: GlobeIcon },
+const historyTabs = [
+  { scope: "mayhem", to: "/history/mayhem", label: "ARAM MAYHEM MATCHES" },
+  { scope: "aram", to: "/history/aram", label: "ARAM MATCHES" },
+  { scope: "arena", to: "/history/arena", label: "ARENA MATCHES" },
+  { scope: "ranked", to: "/history/ranked", label: "RANKED MATCHES" },
+  { scope: "normal", to: "/history/normal", label: "NORMAL MATCHES" },
+  { scope: "full", to: "/", label: "FULL MATCH HISTORY" },
+];
+
+const historySections = [
+  { slug: "champions", label: "CHAMPIONS", icon: TrophyIcon },
+  { slug: "augments", label: "AUGMENTS", icon: CrosshairIcon },
+  { slug: "items", label: "ITEMS", icon: CrosshairIcon },
+  { slug: "runes", label: "RUNES", icon: CrosshairIcon },
+  { slug: "friends", label: "FRIENDS", icon: UsersIcon },
+  { slug: "enemies", label: "ENEMIES", icon: UsersIcon },
+  { slug: "trends", label: "TRENDS", icon: TrendingUpIcon },
+  { slug: "records", label: "RECORDS", icon: MedalIcon },
+  { slug: "total-stats", label: "TOTAL STATS", icon: GlobeIcon },
 ];
 
 // The app is often left open for days, so a launch-only check would never
@@ -47,14 +58,27 @@ const statusLabels: Record<LcuStatus, string> = {
   disconnected: "Disconnected",
 };
 
-function NavItem({ to, label, icon: Icon }: { to: string; label: string; icon: IconComponent }) {
+function NavItem({
+  to,
+  label,
+  icon: Icon,
+  onClick,
+  active,
+}: {
+  to: string;
+  label: string;
+  icon: IconComponent;
+  onClick?: () => void;
+  active?: boolean;
+}) {
   return (
     <NavLink
       to={to}
       end={to === "/"}
+      onClick={onClick}
       className={({ isActive }) =>
         `flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors ${
-          isActive
+          (active ?? isActive)
             ? "bg-lol-gold/10 text-lol-gold"
             : "text-lol-text hover:bg-white/5 hover:text-lol-text-bright"
         }`
@@ -67,6 +91,8 @@ function NavItem({ to, label, icon: Icon }: { to: string; label: string; icon: I
 }
 
 export default function Sidebar() {
+  const [expandedScope, setExpandedScope] = useState<string | null>(null);
+  const location = useLocation();
   const status = useLcuStatus();
   const { running: backfilling, progress, percent } = useBackfill();
   const [refreshing, setRefreshing] = useState(false);
@@ -148,17 +174,54 @@ export default function Sidebar() {
           <HourglassIcon className="w-4 h-4 text-lol-gold" />
         </div>
         <div className="flex flex-col justify-center leading-none">
-          <span className="font-bold text-[15px] tracking-[0.02em] text-lol-text-bright">
-            Mayhem
+          <span className="font-bold text-[13px] tracking-[0.02em] text-lol-text-bright">
+            League Tracker
           </span>
-          <span className="text-[8px] font-semibold uppercase tracking-[0.35em] text-lol-text/80 mt-1">
-            Tracker
+          <span className="text-[8px] font-semibold uppercase tracking-[0.25em] text-lol-gold/80 mt-1">
+            WIP - FORKED FROM YHPRUM
           </span>
         </div>
       </div>
       <div className="flex flex-col gap-0.5 p-3 mt-1 flex-1">
-        {links.map((link) => (
-          <NavItem key={link.to} {...link} />
+        <NavItem to="/live" label="LIVE GAME" icon={SwordsIcon} />
+        {historyTabs.map(({ scope, to, label }) => (
+          <div key={scope} className="flex flex-col gap-0.5">
+            <NavItem
+              to={to}
+              label={label}
+              icon={SwordsIcon}
+              active={
+                scope === "full"
+                  ? location.pathname === "/" || location.pathname.startsWith("/history/full/")
+                  : undefined
+              }
+              onClick={() => setExpandedScope(scope)}
+            />
+            <div
+              className={`ml-3 grid border-l border-lol-border/60 pl-2 transition-[grid-template-rows,opacity] duration-200 ease-out ${
+                expandedScope === scope
+                  ? "grid-rows-[1fr] opacity-100"
+                  : "pointer-events-none grid-rows-[0fr] opacity-0"
+              }`}
+            >
+              <div className="min-h-0 overflow-hidden flex flex-col gap-0.5">
+                {historySections
+                  .filter(
+                    ({ slug }) =>
+                      !(slug === "augments" && ["aram", "ranked", "normal"].includes(scope)) &&
+                      !(slug === "runes" && ["mayhem", "arena"].includes(scope)),
+                  )
+                  .map(({ slug, label: sectionLabel, icon }) => (
+                    <NavItem
+                      key={`${scope}-${slug}`}
+                      to={`/history/${scope}/${slug}`}
+                      label={sectionLabel}
+                      icon={icon}
+                    />
+                  ))}
+              </div>
+            </div>
+          </div>
         ))}
       </div>
       <div className="px-3 pb-1">

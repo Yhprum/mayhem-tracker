@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useIpc } from "../hooks/useIpc";
+import { useHistoryScopeQueue } from "../lib/historyScope";
 import { useChampionData, getChampionName } from "../hooks/useChampions";
 import type {
   ChampionData,
@@ -16,6 +17,7 @@ import QueueSelect, { queueLabel } from "../components/QueueSelect";
 import { ACCENTS, type StatAccent } from "../components/StatCard";
 import {
   CoinsIcon,
+  CrosshairIcon,
   FlameIcon,
   HeartIcon,
   HourglassIcon,
@@ -24,6 +26,7 @@ import {
   StarIcon,
   SwordsIcon,
   TimerIcon,
+  TrophyIcon,
   TrendingDownIcon,
   TrendingUpIcon,
   UsersIcon,
@@ -249,6 +252,35 @@ function statCards(bests: RecordsData["bests"]): CardDef[] {
     accent: "win",
     value: (r) => n(r.value),
   });
+  add(bests.totalDamage, {
+    key: "totalDamage",
+    label: "Most Total Damage Dealt",
+    icon: <CrosshairIcon className="w-3 h-3" />,
+    accent: "purple",
+    value: (r) => n(r.value),
+    sub: "champions, minions & objectives",
+  });
+  add(bests.trueDamage, {
+    key: "trueDamage",
+    label: "Most True Damage Dealt",
+    icon: <ZapIcon className="w-3 h-3" />,
+    accent: "gold",
+    value: (r) => n(r.value),
+  });
+  add(bests.cs, {
+    key: "cs",
+    label: "Most CS in Game",
+    icon: <TrophyIcon className="w-3 h-3" />,
+    accent: "sky",
+    value: (r) => n(r.value),
+  });
+  add(bests.csPerMinute, {
+    key: "csPerMinute",
+    label: "Highest CS per Minute",
+    icon: <TrendingUpIcon className="w-3 h-3" />,
+    accent: "sky",
+    value: (r) => r.value.toFixed(2),
+  });
   add(bests.healing, {
     key: "healing",
     label: "Most Healing",
@@ -285,12 +317,26 @@ function statCards(bests: RecordsData["bests"]): CardDef[] {
     accent: "win",
     value: (r) => formatDuration(r.value),
   });
+  add(bests.fastestLoss, {
+    key: "fastestLoss",
+    label: "Fastest Loss",
+    icon: <TimerIcon className="w-3 h-3" />,
+    accent: "purple",
+    value: (r) => formatDuration(r.value),
+  });
   add(bests.longestGame, {
     key: "longestGame",
     label: "Longest Game",
     icon: <HourglassIcon className="w-3 h-3" />,
     accent: "purple",
     value: (r) => formatDuration(r.value),
+  });
+  add(bests.criticalStrike, {
+    key: "criticalStrike",
+    label: "Highest Critical Strike",
+    icon: <FlameIcon className="w-3 h-3" />,
+    accent: "gold",
+    value: (r) => n(r.value),
   });
   return cards;
 }
@@ -327,7 +373,11 @@ export default function Records() {
     );
   };
 
-  const { data, refetch } = useIpc<RecordsData>(() => window.api.getRecords(queue), [queue]);
+  const scopedQueue = queue ?? useHistoryScopeQueue();
+  const { data, refetch } = useIpc<RecordsData>(
+    () => window.api.getRecords(scopedQueue),
+    [scopedQueue],
+  );
   const champData = useChampionData();
   const [puuids, setPuuids] = useState<string[] | null>(null);
   const [openMatch, setOpenMatch] = useState<RecordMatchRef | null>(null);

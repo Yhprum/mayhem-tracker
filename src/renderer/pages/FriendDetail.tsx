@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useIpc } from "../hooks/useIpc";
 import { useChampionData, getChampionName } from "../hooks/useChampions";
 import type {
@@ -15,18 +15,40 @@ import StatBars from "../components/StatBars";
 import WinRateBar from "../components/WinRateBar";
 import { formatDuration, formatTimeAgo, formatKDA, kdaRatio, kdaColor } from "../lib/format";
 import { scoreColor } from "../../shared/opScore";
+import { useHistoryScopeQueue } from "../lib/historyScope";
 
 export default function FriendDetail() {
   const { key = "" } = useParams();
+  const { section } = useParams<{ section?: string }>();
+  const enemies = section === "enemies";
+  const navigate = useNavigate();
+  const scope = useParams<{ scope?: string }>().scope;
+  const scopedQueue = useHistoryScopeQueue(scope);
   const champData = useChampionData();
   const { data, loading, refetch } = useIpc<TeammateDetail | null>(
-    () => window.api.getTeammateDetail(key),
-    [key],
+    () => window.api.getTeammateDetail(key, scopedQueue, enemies ? "enemies" : "friends"),
+    [key, scopedQueue, enemies],
   );
   const [puuids, setPuuids] = useState<string[] | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<MatchDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [switchMessage, setSwitchMessage] = useState<string | null>(null);
+
+  const switchRelation = useCallback(async () => {
+    const target = enemies ? "friends" : "enemies";
+    const result = await window.api.getTeammateDetail(key, scopedQueue, target);
+    if (!result) {
+      setSwitchMessage("Not enough data");
+      window.setTimeout(() => setSwitchMessage(null), 2200);
+      return;
+    }
+    navigate(
+      scope
+        ? `/history/${scope}/${target}/${encodeURIComponent(key)}`
+        : `/friends/${encodeURIComponent(key)}`,
+    );
+  }, [enemies, key, navigate, scope, scopedQueue]);
 
   useEffect(() => {
     window.api.getAllSummonerPuuids().then(setPuuids);
@@ -62,7 +84,21 @@ export default function FriendDetail() {
   if (!data) {
     return (
       <div className="max-w-6xl space-y-4">
-        <BackLink />
+        <div className="flex items-center gap-3">
+          <Link
+            to={scope ? `/history/${scope}/${enemies ? "enemies" : "friends"}` : "/friends"}
+            className="text-xs text-lol-text hover:text-lol-gold"
+          >
+            ← {enemies ? "Enemies" : "Friends"}
+          </Link>
+          <button
+            type="button"
+            onClick={switchRelation}
+            className="rounded border border-lol-border px-2 py-1 text-[11px] text-lol-text hover:border-lol-gold/60 hover:text-lol-gold"
+          >
+            Switch
+          </button>
+        </div>
         <div className="bg-lol-card rounded-xl border border-lol-border/60 p-8 text-center text-lol-text">
           No games found with this player.
         </div>
@@ -78,16 +114,35 @@ export default function FriendDetail() {
       ? (player.kills + player.assists) / player.deaths
       : player.kills + player.assists;
   // Their score is computed per game rather than stored, so average what we have
-  const scored = matches.filter((m) => m.friend.score != null);
+  const selectedStats = (m: TeammateMatch) => (enemies ? m.score : m.friend.score);
+  const selectedBadge = (m: TeammateMatch) => (enemies ? m.score_badge : m.friend.score_badge);
+  const scored = matches.filter((m) => selectedStats(m) != null);
   const avgScore = scored.length
-    ? scored.reduce((sum, m) => sum + (m.friend.score ?? 0), 0) / scored.length
+    ? scored.reduce((sum, m) => sum + (selectedStats(m) ?? 0), 0) / scored.length
     : null;
-  const mvps = matches.filter((m) => m.friend.score_badge === "MVP").length;
-  const aces = matches.filter((m) => m.friend.score_badge === "ACE").length;
+  const mvps = matches.filter((m) => selectedBadge(m) === "MVP").length;
+  const aces = matches.filter((m) => selectedBadge(m) === "ACE").length;
 
   return (
     <div className="max-w-6xl space-y-4">
-      <BackLink />
+      <Link
+        to={scope ? `/history/${scope}/${enemies ? "enemies" : "friends"}` : "/friends"}
+        className="inline-flex items-center gap-1.5 text-xs text-lol-text hover:text-lol-text-bright transition-colors"
+      >
+        <span aria-hidden>←</span> {enemies ? "Enemies" : "Friends"}
+      </Link>
+      <button
+        type="button"
+        onClick={switchRelation}
+        className="ml-3 rounded border border-lol-border px-2 py-1 text-[11px] text-lol-text hover:border-lol-gold/60 hover:text-lol-gold"
+      >
+        Switch
+      </button>
+      {switchMessage && (
+        <span className="ml-2 rounded bg-lol-card px-2 py-1 text-[11px] text-lol-text">
+          {switchMessage}
+        </span>
+      )}
 
       <div className="grid grid-cols-[1fr_22rem] gap-4 items-stretch">
         <div className="flex flex-col gap-3">
@@ -96,7 +151,8 @@ export default function FriendDetail() {
             <div className="min-w-0">
               <h1 className="text-xl font-bold text-lol-text-bright truncate">{player.name}</h1>
               <span className="text-sm text-lol-text">
-                {player.games} games together · last played {formatTimeAgo(player.lastPlayed)}
+                {player.games} {enemies ? "games against" : "games together"} · last played{" "}
+                {formatTimeAgo(player.lastPlayed)}
               </span>
             </div>
           </div>
@@ -156,7 +212,7 @@ export default function FriendDetail() {
       </div>
 
       <h2 className="text-sm font-semibold text-lol-text-bright uppercase tracking-wider pt-1">
-        Games Played Together
+        {enemies ? "Games Played By Him" : "Games Played Together"}
       </h2>
 
       <div className="space-y-1">
@@ -166,6 +222,7 @@ export default function FriendDetail() {
             match={m}
             champData={champData}
             friendName={player.name}
+            enemies={enemies}
             expanded={expandedId === m.game_id}
             detail={expandedId === m.game_id ? detail : null}
             detailLoading={expandedId === m.game_id && detailLoading}
@@ -200,17 +257,6 @@ function ChampionRow({ champ, champData }: { champ: TeammateChampionStats; champ
         <WinRateBar wins={champ.wins} total={champ.games} />
       </div>
     </div>
-  );
-}
-
-function BackLink() {
-  return (
-    <Link
-      to="/friends"
-      className="inline-flex items-center gap-1.5 text-xs text-lol-text hover:text-lol-text-bright transition-colors"
-    >
-      <span aria-hidden>←</span> Friends
-    </Link>
   );
 }
 
@@ -296,6 +342,7 @@ function SharedGameRow({
   detailLoading,
   puuids,
   onToggle,
+  enemies,
 }: {
   match: TeammateMatch;
   champData: any;
@@ -305,6 +352,7 @@ function SharedGameRow({
   detailLoading: boolean;
   puuids: string[] | null;
   onToggle: () => void;
+  enemies: boolean;
 }) {
   const isWin = !!match.win;
   const accent = isWin ? "bg-lol-win" : "bg-lol-loss";
@@ -333,7 +381,7 @@ function SharedGameRow({
         </div>
 
         <PlayerBlock
-          label="You"
+          label={enemies ? friendName : "You"}
           championId={match.champion_id}
           champData={champData}
           kills={match.kills}
@@ -350,7 +398,7 @@ function SharedGameRow({
         <span className="w-px self-stretch bg-lol-border/60 shrink-0" />
 
         <PlayerBlock
-          label={friendName}
+          label={enemies ? "You" : friendName}
           championId={match.friend.champion_id}
           champData={champData}
           kills={match.friend.kills}

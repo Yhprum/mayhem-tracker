@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { QUEUE_LABELS } from "../../shared/queues";
+import { QUEUE_GROUP_ARENA } from "../../shared/queues";
+import { useHistoryScopeQueue } from "../lib/historyScope";
 
 export function queueLabel(queueId: number): string {
   return QUEUE_LABELS[queueId] ?? `Queue ${queueId}`;
@@ -13,13 +15,15 @@ export default function QueueSelect({
   onChange: (queue: number | undefined) => void;
 }) {
   const [queues, setQueues] = useState<number[]>([]);
+  const scopedQueue = useHistoryScopeQueue();
 
   useEffect(() => {
-    const fetchQueues = () => window.api.getMatchFilterOptions().then((o) => setQueues(o.queues));
+    const fetchQueues = () =>
+      window.api.getMatchFilterOptions({ queue: scopedQueue }).then((o) => setQueues(o.queues));
     fetchQueues();
     const unsub = window.api.onGamesUpdated(fetchQueues);
     return unsub;
-  }, []);
+  }, [scopedQueue]);
 
   // Clear the selection if new data leaves it without any matching games
   useEffect(() => {
@@ -28,7 +32,6 @@ export default function QueueSelect({
     }
   }, [queues, value, onChange]);
 
-  // A queue dropdown is noise while the database only holds one queue
   if (queues.length < 2) return null;
 
   return (
@@ -40,7 +43,7 @@ export default function QueueSelect({
       <option value="">All Queues</option>
       {queues.map((q) => (
         <option key={q} value={q}>
-          {queueLabel(q)}
+          {q === QUEUE_GROUP_ARENA ? "Arena" : queueLabel(q)}
         </option>
       ))}
     </select>

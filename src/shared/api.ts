@@ -76,6 +76,11 @@ export interface MatchListItem {
   spell1: number | null;
   spell2: number | null;
   augment_ids: string | null;
+  rune_ids?: string | null;
+  primary_style?: number | null;
+  secondary_style?: number | null;
+  stat_shard_ids?: string | null;
+  cs?: number;
   game_version: string | null;
   game_max_dmg: number;
   game_max_taken: number;
@@ -145,6 +150,11 @@ export interface MatchParticipantRecord {
   largestKillingSpree: number;
   spell1Id: number | null;
   spell2Id: number | null;
+  cs: number;
+  runeIds: number[];
+  primaryStyle: number | null;
+  secondaryStyle: number | null;
+  statShardIds: number[];
   items: number[];
   augments: number[];
 }
@@ -188,6 +198,64 @@ export interface ItemStats {
   item_id: number;
   picks: number;
   wins: number;
+}
+export interface RuneStats {
+  rune_id: number;
+  picks: number;
+  wins: number;
+}
+export interface RuneChampionStats {
+  champion_id: number;
+  games: number;
+  keystones: { rune_id: number; picks: number }[];
+}
+export interface RuneOverview {
+  runes: RuneStats[];
+  champions: RuneChampionStats[];
+}
+export interface RuneData {
+  [id: number]: {
+    name: string;
+    longDesc: string;
+    icon: string;
+    category: "keystone" | "secondary" | "tree";
+  };
+}
+// Full tree layout (all options per slot, in row order) — used by the hover
+// tooltip to show unselected alternatives greyed out next to the player's
+// actual picks. `slots[0]` is the keystone row for a primary tree; for a
+// secondary tree slots[0] is unused (LoL never lets you pick a secondary
+// keystone) but is still present because runesReforged.json always ships 4
+// rows per tree.
+export interface RuneTreeLayout {
+  [treeId: number]: {
+    id: number;
+    key: string;
+    name: string;
+    icon: string;
+    slots: number[][];
+  };
+}
+export interface ItemDetail {
+  item_id: number;
+  picks: number;
+  wins: number;
+  totalGames: number;
+  champions: {
+    champion_id: number;
+    games: number;
+    championGames: number;
+    wins: number;
+    matches: {
+      game_id: number;
+      game_creation: number;
+      game_duration: number;
+      win: number;
+      kills: number;
+      deaths: number;
+      assists: number;
+    }[];
+  }[];
 }
 
 export interface AugmentStatsDetailed {
@@ -260,6 +328,8 @@ export interface ItemData {
     description: string;
     iconPath: string;
     branch: string;
+    price?: number;
+    from?: number[];
   };
 }
 
@@ -391,10 +461,16 @@ export interface RecordsData {
     killingSpree: StatRecord | null;
     damage: StatRecord | null;
     damageTaken: StatRecord | null;
+    totalDamage: StatRecord | null;
+    trueDamage: StatRecord | null;
+    cs: StatRecord | null;
+    csPerMinute: StatRecord | null;
     healing: StatRecord | null;
     gold: StatRecord | null;
     fastestWin: StatRecord | null;
+    fastestLoss: StatRecord | null;
     longestGame: StatRecord | null;
+    criticalStrike: StatRecord | null;
   };
   winStreak: StreakRecord | null;
   lossStreak: StreakRecord | null;
@@ -453,6 +529,11 @@ export interface ParsedParticipant {
   spell2Id: number | null;
   items: number[];
   augments: number[];
+  cs: number;
+  runeIds: number[];
+  primaryStyle: number | null;
+  secondaryStyle: number | null;
+  statShardIds: number[];
   win: boolean;
   isSelf: boolean;
 }
@@ -472,6 +553,21 @@ export interface BackfillResult {
   totalGames: number;
   truncated: boolean;
   cancelled: boolean;
+}
+
+export interface RiotSyncResult {
+  added: number;
+  scanned: number;
+  totalGames: number;
+  complete: boolean;
+}
+
+export interface RiotAccountConfig {
+  id: string;
+  gameName: string;
+  tagLine: string;
+  platform: string;
+  hasApiKey: boolean;
 }
 
 export interface ReleaseNote {
@@ -541,9 +637,18 @@ export interface ElectronAPI {
     patch?: string,
     queue?: number,
   ) => Promise<ItemStats[]>;
-  getTeammateStats: () => Promise<TeammateStats[]>;
-  getTeammateDetail: (key: string) => Promise<TeammateDetail | null>;
+  getTeammateStats: (queue?: number, relation?: "friends" | "enemies") => Promise<TeammateStats[]>;
+  getTeammateDetail: (
+    key: string,
+    queue?: number,
+    relation?: "friends" | "enemies",
+  ) => Promise<TeammateDetail | null>;
   getGlobalStats: (patch?: string, queue?: number) => Promise<GlobalStats>;
+  getOwnedItemStats: (patch?: string, queue?: number) => Promise<ItemStats[]>;
+  getOwnedRuneStats: (queue?: number, patch?: string) => Promise<RuneOverview>;
+  getRuneData: () => Promise<RuneData>;
+  getRuneTrees: () => Promise<RuneTreeLayout>;
+  getOwnedItemDetail: (itemId: number, patch?: string, queue?: number) => Promise<ItemDetail>;
   getTrends: (queue?: number) => Promise<TrendsData>;
   getRecords: (queue?: number) => Promise<RecordsData>;
   getGlobalChampionDetail: (
@@ -555,6 +660,10 @@ export interface ElectronAPI {
   getAllSummonerPuuids: () => Promise<string[]>;
   getProfile: () => Promise<{ name: string | null; profileIcon: number | null }>;
   refreshGames: () => Promise<{ newGames: number; totalGames: number } | { error: string }>;
+  syncRiotHistory: () => Promise<RiotSyncResult | { error: string }>;
+  getRiotAccounts: () => Promise<RiotAccountConfig[]>;
+  saveRiotAccount: (account: RiotAccountConfig & { apiKey?: string }) => Promise<void>;
+  removeRiotAccount: (id: string) => Promise<void>;
   backfillHistory: () => Promise<BackfillResult | { error: string }>;
   cancelBackfill: () => Promise<void>;
   isBackfillRunning: () => Promise<boolean>;

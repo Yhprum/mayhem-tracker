@@ -13,6 +13,7 @@ import ChampionIcon from "../components/ChampionIcon";
 import WinRateBar from "../components/WinRateBar";
 import PatchSelect from "../components/PatchSelect";
 import QueueSelect from "../components/QueueSelect";
+import { useHistoryScopeQueue } from "../lib/historyScope";
 
 type SortKey = "picks" | "winRate" | "name";
 type SortDir = "asc" | "desc";
@@ -50,9 +51,10 @@ export default function Augments() {
   const augmentData = useAugmentData();
   const [patch, setPatch] = useViewState<string | undefined>("augments.patch", undefined);
   const [queue, setQueue] = useViewState<number | undefined>("augments.queue", undefined);
+  const scopedQueue = queue ?? useHistoryScopeQueue();
   const { data, refetch } = useIpc<AugmentStatsDetailedResult>(
-    () => window.api.getAugmentStatsDetailed(patch, queue),
-    [patch, queue],
+    () => window.api.getAugmentStatsDetailed(patch, scopedQueue),
+    [patch, scopedQueue],
   );
   const [search, setSearch] = useViewState("augments.search", "");
   const [sortKey, setSortKey] = useViewState<SortKey>("augments.sortKey", "picks");

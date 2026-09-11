@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useParams } from "react-router-dom";
 import { useIpc } from "../hooks/useIpc";
 import { useViewState } from "../hooks/useViewState";
 import { readViewState, writeViewState } from "../lib/viewState";
@@ -18,6 +18,7 @@ import WinRateBar from "../components/WinRateBar";
 import PatchSelect from "../components/PatchSelect";
 import QueueSelect from "../components/QueueSelect";
 import RarityFilter, { type Rarity } from "../components/RarityFilter";
+import { useHistoryScopeQueue } from "../lib/historyScope";
 
 type Tab = "champions" | "augments" | "items";
 type ChampSortKey = "games" | "winRate" | "pickRate" | "name";
@@ -76,8 +77,13 @@ export default function GlobalStats() {
   const patch = searchParams.get("patch") ?? undefined;
   const queueParam = searchParams.get("queue");
   const queue = queueParam ? Number(queueParam) : undefined;
+  const scopedQueue = queue ?? useHistoryScopeQueue();
+  const scopedHistory = useHistoryScopeQueue() !== undefined;
+  const { scope } = useParams<{ scope?: string }>();
+  const allowScopedAugments = true;
   const tabParam = searchParams.get("tab");
   const tab: Tab = tabParam === "augments" || tabParam === "items" ? tabParam : "champions";
+  const visibleTab = tab;
 
   const setParam = (key: string, value: string | number | undefined) => {
     setSearchParams(
@@ -122,8 +128,8 @@ export default function GlobalStats() {
   }, [patch, queue]);
 
   const { data, refetch } = useIpc<GlobalStats>(
-    () => window.api.getGlobalStats(patch, queue),
-    [patch, queue],
+    () => window.api.getGlobalStats(patch, scopedQueue),
+    [patch, scopedQueue],
   );
 
   // Champion tab state
@@ -351,16 +357,18 @@ export default function GlobalStats() {
         >
           Champions
         </button>
-        <button
-          onClick={() => setTab("augments")}
-          className={`px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
-            tab === "augments"
-              ? "bg-lol-gold/20 text-lol-gold border-lol-gold/50"
-              : "text-lol-text border-lol-border bg-lol-card hover:border-lol-border/80"
-          }`}
-        >
-          Augments
-        </button>
+        {(!scopedHistory || allowScopedAugments) && (
+          <button
+            onClick={() => setTab("augments")}
+            className={`px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
+              tab === "augments"
+                ? "bg-lol-gold/20 text-lol-gold border-lol-gold/50"
+                : "text-lol-text border-lol-border bg-lol-card hover:border-lol-border/80"
+            }`}
+          >
+            Augments
+          </button>
+        )}
         <button
           onClick={() => setTab("items")}
           className={`px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
@@ -373,7 +381,7 @@ export default function GlobalStats() {
         </button>
       </div>
 
-      {tab === "champions" && (
+      {visibleTab === "champions" && (
         <>
           <div className="flex items-center justify-between">
             <span className="text-xs text-lol-text">{sortedChampions.length} champions</span>
@@ -406,7 +414,13 @@ export default function GlobalStats() {
                   return (
                     <tr
                       key={c.champion_id}
-                      onClick={() => navigate(`/global/champion/${c.champion_id}${filterQuery}`)}
+                      onClick={() =>
+                        navigate(
+                          scope
+                            ? `/history/${scope}/total-stats/champion/${c.champion_id}${filterQuery}`
+                            : `/global/champion/${c.champion_id}${filterQuery}`,
+                        )
+                      }
                       className="group border-t border-lol-border/50 hover:bg-lol-card-hover cursor-pointer transition-colors"
                     >
                       <td className="px-3 py-2 text-xs text-lol-text">{i + 1}</td>
@@ -435,7 +449,7 @@ export default function GlobalStats() {
         </>
       )}
 
-      {tab === "items" && (
+      {visibleTab === "items" && (
         <>
           <div className="flex items-center justify-between">
             <span className="text-xs text-lol-text">{sortedItems.length} items</span>
@@ -490,7 +504,7 @@ export default function GlobalStats() {
         </>
       )}
 
-      {tab === "augments" && (
+      {visibleTab === "augments" && (
         <>
           <div className="flex items-center gap-2">
             <RarityFilter value={rarityFilter} onChange={setRarityFilter} />

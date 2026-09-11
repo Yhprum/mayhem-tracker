@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useIpc } from "../hooks/useIpc";
+import { useHistoryScopeQueue } from "../lib/historyScope";
 import type { TrendsData, TrendsDay } from "../lib/types";
 import { formatPatch } from "../lib/format";
 import QueueSelect from "../components/QueueSelect";
@@ -675,7 +676,11 @@ export default function Trends() {
     );
   };
 
-  const { data, refetch } = useIpc<TrendsData>(() => window.api.getTrends(queue), [queue]);
+  const scopedQueue = queue ?? useHistoryScopeQueue();
+  const { data, refetch } = useIpc<TrendsData>(
+    () => window.api.getTrends(scopedQueue),
+    [scopedQueue],
+  );
 
   useEffect(() => {
     const unsub = window.api.onGamesUpdated(() => refetch());

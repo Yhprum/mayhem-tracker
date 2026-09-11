@@ -11,6 +11,7 @@ import PatchSelect from "../components/PatchSelect";
 import QueueSelect from "../components/QueueSelect";
 import { formatKDA, formatDuration, formatTimeAgo, kdaRatio, kdaColor } from "../lib/format";
 import { scoreColor } from "../../shared/opScore";
+import { useHistoryScopeQueue } from "../lib/historyScope";
 
 type SortKey =
   | "games"
@@ -161,9 +162,10 @@ export default function Champions() {
   const champData = useChampionData();
   const [patch, setPatch] = useViewState<string | undefined>("champions.patch", undefined);
   const [queue, setQueue] = useViewState<number | undefined>("champions.queue", undefined);
+  const scopedQueue = queue ?? useHistoryScopeQueue();
   const { data, refetch } = useIpc<ChampionStats[]>(
-    () => window.api.getChampionStats(patch, queue),
-    [patch, queue],
+    () => window.api.getChampionStats(patch, scopedQueue),
+    [patch, scopedQueue],
   );
   const [search, setSearch] = useViewState("champions.search", "");
   const [sortKey, setSortKey] = useViewState<SortKey>("champions.sortKey", "games");
@@ -376,7 +378,11 @@ export default function Champions() {
                 </tr>
                 {expandedId === c.champion_id && (
                   <tr className="border-t border-lol-border/30 bg-lol-dark/30">
-                    <ChampionExpanded championId={c.champion_id} patch={patch} queue={queue} />
+                    <ChampionExpanded
+                      championId={c.champion_id}
+                      patch={patch}
+                      queue={scopedQueue}
+                    />
                   </tr>
                 )}
               </Fragment>

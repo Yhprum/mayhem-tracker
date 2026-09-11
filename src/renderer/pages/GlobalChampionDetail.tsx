@@ -19,6 +19,7 @@ import PatchSelect from "../components/PatchSelect";
 import QueueSelect from "../components/QueueSelect";
 import RarityFilter, { type Rarity } from "../components/RarityFilter";
 import { kdaRatio } from "../lib/format";
+import { useHistoryScopeQueue } from "../lib/historyScope";
 
 type SortKey = "picks" | "winRate" | "name";
 type SortDir = "asc" | "desc";
@@ -299,6 +300,8 @@ export default function GlobalChampionDetailPage() {
   const patch = searchParams.get("patch") ?? undefined;
   const queueParam = searchParams.get("queue");
   const queue = queueParam ? Number(queueParam) : undefined;
+  const { scope } = useParams<{ scope?: string }>();
+  const scopedQueue = queue ?? useHistoryScopeQueue(scope);
 
   // Filters live in the URL so the back link returns to the same view
   const setFilter = useCallback(
@@ -317,8 +320,8 @@ export default function GlobalChampionDetailPage() {
   );
 
   const { data, refetch } = useIpc<GlobalChampionDetail>(
-    () => window.api.getGlobalChampionDetail(id, patch, queue),
-    [id, patch, queue],
+    () => window.api.getGlobalChampionDetail(id, patch, scopedQueue),
+    [id, patch, scopedQueue],
   );
 
   useEffect(() => {
@@ -329,7 +332,11 @@ export default function GlobalChampionDetailPage() {
   const backQuery = searchParams.toString();
   const backLink = (
     <Link
-      to={`/global${backQuery ? `?${backQuery}` : ""}`}
+      to={
+        scope
+          ? `/history/${scope}/total-stats${backQuery ? `?${backQuery}` : ""}`
+          : `/global${backQuery ? `?${backQuery}` : ""}`
+      }
       className="inline-flex items-center gap-1.5 text-xs text-lol-text hover:text-lol-text-bright transition-colors"
     >
       <span aria-hidden>←</span> Total Stats

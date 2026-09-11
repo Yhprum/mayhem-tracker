@@ -14,7 +14,7 @@ import type { Plugin } from "vite";
 const BASE_CSP = [
   "default-src 'none'",
   "style-src 'self' file: 'unsafe-inline'",
-  "img-src 'self' file: data: https://raw.communitydragon.org https://www.league-of-data-base.com",
+  "img-src 'self' file: data: https://ddragon.leagueoflegends.com https://ddragon.canisback.com https://raw.communitydragon.org https://www.league-of-data-base.com",
   "font-src 'self' file: data:",
   "object-src 'none'",
   "base-uri 'none'",

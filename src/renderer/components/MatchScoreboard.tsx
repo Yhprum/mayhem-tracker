@@ -1,8 +1,9 @@
 import { useMemo, useState, type ReactNode } from "react";
 import type { MatchDetail, ParsedParticipant } from "../lib/types";
 import { parseParticipants, groupByTeam } from "../lib/participants";
-import { getChampionName } from "../hooks/useChampions";
+import { getChampionName, useRuneData } from "../hooks/useChampions";
 import { formatKDA, kdaRatio } from "../lib/format";
+import { isAugmentQueue } from "../../shared/queues";
 import {
   computeMatchScoreBreakdowns,
   scoreColor,
@@ -13,9 +14,11 @@ import {
 import ChampionIcon from "./ChampionIcon";
 import AugmentIcon from "./AugmentIcon";
 import ItemIcon from "./ItemIcon";
+import { RuneSetupGrid } from "./RuneSetup";
 import SummonerSpellIcon from "./SummonerSpellIcon";
 
-const GRID_COLS = "grid-cols-[52px_minmax(80px,1fr)_52px_76px_110px_110px_56px_56px_176px_100px]";
+const GRID_COLS =
+  "grid-cols-[52px_140px_52px_76px_110px_110px_56px_56px_56px_176px_110px]";
 
 export default function MatchScoreboard({
   detail,
@@ -68,6 +71,8 @@ export default function MatchScoreboard({
           champData={champData}
           scores={scores}
           patch={detail.game.game_version}
+          gameDuration={detail.game.game_duration}
+          queueId={detail.game.queue_id}
         />
       ))}
     </div>
@@ -81,6 +86,8 @@ function TeamScoreboard({
   champData,
   scores,
   patch,
+  gameDuration,
+  queueId,
 }: {
   teamId: number;
   players: ParsedParticipant[];
@@ -88,7 +95,10 @@ function TeamScoreboard({
   champData: any;
   scores: Map<number, ScoreBreakdown>;
   patch?: string | null;
+  gameDuration: number;
+  queueId: number;
 }) {
+  const showAugments = isAugmentQueue(queueId);
   const isWin = players[0]?.win ?? false;
   const totals = useMemo(() => computeTeamTotals(players, scores), [players, scores]);
 
@@ -141,8 +151,9 @@ function TeamScoreboard({
         <span className="text-center">Taken</span>
         <span className="text-right">Gold</span>
         <span className="text-right">Heal</span>
+        <span className="text-right">CS</span>
         <span>Items</span>
-        <span>Augments</span>
+        <span>{showAugments ? "Augments" : "Runes"}</span>
       </div>
 
       {/* Player rows */}
@@ -154,6 +165,8 @@ function TeamScoreboard({
           champData={champData}
           score={scores.get(p.participantId)}
           patch={patch}
+          gameDuration={gameDuration}
+          showAugments={showAugments}
         />
       ))}
     </div>
@@ -219,14 +232,19 @@ function PlayerRow({
   champData,
   score,
   patch,
+  gameDuration,
+  showAugments,
 }: {
   player: ParsedParticipant;
   maxStats: { dmg: number; taken: number; gold: number; heal: number };
   champData: any;
   score?: ScoreBreakdown;
   patch?: string | null;
+  gameDuration: number;
+  showAugments: boolean;
 }) {
   const kda = kdaRatio(p.kills, p.deaths, p.assists);
+  const runeData = useRuneData();
 
   return (
     <div
@@ -290,6 +308,16 @@ function PlayerRow({
         {p.totalHeal >= 1000 ? `${(p.totalHeal / 1000).toFixed(1)}k` : p.totalHeal}
       </div>
 
+      {/* CS */}
+      <div className="text-right text-[11px] text-lol-text-bright">
+        <div>{p.cs}</div>
+        <div className="text-[9px] text-lol-text">
+          {p.cs / Math.max(gameDuration / 60, 1) > 0
+            ? `${(p.cs / Math.max(gameDuration / 60, 1)).toFixed(1)} /min`
+            : "CS"}
+        </div>
+      </div>
+
       {/* Items */}
       <div className="flex gap-0.5">
         {p.items.slice(0, 6).map((itemId, i) => (
@@ -300,11 +328,22 @@ function PlayerRow({
         </div>
       </div>
 
-      {/* Augments */}
-      <div className="flex gap-0.5">
-        {p.augments.map((augId, i) => (
-          <AugmentIcon key={i} augmentId={augId} size={22} patch={patch} />
-        ))}
+      {/* Runes for standard queues; Arena/Mayhem show Augments instead — those
+          modes have no rune page at all, so falling back to "runes present?"
+          per player would silently show an empty grid for the whole lobby. */}
+      <div className="flex items-center gap-1">
+        {showAugments ? (
+          p.augments.map((augId, i) => <AugmentIcon key={i} augmentId={augId} size={22} patch={patch} />)
+        ) : (
+          <RuneSetupGrid
+            runeIds={p.runeIds}
+            primaryStyle={p.primaryStyle}
+            secondaryStyle={p.secondaryStyle}
+            statShardIds={p.statShardIds}
+            runeData={runeData}
+            version={patch}
+          />
+        )}
       </div>
     </div>
   );
