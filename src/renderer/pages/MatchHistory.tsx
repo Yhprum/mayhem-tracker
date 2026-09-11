@@ -212,7 +212,7 @@ export default function MatchHistory({
   const [sort, setSort] = useViewState<MatchSort | undefined>("matches.sort", undefined);
   const [sortDir, setSortDir] = useViewState<MatchSortDir>("matches.sortDir", "desc");
   const [favoritesOnly, setFavoritesOnly] = useViewState("matches.favorites", false);
-  const { matches, loading, hasMore, loadMore, reload } = useMatches({
+  const { matches, total, loading, error, hasMore, loadMore, reload } = useMatches({
     championId: championFilter,
     patch: patchFilter,
     queue: scopedQueue,
@@ -688,7 +688,19 @@ export default function MatchHistory({
         </div>
       </div>
 
-      {matches.length === 0 && !loading && (
+      {loading && matches.length === 0 && (
+        <div className="bg-lol-card rounded-xl border border-lol-border/60 p-8 text-center text-lol-text">
+          Loading matches...
+        </div>
+      )}
+
+      {!loading && matches.length === 0 && error && (
+        <div className="bg-lol-card rounded-xl border border-lol-border/60 p-8 text-center text-lol-loss">
+          Unable to load matches: {error.message}
+        </div>
+      )}
+
+      {matches.length === 0 && !loading && !error && total === 0 && (
         <div className="bg-lol-card rounded-xl border border-lol-border/60 p-8 text-center text-lol-text">
           {championFilter !== undefined ||
           patchFilter !== undefined ||

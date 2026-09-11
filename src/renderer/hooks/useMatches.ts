@@ -12,6 +12,7 @@ export function useMatches(filters: MatchFilters = {}) {
   const [matches, setMatches] = useState<MatchListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   const [hasMore, setHasMore] = useState(false);
 
   // How many rows are already loaded. Held in a ref rather than read from
@@ -22,6 +23,7 @@ export function useMatches(filters: MatchFilters = {}) {
   const load = useCallback(
     async (reset = false) => {
       setLoading(true);
+      setError(null);
       const offset = reset ? 0 : offsetRef.current;
       try {
         const result = await window.api.getMatchHistory(PAGE_SIZE, offset, {
@@ -43,6 +45,8 @@ export function useMatches(filters: MatchFilters = {}) {
         offsetRef.current = offset + result.matches.length;
         setTotal(result.total);
         setHasMore(offset + result.matches.length < result.total);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error(String(err)));
       } finally {
         setLoading(false);
       }
@@ -65,5 +69,5 @@ export function useMatches(filters: MatchFilters = {}) {
 
   const reload = useCallback(() => load(true), [load]);
 
-  return { matches, total, loading, hasMore, loadMore, reload };
+  return { matches, total, loading, error, hasMore, loadMore, reload };
 }

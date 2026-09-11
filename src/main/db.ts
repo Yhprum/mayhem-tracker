@@ -1484,6 +1484,7 @@ export function getMatchHistory(
     "ps.",
     `${statsAlias}.`,
   );
+  const matchPuuid = filters?.account ? "tgs.puuid" : "g.puuid";
 
   const total = db
     .prepare(`
@@ -1496,7 +1497,7 @@ export function getMatchHistory(
   const matches = db
     .prepare(`
     SELECT g.game_id, g.queue_id, g.game_creation, g.game_duration, g.is_remake, g.favorite,
-           ${statsAlias}.puuid, g.game_version,
+           ${matchPuuid} as puuid, g.game_version,
            ${statsAlias}.champion_id, ${statsAlias}.win, ${statsAlias}.kills, ${statsAlias}.deaths, ${statsAlias}.assists,
            ${statsAlias}.double_kills, ${statsAlias}.triple_kills, ${statsAlias}.quadra_kills, ${statsAlias}.penta_kills,
            ${statsAlias}.total_damage_dealt, ${statsAlias}.total_damage_taken, ${statsAlias}.total_heal, ${statsAlias}.gold_earned,
@@ -2228,18 +2229,47 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
       largest_killing_spree, total_damage_dealt_all, true_damage_dealt, cs,
       largest_critical_strike, score, score_raw, score_badge, spell1, spell2,
       item0, item1, item2, item3, item4, item5, item6
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (
+      @game_id, @puuid, @champion_id, @win, @kills, @deaths, @assists,
+      @double_kills, @triple_kills, @quadra_kills, @penta_kills,
+      @total_damage_dealt, @total_damage_taken, @gold_earned, @total_heal,
+      @largest_killing_spree, @total_damage_dealt_all, @true_damage_dealt, @cs,
+      @largest_critical_strike, @score, @score_raw, @score_badge, @spell1, @spell2,
+      @item0, @item1, @item2, @item3, @item4, @item5, @item6
+    )
   `);
-  const ownerStats = [
-    owner.champion_id, owner.win, owner.kills, owner.deaths, owner.assists,
-    owner.double_kills, owner.triple_kills, owner.quadra_kills, owner.penta_kills,
-    owner.total_damage_dealt, owner.total_damage_taken, owner.gold_earned, owner.total_heal,
-    owner.largest_killing_spree, owner.total_damage_dealt_all, owner.true_damage_dealt,
-    owner.cs, owner.largest_critical_strike, ownerScore?.score ?? null,
-    ownerScore?.raw ?? null, ownerScore?.badge ?? null, owner.spell1, owner.spell2,
-    owner.items[0], owner.items[1], owner.items[2], owner.items[3], owner.items[4],
-    owner.items[5], owner.items[6],
-  ];
+  const ownerStats = {
+    champion_id: owner.champion_id,
+    win: owner.win,
+    kills: owner.kills,
+    deaths: owner.deaths,
+    assists: owner.assists,
+    double_kills: owner.double_kills,
+    triple_kills: owner.triple_kills,
+    quadra_kills: owner.quadra_kills,
+    penta_kills: owner.penta_kills,
+    total_damage_dealt: owner.total_damage_dealt,
+    total_damage_taken: owner.total_damage_taken,
+    gold_earned: owner.gold_earned,
+    total_heal: owner.total_heal,
+    largest_killing_spree: owner.largest_killing_spree,
+    total_damage_dealt_all: owner.total_damage_dealt_all,
+    true_damage_dealt: owner.true_damage_dealt,
+    cs: owner.cs,
+    largest_critical_strike: owner.largest_critical_strike,
+    score: ownerScore?.score ?? null,
+    score_raw: ownerScore?.raw ?? null,
+    score_badge: ownerScore?.badge ?? null,
+    spell1: owner.spell1,
+    spell2: owner.spell2,
+    item0: owner.items[0],
+    item1: owner.items[1],
+    item2: owner.items[2],
+    item3: owner.items[3],
+    item4: owner.items[4],
+    item5: owner.items[5],
+    item6: owner.items[6],
+  };
 
   const tx = db.transaction(() => {
     const result = insertGameStmt.run(
@@ -2257,7 +2287,7 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
     if (result.changes === 0) {
       // The game payload is shared, but its owner line is not. A second
       // tracked account must still be retained when this game was seen before.
-      const added = insertTrackedStatsStmt.run(gameData.gameId, puuid, ...ownerStats);
+      const added = insertTrackedStatsStmt.run({ game_id: gameData.gameId, puuid, ...ownerStats });
       return added.changes > 0;
     }
 
@@ -2300,7 +2330,7 @@ export function insertGameFull(gameData: any, puuid: string): boolean {
       ownerScore?.raw ?? null,
       ownerScore?.badge ?? null,
     );
-    insertTrackedStatsStmt.run(gameData.gameId, puuid, ...ownerStats);
+    insertTrackedStatsStmt.run({ game_id: gameData.gameId, puuid, ...ownerStats });
 
     // Augments
     for (const aug of owner.augments) {

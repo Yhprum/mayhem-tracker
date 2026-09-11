@@ -381,6 +381,9 @@ export default function Settings() {
 
       <div className="bg-lol-card rounded-xl border border-lol-border/60 p-5">
         <h2 className="text-sm font-semibold text-lol-text-bright mb-2">League history sync</h2>
+        <div className="mb-3 rounded-md border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs font-bold tracking-wide text-red-300">
+          NOT WORKING AT THE MOMENT
+        </div>
         <p className="text-xs text-lol-text mb-4">
           Riot API sync imports every queue and keeps it available offline. The League client is
           detected automatically when running; these values are the fallback.
