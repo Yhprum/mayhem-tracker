@@ -3211,6 +3211,8 @@ interface PlacementDef {
   format: RecapPlacement["format"];
   good: boolean;
   value: (row: CareerRow) => number | null;
+  // What the placement is ranked on, where that differs from the value shown
+  rankedOn?: (row: CareerRow) => number | null;
   // True when a is the better of the two, which for deaths and duration is
   // not the larger one
   better: (a: number, b: number) => boolean;
@@ -3244,6 +3246,9 @@ const PLACEMENTS: PlacementDef[] = [
     format: "score",
     good: true,
     value: (r) => r.score,
+    // Shown clamped to 1-10 and ranked on the raw score, as the Records page
+    // ranks it, so games that both show 10 still have an order
+    rankedOn: (r) => r.score_raw ?? r.score,
     better: higher,
   },
   {
@@ -3328,18 +3333,20 @@ function buildPlacements(rows: CareerRow[], row: CareerRow): RecapPlacement[] {
   const placements: RecapPlacement[] = [];
 
   for (const def of PLACEMENTS) {
+    const rankedOn = def.rankedOn ?? def.value;
     const value = def.value(row);
-    if (value == null) continue;
+    const mark = rankedOn(row);
+    if (value == null || mark == null) continue;
 
     let rank = 1;
     let total = 0;
     for (const other of rows) {
-      const otherValue = def.value(other);
-      if (otherValue == null) continue;
+      const otherMark = rankedOn(other);
+      if (otherMark == null) continue;
       total++;
       // Strictly better only, so a tie shares the rank rather than pushing the
       // game down behind a game it matched
-      if (other.game_id !== row.game_id && def.better(otherValue, value)) rank++;
+      if (other.game_id !== row.game_id && def.better(otherMark, mark)) rank++;
     }
     if (rank <= MAX_PLACEMENT_RANK) {
       placements.push({
