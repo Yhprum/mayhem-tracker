@@ -232,7 +232,7 @@ export function registerIpcHandlers() {
   // A fresh look rather than the cached snapshot: the page can be opened in
   // the middle of a match the poll loop has not started for, and the answer to
   // "is a game running" is the whole reason it asked. With no client there is
-  // nothing to ask, and asking anyway would cost a PowerShell launch to fail.
+  // nothing to ask.
   ipcMain.handle("live:snapshot", () => {
     return lcu.isClientConnected() ? live.refreshLiveGame() : live.getLiveGame();
   });
