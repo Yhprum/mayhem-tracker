@@ -33,14 +33,17 @@ export function useChampionData() {
 export function useAugmentData(patch?: string | null): AugmentData {
   const key = patch || "latest";
   const [data, setData] = useState<AugmentData>(() => augCaches.get(key) ?? {});
+  // Another patch starts from whatever is already cached for it, and from
+  // nothing while it loads
+  const [dataFor, setDataFor] = useState(key);
+  if (dataFor !== key) {
+    setDataFor(key);
+    setData(augCaches.get(key) ?? {});
+  }
 
   useEffect(() => {
     const cached = augCaches.get(key);
-    if (cached && Object.keys(cached).length > 0) {
-      setData(cached);
-      return;
-    }
-    setData({});
+    if (cached && Object.keys(cached).length > 0) return;
     let promise = augPromises.get(key);
     if (!promise) {
       // Derived from key rather than patch so the effect depends on one value.
@@ -82,14 +85,17 @@ export function useSummonerSpellData() {
 export function useItemData(patch?: string | null): ItemData {
   const key = patch || "latest";
   const [items, setItems] = useState<ItemData>(() => itemCaches.get(key) ?? {});
+  // Another patch starts from whatever is already cached for it, and from
+  // nothing while it loads
+  const [itemsFor, setItemsFor] = useState(key);
+  if (itemsFor !== key) {
+    setItemsFor(key);
+    setItems(itemCaches.get(key) ?? {});
+  }
 
   useEffect(() => {
     const cached = itemCaches.get(key);
-    if (cached && Object.keys(cached).length > 0) {
-      setItems(cached);
-      return;
-    }
-    setItems({});
+    if (cached && Object.keys(cached).length > 0) return;
     let promise = itemPromises.get(key);
     if (!promise) {
       // Derived from key rather than patch so the effect depends on one value.

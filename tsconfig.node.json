@@ -5,6 +5,7 @@
     "moduleResolution": "bundler",
     "target": "ESNext",
     "lib": ["ESNext"],
+    "types": ["node"],
     "outDir": "./out",
     "rootDir": ".",
     "strict": true,

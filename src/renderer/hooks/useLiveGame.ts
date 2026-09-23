@@ -7,6 +7,10 @@ export interface LiveGameState {
   snapshot: LiveGameSnapshot | null;
   // When the snapshot landed, so the game clock can keep running between polls
   receivedAt: number;
+  // The last match seen running while the page was open. Kept apart from the
+  // snapshot, because the snapshot that says the match is over is the same one
+  // that has stopped describing it.
+  lastGame: { gameId: number; queueId: number | null } | null;
 }
 
 /**
@@ -22,12 +26,25 @@ export interface LiveGameState {
  * already in progress.
  */
 export function useLiveGame(): LiveGameState {
-  const [state, setState] = useState<LiveGameState>({ snapshot: null, receivedAt: 0 });
+  const [state, setState] = useState<LiveGameState>({
+    snapshot: null,
+    receivedAt: 0,
+    lastGame: null,
+  });
 
   useEffect(() => {
     let active = true;
     const apply = (snapshot: LiveGameSnapshot) => {
-      if (active) setState({ snapshot, receivedAt: Date.now() });
+      if (!active) return;
+      const receivedAt = Date.now();
+      setState((prev) => ({
+        snapshot,
+        receivedAt,
+        lastGame:
+          snapshot.inGame && snapshot.gameId
+            ? { gameId: snapshot.gameId, queueId: snapshot.queueId }
+            : prev.lastGame,
+      }));
     };
     const pull = () => window.api.getLiveGame().then(apply);
 

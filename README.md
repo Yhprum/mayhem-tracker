@@ -38,9 +38,10 @@ Electron + React + TypeScript, built with electron-vite. Uses Tailwind CSS for s
 
 ```bash
 npm install
-npm run rebuild   # rebuild native modules for Electron
 npm run dev       # start in dev mode
 ```
+
+better-sqlite3 ships prebuilt Node-API binaries, so there is no native module to rebuild for Electron. The Electron binary itself downloads the first time `npm run dev` needs it.
 
 These run on pull requests, again before a tagged release, and locally via
 `preversion`, so `npm version` will not tag a tree that fails them:

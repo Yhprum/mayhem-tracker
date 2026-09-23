@@ -13,14 +13,32 @@ export function useMatches(filters: MatchFilters = {}) {
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
 
+  // New filters mark the list as loading the moment they change, before the
+  // effect below has asked for their first page
+  const filtersKey = JSON.stringify([
+    championId,
+    patch,
+    queue,
+    account,
+    sort,
+    sortDir,
+    multikillsKey,
+    favorites,
+  ]);
+  const [loadingFor, setLoadingFor] = useState(filtersKey);
+  if (loadingFor !== filtersKey) {
+    setLoadingFor(filtersKey);
+    setLoading(true);
+  }
+
   // How many rows are already loaded. Held in a ref rather than read from
   // matches.length so that appending a page doesn't change `load`'s identity —
   // if it did, the effect below would re-run on every page and reset the list.
   const offsetRef = useRef(0);
 
+  // Whoever starts a load has already marked the list as loading
   const load = useCallback(
     async (reset = false) => {
-      setLoading(true);
       const offset = reset ? 0 : offsetRef.current;
       try {
         const result = await window.api.getMatchHistory(PAGE_SIZE, offset, {
@@ -53,15 +71,23 @@ export function useMatches(filters: MatchFilters = {}) {
   useEffect(() => {
     load(true);
 
-    const unsub = window.api.onGamesUpdated(() => load(true));
+    const unsub = window.api.onGamesUpdated(() => {
+      setLoading(true);
+      load(true);
+    });
     return unsub;
   }, [load]);
 
   const loadMore = useCallback(() => {
-    if (!loading && hasMore) load(false);
-  }, [loading, hasMore, load]);
+    if (loading || !hasMore) return;
+    setLoading(true);
+    load(false);
+  }, [loading, hasMore, load, setLoading]);
 
-  const reload = useCallback(() => load(true), [load]);
+  const reload = useCallback(() => {
+    setLoading(true);
+    return load(true);
+  }, [load, setLoading]);
 
   return { matches, loading, hasMore, loadMore, reload };
 }

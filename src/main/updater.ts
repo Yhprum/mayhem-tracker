@@ -4,6 +4,7 @@ import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { sendToRenderer } from "./ipc";
 import type { ReleaseNote, UpdateInfo } from "../shared/api";
 
 const CHECK_TIMEOUT_MS = 10_000;
@@ -184,10 +185,10 @@ export async function downloadAndInstall(
       received += value.length;
       hash.update(value);
       if (!out.write(Buffer.from(value))) {
-        await new Promise((resolve) => out.once("drain", resolve));
+        await new Promise<void>((resolve) => out.once("drain", () => resolve()));
       }
       if (total) {
-        win.webContents.send("update:progress", Math.round((received / total) * 100));
+        sendToRenderer(win, "update:progress", Math.round((received / total) * 100));
       }
     }
     clearTimeout(stallTimer);

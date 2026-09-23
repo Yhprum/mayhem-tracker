@@ -22,12 +22,35 @@ import { ordinal } from "../shared/text";
 import { getDataDir } from "./paths";
 import { getChampionClasses, getChampionDataVersion } from "./dragon";
 import type {
+  AugmentStats,
+  AugmentStatsDetailedResult,
+  ChampionStats,
+  DashboardData,
+  GameAugment,
+  GameRecap,
+  GameRecord,
+  GlobalChampionDetail,
+  GlobalStats,
+  ItemStats,
+  MatchDetail,
+  MatchFilterOptions,
+  MatchListItem,
+  MatchParticipantRecord,
+  MatchSession,
   PlayerRecord,
+  PlayerStatsRecord,
   RecapChallenge,
   RecapMilestone,
   RecapPlacement,
   RecapSessionGame,
   RecapStreak,
+  RecordMatchRef,
+  RecordsData,
+  StreakRecord,
+  TeammateDetail,
+  TeammateMatch,
+  TeammateStats,
+  TrendsData,
 } from "../shared/api";
 
 // Poro-Snax (base and upgraded) is handed out for free, so it skews item stats
@@ -1291,7 +1314,7 @@ const SESSION_KEY_SQL: Record<Exclude<SessionGrouping, "none">, string> = {
  * Remakes are in the game count and out of everything else, matching how the
  * rest of the app treats them.
  */
-export function getMatchSessions(filters?: MatchListFilters): any[] {
+export function getMatchSessions(filters?: MatchListFilters): MatchSession[] {
   const grouping = parseSessionGrouping(getSetting(SESSION_GROUPING_SETTING));
   // Nothing to total up when the list runs flat.
   if (grouping === "none") return [];
@@ -1314,14 +1337,14 @@ export function getMatchSessions(filters?: MatchListFilters): any[] {
       GROUP BY key
       ORDER BY MAX(g.game_creation) DESC
     `)
-    .all(...params);
+    .all(...params) as MatchSession[];
 }
 
 export function getMatchHistory(
   limit: number,
   offset: number,
   filters?: MatchListFilters,
-): { matches: any[]; total: number } {
+): { matches: MatchListItem[]; total: number } {
   const { whereSql, params } = matchListWhere(filters);
   const orderBy = matchOrderBy(filters?.sort, filters?.sortDir);
 
@@ -1332,7 +1355,7 @@ export function getMatchHistory(
     JOIN player_stats ps ON g.game_id = ps.game_id
     ${whereSql}
   `)
-    .get(...params) as any;
+    .get(...params) as { count: number };
   const matches = db
     .prepare(`
     SELECT ${MATCH_ROW_SQL}
@@ -1342,7 +1365,7 @@ export function getMatchHistory(
     ORDER BY ${orderBy}
     LIMIT ? OFFSET ?
   `)
-    .all(...params, limit, offset);
+    .all(...params, limit, offset) as MatchListItem[];
   return { matches, total: total.count };
 }
 
@@ -1351,13 +1374,7 @@ export function getMatchFilterOptions(filters?: {
   patch?: string;
   queue?: number;
   account?: string;
-}): {
-  patches: string[];
-  champions: number[];
-  queues: number[];
-  accounts: { puuid: string; name: string | null; profileIcon: number | null }[];
-  hasFavorites: boolean;
-} {
+}): MatchFilterOptions {
   // Each list is narrowed by the OTHER filters so a dropdown never hides its own selection
   const applyAccountFilter = (where: string[], params: any[]) => {
     if (filters?.account) {
@@ -1494,7 +1511,7 @@ export function getMatchFilterOptions(filters?: {
 // The full ten-player scoreboard for one game, in the shape the renderer draws.
 // Columns are listed rather than starred so the IPC message stays a few
 // kilobytes instead of carrying the stored payload with it.
-function getMatchParticipants(gameId: number): any[] {
+function getMatchParticipants(gameId: number): MatchParticipantRecord[] {
   const rows = db
     .prepare(`
       SELECT participant_id, puuid, game_name, tag_line, team_id, champion_id, win,
@@ -1551,7 +1568,7 @@ function getMatchParticipants(gameId: number): any[] {
   }));
 }
 
-export function getMatchDetail(gameId: number): any {
+export function getMatchDetail(gameId: number): MatchDetail | null {
   // Columns are listed rather than starred so the compressed payload stays out
   // of an IPC message that only needs the game's metadata.
   const game = db
@@ -1560,12 +1577,14 @@ export function getMatchDetail(gameId: number): any {
              is_remake, puuid, game_version, favorite
       FROM games WHERE game_id = ?
     `)
-    .get(gameId) as any;
+    .get(gameId) as GameRecord | undefined;
   if (!game) return null;
-  const stats = db.prepare("SELECT * FROM player_stats WHERE game_id = ?").get(gameId);
+  const stats = db
+    .prepare("SELECT * FROM player_stats WHERE game_id = ?")
+    .get(gameId) as PlayerStatsRecord;
   const augments = db
     .prepare("SELECT * FROM game_augments WHERE game_id = ? ORDER BY slot")
-    .all(gameId);
+    .all(gameId) as GameAugment[];
   return {
     game,
     stats,
@@ -1574,7 +1593,7 @@ export function getMatchDetail(gameId: number): any {
   };
 }
 
-export function getChampionStatsAll(patch?: string, queue?: number): any[] {
+export function getChampionStatsAll(patch?: string, queue?: number): ChampionStats[] {
   const where = ["g.is_remake = 0"];
   const params: any[] = [];
   if (patch) {
@@ -1609,10 +1628,14 @@ export function getChampionStatsAll(patch?: string, queue?: number): any[] {
     GROUP BY ps.champion_id
     ORDER BY games DESC
   `)
-    .all(...params);
+    .all(...params) as ChampionStats[];
 }
 
-export function getAugmentStatsAll(championId?: number, patch?: string, queue?: number): any[] {
+export function getAugmentStatsAll(
+  championId?: number,
+  patch?: string,
+  queue?: number,
+): AugmentStats[] {
   const where = ["g.is_remake = 0"];
   const params: any[] = [];
   if (championId !== undefined) {
@@ -1634,7 +1657,7 @@ export function getAugmentStatsAll(championId?: number, patch?: string, queue?: 
     GROUP BY ga.augment_id
     ORDER BY picks DESC
   `)
-    .all(...params);
+    .all(...params) as AugmentStats[];
 }
 
 export function getDashboardData(filters?: {
@@ -1642,7 +1665,7 @@ export function getDashboardData(filters?: {
   patch?: string;
   queue?: number;
   account?: string;
-}): any {
+}): DashboardData {
   const where: string[] = ["g.is_remake = 0"];
   const params: any[] = [];
   if (filters?.championId != null) {
@@ -1695,38 +1718,7 @@ export function getDashboardData(filters?: {
     ORDER BY g.game_creation DESC
     LIMIT 10
   `)
-    .all(...params);
-
-  const topChampions = db
-    .prepare(`
-    SELECT
-      ps.champion_id,
-      COUNT(*) as games,
-      SUM(ps.win) as wins,
-      ROUND(AVG(ps.kills), 1) as avg_kills,
-      ROUND(AVG(ps.deaths), 1) as avg_deaths,
-      ROUND(AVG(ps.assists), 1) as avg_assists
-    FROM player_stats ps
-    JOIN games g ON ps.game_id = g.game_id
-    ${whereSql}
-    GROUP BY ps.champion_id
-    ORDER BY games DESC
-    LIMIT 5
-  `)
-    .all(...params);
-
-  const topAugments = db
-    .prepare(`
-    SELECT ga.augment_id, COUNT(*) as picks, SUM(ps.win) as wins
-    FROM game_augments ga
-    JOIN player_stats ps ON ga.game_id = ps.game_id
-    JOIN games g ON ga.game_id = g.game_id
-    ${whereSql}
-    GROUP BY ga.augment_id
-    ORDER BY picks DESC
-    LIMIT 5
-  `)
-    .all(...params);
+    .all(...params) as DashboardData["recentForm"];
 
   return {
     totalGames: totals.totalGames ?? 0,
@@ -1742,29 +1734,19 @@ export function getDashboardData(filters?: {
     scoredLosses: totals.scoredLosses ?? 0,
     accounts: totals.accounts ?? 0,
     recentForm,
-    topChampions,
     multikills: {
       doubles: totals.doubles ?? 0,
       triples: totals.triples ?? 0,
       quadras: totals.quadras ?? 0,
       pentas: totals.pentas ?? 0,
     },
-    topAugments,
   };
 }
 
 export function getAugmentStatsWithChampions(
   patch?: string,
   queue?: number,
-): {
-  totalGames: number;
-  augments: {
-    augment_id: number;
-    picks: number;
-    wins: number;
-    champions: { champion_id: number; picks: number; wins: number }[];
-  }[];
-} {
+): AugmentStatsDetailedResult {
   const where = ["g.is_remake = 0"];
   const params: any[] = [];
   if (patch) {
@@ -1832,7 +1814,7 @@ export function getChampionMatchHistory(
   offset: number,
   patch?: string,
   queue?: number,
-): { matches: any[]; total: number } {
+): { matches: MatchListItem[]; total: number } {
   const where = ["ps.champion_id = ?"];
   const params: any[] = [championId];
   if (patch) {
@@ -1848,7 +1830,7 @@ export function getChampionMatchHistory(
     JOIN player_stats ps ON g.game_id = ps.game_id
     ${whereSql}
   `)
-    .get(...params) as any;
+    .get(...params) as { count: number };
   const matches = db
     .prepare(`
     SELECT ${MATCH_ROW_SQL}
@@ -1858,7 +1840,7 @@ export function getChampionMatchHistory(
     ORDER BY g.game_creation DESC
     LIMIT ? OFFSET ?
   `)
-    .all(...params, limit, offset);
+    .all(...params, limit, offset) as MatchListItem[];
   return { matches, total: total.count };
 }
 
@@ -2147,7 +2129,7 @@ function teammateRows(puuids: string[]): TeammateRow[] {
     .all(...puuids, ...params) as TeammateRow[];
 }
 
-export function getTeammateStats(): any[] {
+export function getTeammateStats(): TeammateStats[] {
   const puuids = getAllPuuids();
   if (puuids.length === 0) return [];
 
@@ -2236,7 +2218,7 @@ export function getTeammateStats(): any[] {
 
 // Every game we played alongside one teammate, from both sides: our stored
 // stats for the row plus the teammate's own line in that game.
-export function getTeammateDetail(key: string): { player: any; matches: any[] } | null {
+export function getTeammateDetail(key: string): TeammateDetail | null {
   const puuids = getAllPuuids();
   if (puuids.length === 0) return null;
 
@@ -2269,7 +2251,7 @@ export function getTeammateDetail(key: string): { player: any; matches: any[] } 
       WHERE g.game_id IN (${idList})
       ORDER BY g.game_creation DESC
     `)
-    .all(...gameIds) as any[];
+    .all(...gameIds) as MatchListItem[];
 
   // The teammate's score has to be computed rather than looked up — player_stats
   // only ever scores our own row — so each shared game needs all ten players.
@@ -2289,7 +2271,7 @@ export function getTeammateDetail(key: string): { player: any; matches: any[] } 
     assists: number;
   }
 
-  const matches: any[] = [];
+  const matches: TeammateMatch[] = [];
   const champions = new Map<number, ChampionTotals>();
   const first = theirs[0];
   const player = {
@@ -2363,7 +2345,7 @@ export function getChampionItemStats(
   championId: number,
   patch?: string,
   queue?: number,
-): { item_id: number; picks: number; wins: number }[] {
+): ItemStats[] {
   const extraWhere: string[] = [];
   const extraParams: any[] = [];
   if (patch) {
@@ -2387,7 +2369,7 @@ export function getChampionItemStats(
     GROUP BY item_id
     ORDER BY picks DESC
   `)
-    .all(...params) as any[];
+    .all(...params) as ItemStats[];
 }
 
 // The seven item slots are columns, and every item stat wants them as rows.
@@ -2410,15 +2392,7 @@ function participantFilter(patch?: string, queue?: number, alias = "mp") {
   return { where, params, sql: where.join(" AND ") };
 }
 
-export function getGlobalStats(
-  patch?: string,
-  queue?: number,
-): {
-  champions: { champion_id: number; games: number; wins: number }[];
-  augments: { augment_id: number; picks: number; wins: number }[];
-  items: { item_id: number; picks: number; wins: number }[];
-  totalParticipantSlots: number;
-} {
+export function getGlobalStats(patch?: string, queue?: number): GlobalStats {
   const mp = participantFilter(patch, queue);
   const mpa = participantFilter(patch, queue, "mpa");
 
@@ -2481,27 +2455,7 @@ export function getGlobalChampionDetail(
   championId: number,
   patch?: string,
   queue?: number,
-): {
-  champion_id: number;
-  games: number;
-  wins: number;
-  kills: number;
-  deaths: number;
-  assists: number;
-  avgDamage: number;
-  avgDamageTaken: number;
-  avgGold: number;
-  avgHeal: number;
-  damageShare: number;
-  killParticipation: number;
-  doubleKills: number;
-  tripleKills: number;
-  quadraKills: number;
-  pentaKills: number;
-  totalParticipantSlots: number;
-  items: { item_id: number; picks: number; wins: number }[];
-  augments: { augment_id: number; picks: number; wins: number }[];
-} {
+): GlobalChampionDetail {
   const mp = participantFilter(patch, queue);
   const mpa = participantFilter(patch, queue, "mpa");
 
@@ -2614,7 +2568,7 @@ export function getGlobalChampionDetail(
 // itself instead of asking again; patches and clock buckets can't be derived
 // from days and come as their own aggregates. All local time — "games per day"
 // means the player's day, not UTC's.
-export function getTrendsData(queue?: number): any {
+export function getTrendsData(queue?: number): TrendsData {
   const where = ["g.is_remake = 0"];
   const params: any[] = [];
   applyQueueFilter(where, params, queue);
@@ -2638,7 +2592,7 @@ export function getTrendsData(queue?: number): any {
       GROUP BY day
       ORDER BY day
     `)
-    .all(...params);
+    .all(...params) as TrendsData["daily"];
 
   // Ordered by when the patch was first played rather than by parsing version
   // strings — chronological is what a trend axis wants anyway.
@@ -2654,7 +2608,7 @@ export function getTrendsData(queue?: number): any {
       GROUP BY g.game_version
       ORDER BY first_played
     `)
-    .all(...params);
+    .all(...params) as TrendsData["patches"];
 
   const hours = db
     .prepare(`
@@ -2666,7 +2620,7 @@ export function getTrendsData(queue?: number): any {
       GROUP BY hour
       ORDER BY hour
     `)
-    .all(...params);
+    .all(...params) as TrendsData["hours"];
 
   // strftime('%w'): 0 = Sunday
   const weekdays = db
@@ -2679,7 +2633,7 @@ export function getTrendsData(queue?: number): any {
       GROUP BY weekday
       ORDER BY weekday
     `)
-    .all(...params);
+    .all(...params) as TrendsData["weekdays"];
 
   return { daily, patches, hours, weekdays };
 }
@@ -2741,11 +2695,11 @@ function careerRows(queue?: number, account?: string): CareerRow[] {
 // chronological pass over our own rows — streaks need the ordering anyway, and
 // the maxima fall out of the same loop. On ties the earliest game keeps the
 // record, so a mark has to be strictly beaten to change hands.
-export function getRecords(queue?: number, account?: string): any {
+export function getRecords(queue?: number, account?: string): RecordsData {
   const rows = careerRows(queue, account);
 
   // Just enough of the game to render a record's context and open its match
-  const matchOf = (r: any) => ({
+  const matchOf = (r: CareerRow): RecordMatchRef => ({
     game_id: r.game_id,
     game_creation: r.game_creation,
     game_duration: r.game_duration,
@@ -2757,7 +2711,7 @@ export function getRecords(queue?: number, account?: string): any {
     assists: r.assists,
   });
 
-  const bests: Record<string, { value: number; match: any } | null> = {
+  const bests: RecordsData["bests"] = {
     kills: null,
     deaths: null,
     assists: null,
@@ -2773,29 +2727,23 @@ export function getRecords(queue?: number, account?: string): any {
   };
   // What each record is ranked on, where that differs from the value the card
   // shows: the score displays the clamped 1-10 number and ranks on the raw one.
-  const ranks: Record<string, number> = {};
+  const ranks: Partial<Record<keyof RecordsData["bests"], number>> = {};
   const track = (
-    key: string,
+    key: keyof RecordsData["bests"],
     value: number | null,
-    row: any,
+    row: CareerRow,
     better = higher,
     rank: number | null = value,
   ) => {
     if (value == null || rank == null) return;
-    if (!bests[key] || better(rank, ranks[key])) {
+    if (!bests[key] || better(rank, ranks[key]!)) {
       bests[key] = { value, match: matchOf(row) };
       ranks[key] = rank;
     }
   };
 
-  interface Streak {
-    length: number;
-    start: number;
-    end: number;
-    match: any;
-  }
-  let winStreak: Streak | null = null;
-  let lossStreak: Streak | null = null;
+  let winStreak: StreakRecord | null = null;
+  let lossStreak: StreakRecord | null = null;
   let run: { win: number; length: number; start: number } | null = null;
 
   for (const r of rows) {
@@ -2819,7 +2767,7 @@ export function getRecords(queue?: number, account?: string): any {
       run = { win: r.win, length: 0, start: r.game_creation };
     }
     run.length++;
-    const record: Streak = {
+    const record: StreakRecord = {
       length: run.length,
       start: run.start,
       end: r.game_creation,
@@ -2975,9 +2923,9 @@ export function getGameProfileIcon(gameId: number): number | null {
     .get(gameId, game.puuid) as { profile_icon: number | null } | undefined;
   if (played?.profile_icon != null) return played.profile_icon;
 
-  const account = db.prepare("SELECT profile_icon FROM summoner WHERE puuid = ?").get(game.puuid) as
-    | { profile_icon: number | null }
-    | undefined;
+  const account = db
+    .prepare("SELECT profile_icon FROM summoner WHERE puuid = ?")
+    .get(game.puuid) as { profile_icon: number | null } | undefined;
   return account?.profile_icon ?? null;
 }
 
@@ -3470,7 +3418,7 @@ function buildStreak(rows: CareerRow[], index: number): RecapStreak {
  * question about the library as it stands. Milestones are as of the game,
  * because crossing a mark only happens once and happened then.
  */
-export function getGameRecap(gameId?: number): any {
+export function getGameRecap(gameId?: number): GameRecap | null {
   const rows = careerRows();
   const id = gameId ?? rows[rows.length - 1]?.game_id;
   if (id == null) return null;
@@ -3488,19 +3436,17 @@ export function getGameRecap(gameId?: number): any {
   const session = {
     day,
     index: sessionRows.findIndex((r) => r.game_id === id),
-    games: sessionRows.map(
-      (r): RecapSessionGame => ({
-        game_id: r.game_id,
-        game_creation: r.game_creation,
-        game_duration: r.game_duration,
-        champion_id: r.champion_id,
-        win: r.win,
-        kills: r.kills,
-        deaths: r.deaths,
-        assists: r.assists,
-        score: r.score,
-      }),
-    ),
+    games: sessionRows.map((r): RecapSessionGame => ({
+      game_id: r.game_id,
+      game_creation: r.game_creation,
+      game_duration: r.game_duration,
+      champion_id: r.champion_id,
+      win: r.win,
+      kills: r.kills,
+      deaths: r.deaths,
+      assists: r.assists,
+      score: r.score,
+    })),
     wins: 0,
     losses: 0,
     kills: 0,
@@ -3599,20 +3545,18 @@ export function getGameRecap(gameId?: number): any {
   }
   if (careerScored > 0) career.avgScore = careerScore / careerScored;
 
-  const challenges = getGameChallenges(id).map(
-    (c): RecapChallenge => ({
-      id: c.challenge_id,
-      name: c.name,
-      description: c.description,
-      previousValue: c.previous_value,
-      currentValue: c.current_value,
-      previousLevel: c.previous_level,
-      currentLevel: c.current_level,
-      nextLevel: c.next_level,
-      nextThreshold: c.next_threshold,
-      iconPath: c.icon_path,
-    }),
-  );
+  const challenges = getGameChallenges(id).map((c): RecapChallenge => ({
+    id: c.challenge_id,
+    name: c.name,
+    description: c.description,
+    previousValue: c.previous_value,
+    currentValue: c.current_value,
+    previousLevel: c.previous_level,
+    currentLevel: c.current_level,
+    nextLevel: c.next_level,
+    nextThreshold: c.next_threshold,
+    iconPath: c.icon_path,
+  }));
 
   const milestones = row ? buildMilestones(rows, index) : [];
   // The S- challenge counts champions, not grades, so it only moves on one a
@@ -3726,27 +3670,23 @@ export async function writeExportTo(filePath: string): Promise<number> {
   return count;
 }
 
-export function importData(data: any): number {
-  if (data.version >= 3) {
-    for (const s of data.summoners ?? []) {
-      upsertSummoner(s);
-    }
-    let imported = 0;
-    for (const game of data.games ?? []) {
-      const puuid = game._ownerPuuid || data.summoners?.[0]?.puuid;
-      if (!puuid) continue;
-      if (insertGameFull(game, puuid)) imported++;
-    }
-    return imported;
-  }
-  // v2 fallback: single summoner
-  const puuid = data.summoner?.puuid;
-  if (!puuid) return 0;
-  upsertSummoner(data.summoner);
+// The accounts a backup file names, before any of its games go in
+export function importSummoners(summoners: any[]): void {
+  db.transaction(() => {
+    for (const summoner of summoners) upsertSummoner(summoner);
+  })();
+}
+
+// One batch of a backup file's games, in a single transaction, returning how
+// many were new. Reading the file and deciding each game's owner is
+// importBackupFile's business.
+export function importGames(games: { game: any; owner: string }[]): number {
   let imported = 0;
-  for (const game of data.games ?? []) {
-    if (insertGameFull(game, puuid)) imported++;
-  }
+  db.transaction(() => {
+    for (const { game, owner } of games) {
+      if (insertGameFull(game, owner)) imported++;
+    }
+  })();
   return imported;
 }
 

@@ -121,7 +121,7 @@ function MatchModal({
   puuids: string[] | null;
   onClose: () => void;
 }) {
-  const { data: detail } = useIpc<MatchDetail>(
+  const { data: detail } = useIpc<MatchDetail | null>(
     () => window.api.getMatchDetail(match.game_id),
     [match.game_id],
   );

@@ -18,30 +18,28 @@
     "gen:augments": "node scripts/generate-augment-descriptions.mjs"
   },
   "dependencies": {
-    "better-sqlite3": "^12.6.2",
+    "better-sqlite3": "^13.0.3",
     "league-connect": "^6.0.0-rc13",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "react-router-dom": "^7.13.1"
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
-    "@electron-toolkit/preload": "^3.0.2",
-    "@electron-toolkit/utils": "^4.0.0",
     "@fontsource-variable/figtree": "^5.3.0",
-    "@tailwindcss/vite": "^4.2.1",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^25.3.1",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.4",
-    "electron": "^40.6.1",
-    "electron-builder": "^26.8.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^24.13.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
-    "oxfmt": "^0.35.0",
-    "oxlint": "^1.78.0",
-    "tailwindcss": "^4.2.1",
-    "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "oxfmt": "^0.70.0",
+    "oxlint": "^1.85.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.6"
   },
   "build": {
     "appId": "com.mayhem-tracker.app",
@@ -54,8 +52,10 @@
       "assets/icon.png",
       "assets/tray.png",
       "assets/tray@2x.png",
-      "node_modules/better-sqlite3/**/*"
+      "node_modules/better-sqlite3/**/*",
+      "!node_modules/better-sqlite3/prebuilds/{darwin,linux,linuxmusl}-*.node"
     ],
+    "npmRebuild": false,
     "win": {
       "target": "portable",
       "icon": "assets/icon.ico",

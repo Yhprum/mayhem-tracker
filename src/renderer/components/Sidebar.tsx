@@ -82,7 +82,9 @@ export default function Sidebar() {
   // Read inside the poll instead of as an effect dep, so opening the dialog
   // doesn't restart the interval
   const dialogOpenRef = useRef(false);
-  dialogOpenRef.current = showUpdateDialog;
+  useEffect(() => {
+    dialogOpenRef.current = showUpdateDialog;
+  }, [showUpdateDialog]);
 
   useEffect(() => {
     window.api.getVersion().then(setVersion);

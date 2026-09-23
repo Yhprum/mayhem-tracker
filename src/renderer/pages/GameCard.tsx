@@ -30,10 +30,13 @@ function publish(status: CardStatus) {
  */
 export default function GameCard() {
   const { gameId } = useParams<{ gameId: string }>();
+  const id = Number(gameId);
+  const validId = Number.isFinite(id);
   const champData = useChampionData();
   const [card, setCard] = useState<GameCardData | null>(null);
   const [puuids, setPuuids] = useState<string[] | null>(null);
-  const [missing, setMissing] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const missing = !validId || notFound;
   const root = useRef<HTMLDivElement>(null);
 
   // The app's layout pins the root to the viewport and hides the overflow,
@@ -45,18 +48,14 @@ export default function GameCard() {
   }, []);
 
   useEffect(() => {
-    const id = Number(gameId);
-    if (!Number.isFinite(id)) {
-      setMissing(true);
-      return;
-    }
+    if (!validId) return;
     let active = true;
     Promise.all([window.api.getGameCard(id), window.api.getAllSummonerPuuids()]).then(
       ([result, ids]) => {
         if (!active) return;
         setPuuids(ids);
         if (result) setCard(result);
-        else setMissing(true);
+        else setNotFound(true);
       },
       (err) => {
         if (active) publish({ state: "error", height: 0, error: err.message });
@@ -65,7 +64,7 @@ export default function GameCard() {
     return () => {
       active = false;
     };
-  }, [gameId]);
+  }, [id, validId]);
 
   useEffect(() => {
     if (missing) publish({ state: "error", height: 0, error: "That game isn't in the database" });

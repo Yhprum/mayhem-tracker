@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState } from "react";
 import { useItemData } from "../hooks/useChampions";
 import { CDRAGON_ASSET_URL } from "../lib/constants";
 import HoverCard from "./HoverCard";
@@ -21,24 +21,26 @@ function stripIconVariant(iconPath: string): string | null {
 
 export default function ItemIcon({ itemId, size = 24, patch }: ItemIconProps) {
   const items = useItemData(patch);
-  const [attempt, setAttempt] = useState(0);
 
   const item = items[itemId];
-  const sources = useMemo(() => {
-    const urls: string[] = [];
-    if (item?.iconPath) {
-      urls.push(CDRAGON_ASSET_URL(item.branch, item.iconPath));
-      const base = stripIconVariant(item.iconPath);
-      if (base) urls.push(CDRAGON_ASSET_URL(item.branch, base));
-    }
-    // No tier below this: an item with no CommunityDragon mapping, or whose
-    // icons all fail, falls through to the placeholder below.
-    return urls;
-  }, [item?.iconPath, item?.branch]);
+  // No tier below these: an item with no CommunityDragon mapping, or whose
+  // icons all fail, falls through to the placeholder below.
+  const sources: string[] = [];
+  if (item?.iconPath) {
+    sources.push(CDRAGON_ASSET_URL(item.branch, item.iconPath));
+    const base = stripIconVariant(item.iconPath);
+    if (base) sources.push(CDRAGON_ASSET_URL(item.branch, base));
+  }
 
-  useEffect(() => {
+  // New sources, from the item data landing or another patch, start the list
+  // over
+  const sourcesKey = sources.join(" ");
+  const [attempt, setAttempt] = useState(0);
+  const [attemptsFor, setAttemptsFor] = useState(sourcesKey);
+  if (attemptsFor !== sourcesKey) {
+    setAttemptsFor(sourcesKey);
     setAttempt(0);
-  }, [sources]);
+  }
 
   const src = sources[attempt];
 

@@ -2,6 +2,7 @@ import https from "https";
 import type { BrowserWindow } from "electron";
 import * as db from "./db";
 import { getChampionData, loadSummonerSpellData } from "./dragon";
+import { sendToRenderer } from "./ipc";
 import { getLiveGameRef, lcuJson, onLcuStatusChange } from "./lcu";
 import { mapNameForSkin } from "../shared/maps";
 import type { LcuStatus, LiveEvent, LiveGameSnapshot, LivePlayer } from "../shared/api";
@@ -447,9 +448,7 @@ let latest: LiveGameSnapshot = emptySnapshot();
 
 function publish(snapshot: LiveGameSnapshot) {
   latest = snapshot;
-  if (win && !win.isDestroyed()) {
-    win.webContents.send("live:changed", snapshot);
-  }
+  sendToRenderer(win, "live:changed", snapshot);
 }
 
 // One refresh at a time: a poll tick overlapping the one before it would ask

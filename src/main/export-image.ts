@@ -1,4 +1,11 @@
-import { BrowserWindow, clipboard, dialog, session, type NativeImage } from "electron";
+import {
+  BrowserWindow,
+  ClipboardItem,
+  clipboard,
+  dialog,
+  session,
+  type NativeImage,
+} from "electron";
 import fs from "fs";
 import path from "path";
 import * as db from "./db";
@@ -184,7 +191,10 @@ export async function exportGameImage(
 // clean up afterwards when all you wanted was to paste it into a chat.
 export async function copyGameImage(gameId: number): Promise<ExportImageResult> {
   try {
-    clipboard.writeImage(await renderCard(gameId));
+    const png = (await renderCard(gameId)).toPNG();
+    await clipboard.write([
+      new ClipboardItem({ "image/png": new Blob([png], { type: "image/png" }) }),
+    ]);
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };

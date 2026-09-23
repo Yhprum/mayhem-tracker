@@ -1,5 +1,6 @@
 import { BrowserWindow } from "electron";
 import * as db from "./db";
+import { sendToRenderer } from "./ipc";
 import { getLiveGameRef, isClientConnected, lcuJson, onLcuStatusChange } from "./lcu";
 import {
   ARAM_CAPSTONE_ID,
@@ -245,9 +246,7 @@ function refreshAndBroadcast(): Promise<ChallengesData | null> {
   refreshing = (async () => {
     try {
       const data = await refreshChallenges();
-      if (data && win && !win.isDestroyed()) {
-        win.webContents.send("challenges:changed", { data, pending: false });
-      }
+      if (data) sendToRenderer(win, "challenges:changed", { data, pending: false });
       return data;
     } catch (err) {
       console.log("Challenge fetch failed:", err);

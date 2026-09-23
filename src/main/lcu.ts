@@ -9,6 +9,7 @@ import {
 } from "league-connect";
 import { BrowserWindow } from "electron";
 import * as db from "./db";
+import { sendToRenderer } from "./ipc";
 import { findClient, installDirCandidates } from "./lockfile";
 import { MAYHEM_QUEUE_IDS } from "../shared/queues";
 import { SGP_HISTORY_CAP } from "../shared/api";
@@ -33,9 +34,7 @@ export function onLcuStatusChange(listener: StatusListener) {
 function setStatus(newStatus: typeof status, win?: BrowserWindow | null) {
   const changed = status !== newStatus;
   status = newStatus;
-  if (win && !win.isDestroyed()) {
-    win.webContents.send("lcu:status-changed", status);
-  }
+  sendToRenderer(win, "lcu:status-changed", status);
   if (!changed) return;
   for (const listener of statusListeners) {
     try {
@@ -244,12 +243,6 @@ let backfillCancelled = false;
 // Suppresses only the *automatic* backfill. Cleared on restart, and a manual
 // run from Settings always ignores it.
 let autoBackfillPausedUntil = 0;
-
-function notifyGamesUpdated(win?: BrowserWindow | null) {
-  if (win && !win.isDestroyed()) {
-    win.webContents.send("lcu:games-updated");
-  }
-}
 
 function sgpMatchIdsUrl(
   host: string,
@@ -548,11 +541,8 @@ export async function backfillHistory(
 
     const pending = ids.filter((id) => !known.has(id));
 
-    const progress = (current: number, added: number) => {
-      if (win && !win.isDestroyed()) {
-        win.webContents.send("lcu:backfill-progress", { current, total: pending.length, added });
-      }
-    };
+    const progress = (current: number, added: number) =>
+      sendToRenderer(win, "lcu:backfill-progress", { current, total: pending.length, added });
     // A periodic check that finds nothing has no progress to report, and
     // announcing one anyway would flash an import bar at the user every few
     // hours for work that never happened.
@@ -583,7 +573,7 @@ export async function backfillHistory(
       // Let the app fill in as it goes rather than staying empty for minutes
       if (added - announced >= GAMES_UPDATED_BATCH) {
         announced = added;
-        notifyGamesUpdated(win);
+        sendToRenderer(win, "lcu:games-updated");
       }
       progress(i + 1, added);
     }
@@ -606,7 +596,7 @@ export async function backfillHistory(
       autoBackfillPausedUntil = Infinity;
     }
 
-    if (added > announced) notifyGamesUpdated(win);
+    if (added > announced) sendToRenderer(win, "lcu:games-updated");
 
     const dashboard = db.getDashboardData();
     const result: BackfillResult = {
@@ -618,14 +608,10 @@ export async function backfillHistory(
       cancelled,
     };
 
-    if (win && !win.isDestroyed()) {
-      win.webContents.send("lcu:backfill-done", result);
-    }
+    sendToRenderer(win, "lcu:backfill-done", result);
     return result;
   } catch (err) {
-    if (win && !win.isDestroyed()) {
-      win.webContents.send("lcu:backfill-done", { error: friendlyErrorMessage(err) });
-    }
+    sendToRenderer(win, "lcu:backfill-done", { error: friendlyErrorMessage(err) });
     throw err;
   } finally {
     backfillRunning = false;
@@ -700,9 +686,7 @@ export async function fetchNewGames(
     }
   }
 
-  if (newGamesCount > 0 && win && !win.isDestroyed()) {
-    win.webContents.send("lcu:games-updated");
-  }
+  if (newGamesCount > 0) sendToRenderer(win, "lcu:games-updated");
 
   const dashboard = db.getDashboardData();
   return {
@@ -846,7 +830,7 @@ async function captureEogGame(
 
     if (db.insertGameFull(game, summoner.puuid)) {
       console.log(`Stored ARAM Mayhem game ${gameId} from the post-game screen`);
-      notifyGamesUpdated(win);
+      sendToRenderer(win, "lcu:games-updated");
     }
     eogPending.delete(gameId);
   } catch (err) {

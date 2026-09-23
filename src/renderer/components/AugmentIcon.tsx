@@ -84,14 +84,17 @@ export default function AugmentIcon({
     const large = CDRAGON_ASSET_URL(branch, aug.iconPath.replace("small", "large"));
     const small = CDRAGON_ASSET_URL(branch, aug.iconPath);
     return [...new Set([large, small])].filter((url) => !deadSources.has(url));
-  }, [aug?.iconPath, aug?.branch]);
+  }, [aug]);
 
   // Augment data arrives after the first render, so the live paths appear late;
   // start over on them, keeping whatever fallback is already known.
-  useEffect(() => {
+  const sourcesKey = `${cacheKey} ${sources.join(" ")}`;
+  const [attemptsFor, setAttemptsFor] = useState(sourcesKey);
+  if (attemptsFor !== sourcesKey) {
+    setAttemptsFor(sourcesKey);
     setAttempt(0);
     setFallback(fallbackResults.get(cacheKey) ?? null);
-  }, [sources, cacheKey]);
+  }
 
   // Augments Riot has cut keep their name and rarity on "latest" but lose their
   // art, so once the live paths 404 ask the main process to dig the icon out of

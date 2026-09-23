@@ -26,3 +26,7 @@ export function getDataDir() {
 export function getBackupDir() {
   return ensureDir(path.join(getRootDir(), "backups"));
 }
+
+export function getLogDir() {
+  return ensureDir(path.join(getRootDir(), "logs"));
+}

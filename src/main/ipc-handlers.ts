@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, dialog, app, shell } from "electron";
+import { BrowserWindow, dialog, app, shell } from "electron";
 import fs from "fs";
 import * as db from "./db";
 import * as lcu from "./lcu";
@@ -8,9 +8,11 @@ import * as dragon from "./dragon";
 import * as updater from "./updater";
 import * as backup from "./backup";
 import { copyGameImage, exportGameImage } from "./export-image";
-import { getBackupDir } from "./paths";
+import { importBackupFile } from "./import";
+import { getBackupDir, getLogDir } from "./paths";
 import { openExternalUrl } from "./security";
 import { applyAutoStart, isAutoStartSupported } from "./autostart";
+import { handle, sendToRenderer } from "./ipc";
 import { SESSION_GROUPING_SETTING } from "../shared/session";
 
 // The settings table doubles as internal bookkeeping — sgp_host, the
@@ -36,101 +38,39 @@ function senderWindow(event: { sender: Electron.WebContents }): BrowserWindow | 
 }
 
 export function registerIpcHandlers() {
-  ipcMain.handle(
-    "db:match-history",
-    (
-      _event,
-      limit: number,
-      offset: number,
-      filters?: {
-        championId?: number;
-        patch?: string;
-        queue?: number;
-        account?: string;
-        sort?: string;
-        sortDir?: string;
-        multikills?: string[];
-        favorites?: boolean;
-      },
-    ) => {
-      return db.getMatchHistory(limit, offset, filters);
-    },
+  handle("getMatchHistory", (_event, limit, offset, filters) =>
+    db.getMatchHistory(limit, offset, filters),
   );
 
-  ipcMain.handle(
-    "db:match-filters",
-    (
-      _event,
-      filters?: { championId?: number; patch?: string; queue?: number; account?: string },
-    ) => {
-      return db.getMatchFilterOptions(filters);
-    },
+  handle("getMatchFilterOptions", (_event, filters) => db.getMatchFilterOptions(filters));
+
+  handle("getMatchSessions", (_event, filters) => db.getMatchSessions(filters));
+
+  // Unlike the queue list in getMatchFilterOptions, this one ignores the hidden
+  // queues: it backs the switches that decide which queues are hidden.
+  handle("getStoredQueues", () => db.getStoredQueues());
+
+  handle("getMatchDetail", (_event, gameId) => db.getMatchDetail(gameId));
+
+  handle("toggleFavorite", (_event, gameId) => db.toggleFavorite(gameId));
+
+  handle("getChampionStats", (_event, patch, queue) => db.getChampionStatsAll(patch, queue));
+
+  handle("getAugmentStats", (_event, championId, patch, queue) =>
+    db.getAugmentStatsAll(championId, patch, queue),
   );
 
-  ipcMain.handle(
-    "db:match-sessions",
-    (
-      _event,
-      filters?: {
-        championId?: number;
-        patch?: string;
-        queue?: number;
-        account?: string;
-        multikills?: string[];
-        favorites?: boolean;
-      },
-    ) => {
-      return db.getMatchSessions(filters);
-    },
+  handle("getAugmentStatsDetailed", (_event, patch, queue) =>
+    db.getAugmentStatsWithChampions(patch, queue),
   );
 
-  // Unlike the queue list in db:match-filters, this one ignores the hidden
-  // queues — it backs the switches that decide which queues are hidden.
-  ipcMain.handle("db:stored-queues", () => {
-    return db.getStoredQueues();
-  });
+  handle("getDashboard", (_event, filters) => db.getDashboardData(filters));
 
-  ipcMain.handle("db:match-detail", (_event, gameId: number) => {
-    return db.getMatchDetail(gameId);
-  });
-
-  ipcMain.handle("db:toggle-favorite", (_event, gameId: number) => {
-    return db.toggleFavorite(gameId);
-  });
-
-  ipcMain.handle("db:champion-stats", (_event, patch?: string, queue?: number) => {
-    return db.getChampionStatsAll(patch, queue);
-  });
-
-  ipcMain.handle(
-    "db:augment-stats",
-    (_event, championId?: number, patch?: string, queue?: number) => {
-      return db.getAugmentStatsAll(championId, patch, queue);
-    },
+  handle("getChampionMatchHistory", (_event, championId, limit, offset, patch, queue) =>
+    db.getChampionMatchHistory(championId, limit, offset, patch, queue),
   );
 
-  ipcMain.handle("db:augment-stats-detailed", (_event, patch?: string, queue?: number) => {
-    return db.getAugmentStatsWithChampions(patch, queue);
-  });
-
-  ipcMain.handle(
-    "db:dashboard",
-    (
-      _event,
-      filters?: { championId?: number; patch?: string; queue?: number; account?: string },
-    ) => {
-      return db.getDashboardData(filters);
-    },
-  );
-
-  ipcMain.handle(
-    "db:champion-match-history",
-    (_event, championId: number, limit: number, offset: number, patch?: string, queue?: number) => {
-      return db.getChampionMatchHistory(championId, limit, offset, patch, queue);
-    },
-  );
-
-  ipcMain.handle("lcu:refresh", async (event) => {
+  handle("refreshGames", async (event) => {
     // Return errors as data instead of throwing, so the renderer gets a clean
     // message rather than Electron's "Error invoking remote method" wrapper
     try {
@@ -140,7 +80,7 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle("lcu:backfill", async (event) => {
+  handle("backfillHistory", async (event) => {
     try {
       // Asked for by hand, so it checks everything Riot still has rather than
       // stopping at the newest page it recognises. Someone reaching for this
@@ -151,24 +91,20 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle("lcu:cancel-backfill", () => {
+  handle("cancelBackfill", () => {
     lcu.cancelBackfill();
   });
 
-  ipcMain.handle("lcu:backfill-running", () => {
-    return lcu.isBackfillRunning();
-  });
+  handle("isBackfillRunning", () => lcu.isBackfillRunning());
 
-  ipcMain.handle("lcu:status", () => {
-    return lcu.getStatus();
-  });
+  handle("getLcuStatus", () => lcu.getStatus());
 
-  ipcMain.handle("dragon:champions", async () => {
+  handle("getChampionData", async () => {
     await dragon.waitForChampionData();
     return dragon.getChampionData();
   });
 
-  ipcMain.handle("dragon:augments", async (_event, patch?: string) => {
+  handle("getAugmentData", async (_event, patch) => {
     try {
       return await dragon.loadAugmentData(patch);
     } catch {
@@ -176,7 +112,7 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle("dragon:augment-icon", async (_event, id: number, patch?: string) => {
+  handle("resolveAugmentIcon", async (_event, id, patch) => {
     try {
       return await dragon.resolveAugmentIcon(id, patch);
     } catch {
@@ -184,7 +120,7 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle("dragon:items", async (_event, patch?: string) => {
+  handle("getItemData", async (_event, patch) => {
     try {
       return await dragon.loadItemData(patch);
     } catch {
@@ -192,7 +128,7 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle("dragon:summoner-spells", async () => {
+  handle("getSummonerSpellData", async () => {
     try {
       return await dragon.loadSummonerSpellData();
     } catch {
@@ -200,44 +136,33 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle(
-    "db:champion-item-stats",
-    (_event, championId: number, patch?: string, queue?: number) => {
-      return db.getChampionItemStats(championId, patch, queue);
-    },
+  handle("getChampionItemStats", (_event, championId, patch, queue) =>
+    db.getChampionItemStats(championId, patch, queue),
   );
 
-  ipcMain.handle("db:teammate-stats", () => {
-    return db.getTeammateStats();
-  });
+  handle("getTeammateStats", () => db.getTeammateStats());
 
-  ipcMain.handle("db:teammate-detail", async (_event, key: string) => {
+  handle("getTeammateDetail", async (_event, key) => {
     // Teammate scores are computed on the fly and need champion classes
     await dragon.waitForChampionData();
     return db.getTeammateDetail(key);
   });
 
-  ipcMain.handle("db:global-stats", (_event, patch?: string, queue?: number) => {
-    return db.getGlobalStats(patch, queue);
-  });
+  handle("getGlobalStats", (_event, patch, queue) => db.getGlobalStats(patch, queue));
 
-  ipcMain.handle("db:trends", (_event, queue?: number) => {
-    return db.getTrendsData(queue);
-  });
+  handle("getTrends", (_event, queue) => db.getTrendsData(queue));
 
-  ipcMain.handle("db:records", (_event, queue?: number, account?: string) => {
-    return db.getRecords(queue, account);
-  });
+  handle("getRecords", (_event, queue, account) => db.getRecords(queue, account));
 
   // A fresh look rather than the cached snapshot: the page can be opened in
   // the middle of a match the poll loop has not started for, and the answer to
   // "is a game running" is the whole reason it asked. With no client there is
   // nothing to ask.
-  ipcMain.handle("live:snapshot", () => {
-    return lcu.isClientConnected() ? live.refreshLiveGame() : live.getLiveGame();
-  });
+  handle("getLiveGame", () =>
+    lcu.isClientConnected() ? live.refreshLiveGame() : live.getLiveGame(),
+  );
 
-  ipcMain.handle("db:game-recap", async (_event, gameId?: number) => {
+  handle("getGameRecap", async (_event, gameId) => {
     // The scoreboard scores every player, which reads champion classes
     await dragon.waitForChampionData();
     return db.getGameRecap(gameId);
@@ -245,7 +170,7 @@ export function registerIpcHandlers() {
 
   // Backs the exported image: the scoreboard scores every player, which reads
   // champion classes
-  ipcMain.handle("db:game-card", async (_event, gameId: number) => {
+  handle("getGameCard", async (_event, gameId) => {
     await dragon.waitForChampionData();
     const detail = db.getMatchDetail(gameId);
     if (!detail) return null;
@@ -256,32 +181,23 @@ export function registerIpcHandlers() {
     };
   });
 
-  ipcMain.handle(
-    "db:global-champion-detail",
-    (_event, championId: number, patch?: string, queue?: number) => {
-      return db.getGlobalChampionDetail(championId, patch, queue);
-    },
+  handle("getGlobalChampionDetail", (_event, championId, patch, queue) =>
+    db.getGlobalChampionDetail(championId, patch, queue),
   );
 
-  ipcMain.handle("challenges:get", () => {
-    return challenges.getChallenges();
-  });
+  handle("getChallenges", () => challenges.getChallenges());
 
-  ipcMain.handle("db:all-summoner-puuids", () => {
-    return db.getAllPuuids();
-  });
+  handle("getAllSummonerPuuids", () => db.getAllPuuids());
 
-  ipcMain.handle("db:profile", () => {
-    return db.getProfile();
-  });
+  handle("getProfile", () => db.getProfile());
 
   // Settings
-  ipcMain.handle("settings:get", (_event, key: string) => {
+  handle("getSetting", (_event, key) => {
     if (!RENDERER_SETTINGS.has(key)) return null;
     return db.getSetting(key);
   });
 
-  ipcMain.handle("settings:set", (_event, key: string, value: string) => {
+  handle("setSetting", (_event, key, value) => {
     if (!RENDERER_SETTINGS.has(key)) {
       console.warn("Refused to write non-renderer setting:", key);
       return;
@@ -296,50 +212,44 @@ export function registerIpcHandlers() {
   // Auto-start registers the app by its own path, which an unpackaged run does
   // not have — the Settings page reads this to say so rather than offering a
   // switch that would quietly do nothing.
-  ipcMain.handle("autostart:supported", () => isAutoStartSupported());
+  handle("isAutoStartSupported", () => isAutoStartSupported());
 
   // Window controls (custom title bar). The maximize/unmaximize events that
   // pair with these are wired up in createWindow, where the window lives.
-  ipcMain.handle("window:minimize", (event) => {
+  handle("minimizeWindow", (event) => {
     senderWindow(event)?.minimize();
   });
 
-  ipcMain.handle("window:toggle-maximize", (event) => {
+  handle("toggleMaximizeWindow", (event) => {
     const win = senderWindow(event);
     if (!win) return;
     if (win.isMaximized()) win.unmaximize();
     else win.maximize();
   });
 
-  ipcMain.handle("window:close", (event) => {
+  handle("closeWindow", (event) => {
     senderWindow(event)?.close();
   });
 
-  ipcMain.handle("window:is-maximized", (event) => {
-    return senderWindow(event)?.isMaximized() ?? false;
-  });
+  handle("isWindowMaximized", (event) => senderWindow(event)?.isMaximized() ?? false);
 
   // Version & updates
-  ipcMain.handle("app:version", () => {
-    return app.getVersion();
-  });
+  handle("getVersion", () => app.getVersion());
 
-  ipcMain.handle("app:check-update", () => {
-    return updater.checkForUpdate();
-  });
+  handle("checkForUpdate", () => updater.checkForUpdate());
 
-  ipcMain.handle("app:download-update", (event, assetUrl: string) => {
+  handle("downloadUpdate", (event, assetUrl) => {
     const win = senderWindow(event);
     if (!win) return { success: false, error: "No window to report progress to" };
     return updater.downloadAndInstall(win, assetUrl);
   });
 
-  ipcMain.handle("app:open-url", (_event, url: string) => {
+  handle("openUrl", (_event, url) => {
     openExternalUrl(url);
   });
 
   // Data export/import
-  ipcMain.handle("data:export", async (event) => {
+  handle("exportData", async (event) => {
     const win = senderWindow(event);
     const options = {
       title: "Export Mayhem Data",
@@ -366,8 +276,8 @@ export function registerIpcHandlers() {
   });
 
   // One game as a PNG, drawn by the renderer in a window of its own. Separate
-  // from data:export, which is the whole database as JSON.
-  ipcMain.handle("export:game-image", async (event, gameId: number) => {
+  // from exportData, which is the whole database as JSON.
+  handle("exportGameImage", async (event, gameId) => {
     // The card carries the scoreboard, which scores every player from their
     // champion's class
     await dragon.waitForChampionData();
@@ -375,12 +285,12 @@ export function registerIpcHandlers() {
   });
 
   // The same card, onto the clipboard instead of into a file
-  ipcMain.handle("export:copy-game-image", async (_event, gameId: number) => {
+  handle("copyGameImage", async (_event, gameId) => {
     await dragon.waitForChampionData();
     return copyGameImage(gameId);
   });
 
-  ipcMain.handle("data:import", async (event) => {
+  handle("importData", async (event) => {
     const win = senderWindow(event);
     const options = {
       title: "Import Mayhem Data",
@@ -395,15 +305,7 @@ export function registerIpcHandlers() {
     // JSON and well-formed JSON that isn't a backup all have to come back as
     // messages rather than as a thrown "Error invoking remote method".
     try {
-      const raw = await fs.promises.readFile(result.filePaths[0], "utf-8");
-      const data = JSON.parse(raw);
-      if (!data || typeof data !== "object" || !Array.isArray(data.games)) {
-        return { success: false, error: "That file isn't a Mayhem Tracker backup" };
-      }
-      // Snapshot first: an import writes into every table, and this is the last
-      // moment the database is known to be in the state the user chose it from.
-      await backup.backupQuietly("pre-import");
-      const imported = db.importData(data);
+      const imported = await importBackupFile(result.filePaths[0], win);
       return { success: true, imported };
     } catch (err: any) {
       const reason = err instanceof SyntaxError ? "it isn't valid JSON" : err.message;
@@ -411,7 +313,7 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle("data:repair-puuids", async () => {
+  handle("repairPuuids", async () => {
     // Repair rescoring needs champion classes; wait so a repair triggered
     // right after launch doesn't score with default weights.
     await dragon.waitForChampionData();
@@ -422,11 +324,9 @@ export function registerIpcHandlers() {
   });
 
   // Backups
-  ipcMain.handle("backup:list", () => {
-    return backup.listBackups();
-  });
+  handle("listBackups", () => backup.listBackups());
 
-  ipcMain.handle("backup:create", async () => {
+  handle("createBackup", async () => {
     try {
       return { success: true, backup: await backup.createBackup("manual") };
     } catch (err: any) {
@@ -434,24 +334,27 @@ export function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle("backup:restore", async (event, file: string) => {
+  handle("restoreBackup", async (event, file) => {
     try {
       const result = await backup.restoreBackup(file);
       // Everything on screen was read from the database that just got replaced
-      senderWindow(event)?.webContents.send("lcu:games-updated");
+      sendToRenderer(senderWindow(event), "lcu:games-updated");
       return { success: true, games: result.games };
     } catch (err: any) {
       return { success: false, error: err.message };
     }
   });
 
-  ipcMain.handle("backup:recovery-report", () => {
-    return backup.getRecoveryReport();
-  });
+  handle("getRecoveryReport", () => backup.getRecoveryReport());
 
   // No renderer input reaches this: the path is ours, and the folder is the
   // one place a user needs to reach to copy a backup somewhere safer.
-  ipcMain.handle("backup:open-folder", () => {
+  handle("openBackupFolder", () => {
     void shell.openPath(getBackupDir());
+  });
+
+  // The same for the log, which is what a bug report needs attached
+  handle("openLogsFolder", () => {
+    void shell.openPath(getLogDir());
   });
 }
