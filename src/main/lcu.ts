@@ -687,7 +687,10 @@ export async function fetchNewGames(
     try {
       fullGame = await fetchGameDetails(game.gameId);
     } catch {
-      fullGame = game;
+      // The list entry carries only our own participant. Stored, it would
+      // mark the game known with nine players missing, and nothing refetches
+      // a known game; left unrecorded, the next sync tries it again.
+      continue;
     }
 
     const inserted = db.insertGameFull(fullGame, summoner.puuid);
