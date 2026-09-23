@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useIpc } from "../hooks/useIpc";
 import type { TrendsData, TrendsDay } from "../lib/types";
-import { formatPatch } from "../lib/format";
+import { LOCALE, formatPatch } from "../lib/format";
 import QueueSelect from "../components/QueueSelect";
 
 // ---- Time helpers ----
@@ -21,7 +21,7 @@ function dayKey(date: Date): string {
 }
 
 function shortDate(date: Date): string {
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return date.toLocaleDateString(LOCALE, { month: "short", day: "numeric", year: "numeric" });
 }
 
 // ---- Bucketing ----
@@ -48,9 +48,8 @@ function buildBuckets(daily: TrendsDay[], granularity: Granularity): Bucket[] {
   const buckets = new Map<string, Bucket>();
 
   const monthLabel = (d: Date) =>
-    `${d.toLocaleDateString(undefined, { month: "short" })} '${String(d.getFullYear() % 100).padStart(2, "0")}`;
-  const weekLabel = (d: Date) =>
-    d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    `${d.toLocaleDateString(LOCALE, { month: "short" })} '${String(d.getFullYear() % 100).padStart(2, "0")}`;
+  const weekLabel = (d: Date) => d.toLocaleDateString(LOCALE, { month: "short", day: "numeric" });
 
   const first = parseDay(daily[0].day);
   const last = parseDay(daily[daily.length - 1].day);
@@ -405,7 +404,7 @@ function ActivityHeatmap({ daily }: { daily: TrendsDay[] }) {
             fontSize={9}
             fill="var(--color-lol-text)"
           >
-            {colDate.toLocaleDateString(undefined, { month: "short" })}
+            {colDate.toLocaleDateString(LOCALE, { month: "short" })}
           </text>,
         );
       }

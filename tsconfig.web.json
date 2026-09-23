@@ -8,6 +8,7 @@
     "types": ["vite/client"],
     "jsx": "react-jsx",
     "outDir": "./out",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.web.tsbuildinfo",
     "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { LOCALE } from "../lib/format";
 import type { ReleaseNote, UpdateInfo } from "../lib/types";
 import { ChevronRightIcon, RefreshIcon } from "./icons";
 import Markdown from "./Markdown";
@@ -7,7 +8,7 @@ function formatReleaseDate(iso: string): string {
   if (!iso) return "";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return date.toLocaleDateString(LOCALE, { month: "short", day: "numeric" });
 }
 
 function ReleaseBody({ release }: { release: ReleaseNote }) {

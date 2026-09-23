@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import {
   INVOKE_CHANNELS,
+  LOCALE_SWITCH,
   type ElectronAPI,
   type InvokeMethod,
   type RendererEvents,
@@ -30,9 +31,14 @@ function subscribe<C extends keyof RendererEvents>(channel: C) {
   };
 }
 
+// The switch the main process created this window with, if it had a locale to
+// pass on
+const localeArgument = process.argv.find((arg) => arg.startsWith(`${LOCALE_SWITCH}=`));
+
 // Annotated rather than inferred, so the compiler checks the whole bridge
 // against the contract the renderer calls through.
 const api: ElectronAPI = {
+  locale: localeArgument?.slice(LOCALE_SWITCH.length + 1),
   ...requests,
   onBackfillDone: subscribe("lcu:backfill-done"),
   onBackfillProgress: subscribe("lcu:backfill-progress"),

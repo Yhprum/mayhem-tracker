@@ -19,10 +19,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
-    "league-connect": "^6.0.0-rc13",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "react-router-dom": "^7.18.4"
+    "league-connect": "^6.0.0-rc13"
   },
   "devDependencies": {
     "@fontsource-variable/figtree": "^5.3.0",
@@ -37,6 +34,9 @@
     "electron-vite": "^5.0.0",
     "oxfmt": "^0.70.0",
     "oxlint": "^1.85.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^7.3.6"
@@ -52,8 +52,13 @@
       "assets/icon.png",
       "assets/tray.png",
       "assets/tray@2x.png",
-      "node_modules/better-sqlite3/**/*",
-      "!node_modules/better-sqlite3/prebuilds/{darwin,linux,linuxmusl}-*.node"
+      "!node_modules/better-sqlite3/{deps,src}",
+      "!node_modules/better-sqlite3/prebuilds/*.node",
+      "node_modules/better-sqlite3/prebuilds/win32-${arch}.node",
+      "!**/node_modules/node-addon-api/**"
+    ],
+    "electronLanguages": [
+      "en-US"
     ],
     "npmRebuild": false,
     "win": {

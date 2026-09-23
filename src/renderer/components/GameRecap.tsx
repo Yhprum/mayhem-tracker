@@ -8,6 +8,7 @@ import type {
 } from "../lib/types";
 import { getChampionName } from "../hooks/useChampions";
 import {
+  LOCALE,
   formatCompact,
   formatDuration,
   formatKDA,
@@ -259,7 +260,7 @@ export default function GameRecap({
       {recap.placements.length > 0 && (
         <Panel
           title="Where it lands"
-          subtitle={`among ${career.games.toLocaleString()} recorded games`}
+          subtitle={`among ${career.games.toLocaleString(LOCALE)} recorded games`}
           icon={<MedalIcon className="h-3 w-3" />}
           accent="gold"
         >
@@ -474,7 +475,7 @@ function placementValue(placement: RecapPlacement, recap: GameRecapData): string
         recap.detail.stats?.assists ?? 0,
       );
     default:
-      return Math.round(placement.value).toLocaleString();
+      return Math.round(placement.value).toLocaleString(LOCALE);
   }
 }
 
@@ -505,7 +506,7 @@ function PlacementCard({ placement, recap }: { placement: RecapPlacement; recap:
           ? placement.good
             ? "Best ever"
             : "Most ever"
-          : `${ordinal(placement.rank)} of ${placement.total.toLocaleString()}`}
+          : `${ordinal(placement.rank)} of ${placement.total.toLocaleString(LOCALE)}`}
       </div>
     </div>
   );

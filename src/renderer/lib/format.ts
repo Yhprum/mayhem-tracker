@@ -1,3 +1,8 @@
+// Windows' regional format, passed in by the main process (src/main/locale.ts).
+// Every date and number the UI prints names it, since the page's own default
+// is en-US in the packaged app whatever Windows is set to.
+export const LOCALE = window.api.locale;
+
 export function formatKDA(kills: number, deaths: number, assists: number): string {
   return `${kills} / ${deaths} / ${assists}`;
 }
@@ -37,7 +42,7 @@ export function formatPlaytime(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
   if (hours === 0) return `${mins}m`;
-  if (hours >= 100) return `${hours.toLocaleString()}h`;
+  if (hours >= 100) return `${hours.toLocaleString(LOCALE)}h`;
   return `${hours}h ${mins}m`;
 }
 
@@ -50,18 +55,18 @@ export function formatTimeAgo(timestamp: number): string {
   if (minutes < 60) return `${minutes}m ago`;
   if (hours < 24) return `${hours}h ago`;
   if (days < 30) return `${days}d ago`;
-  return new Date(timestamp).toLocaleDateString();
+  return new Date(timestamp).toLocaleDateString(LOCALE);
 }
 
 // The exact moment behind a relative timestamp, for tooltips
 export function formatDateTime(timestamp: number): string {
   const date = new Date(timestamp);
-  return `${date.toLocaleDateString(undefined, {
+  return `${date.toLocaleDateString(LOCALE, {
     weekday: "short",
     month: "short",
     day: "numeric",
     year: "numeric",
-  })} ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  })} ${date.toLocaleTimeString(LOCALE, { hour: "numeric", minute: "2-digit" })}`;
 }
 
 // Riot switched displayed patch numbers to year-based in 2025 (internal 15.x

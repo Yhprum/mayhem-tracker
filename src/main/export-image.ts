@@ -10,6 +10,7 @@ import fs from "fs";
 import path from "path";
 import * as db from "./db";
 import * as dragon from "./dragon";
+import { localeArguments } from "./locale";
 import { hardenSession } from "./security";
 import { CARD_STATUS_KEY, cardRoute, type CardStatus } from "../shared/card";
 
@@ -83,6 +84,7 @@ function createCardWindow(): BrowserWindow {
     backgroundColor: "#0b0e14",
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
+      additionalArguments: localeArguments(),
       // Renders into a bitmap instead of onto the screen: a hidden on-screen
       // window is not guaranteed to paint at all, and this one exists only to
       // be photographed.

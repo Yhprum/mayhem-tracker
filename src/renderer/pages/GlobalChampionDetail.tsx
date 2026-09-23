@@ -20,7 +20,7 @@ import QueueSelect from "../components/QueueSelect";
 import RarityFilter, { type Rarity } from "../components/RarityFilter";
 import SortHeader from "../components/SortHeader";
 import { useSort, type SortDir } from "../hooks/useSort";
-import { kdaRatio } from "../lib/format";
+import { LOCALE, kdaRatio } from "../lib/format";
 
 type SortKey = "picks" | "winRate" | "name";
 
@@ -311,7 +311,7 @@ export default function GlobalChampionDetailPage() {
             />
             <StatCard
               label="Damage"
-              value={data.avgDamage.toLocaleString()}
+              value={data.avgDamage.toLocaleString(LOCALE)}
               subtext={`${percent(data.damageShare)} of team damage`}
             />
             <StatCard
@@ -323,9 +323,9 @@ export default function GlobalChampionDetailPage() {
 
           <div className="grid grid-cols-5 gap-2">
             <MiniStat label="Kill Part.">{percent(data.killParticipation)}</MiniStat>
-            <MiniStat label="Avg Gold">{data.avgGold.toLocaleString()}</MiniStat>
-            <MiniStat label="Avg Dmg Taken">{data.avgDamageTaken.toLocaleString()}</MiniStat>
-            <MiniStat label="Avg Healing">{data.avgHeal.toLocaleString()}</MiniStat>
+            <MiniStat label="Avg Gold">{data.avgGold.toLocaleString(LOCALE)}</MiniStat>
+            <MiniStat label="Avg Dmg Taken">{data.avgDamageTaken.toLocaleString(LOCALE)}</MiniStat>
+            <MiniStat label="Avg Healing">{data.avgHeal.toLocaleString(LOCALE)}</MiniStat>
             <MiniStat label="Multikills">
               <MultikillCounts
                 doubles={data.doubleKills}

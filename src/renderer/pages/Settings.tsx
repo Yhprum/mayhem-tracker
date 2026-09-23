@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useBackfill } from "../hooks/useBackfill";
 import { queueLabel } from "../components/QueueSelect";
+import { LOCALE } from "../lib/format";
 import { setRemembering } from "../lib/viewState";
 import { SGP_HISTORY_CAP } from "../lib/types";
 import type { BackupInfo, ImportProgress } from "../lib/types";
@@ -32,7 +33,7 @@ function formatSize(bytes: number): string {
 
 function formatTaken(timestamp: number): string {
   const date = new Date(timestamp);
-  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], {
+  return `${date.toLocaleDateString(LOCALE)} ${date.toLocaleTimeString(LOCALE, {
     hour: "2-digit",
     minute: "2-digit",
   })}`;

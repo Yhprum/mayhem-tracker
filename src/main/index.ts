@@ -4,6 +4,7 @@ import { closeDatabase, getSetting, checkScoreBackfill } from "./db";
 import { initDatabaseWithRecovery, startBackupSchedule, stopBackupSchedule } from "./backup";
 import { registerIpcHandlers } from "./ipc-handlers";
 import { sendToRenderer } from "./ipc";
+import { localeArguments } from "./locale";
 import { startLogging } from "./log";
 import { startPolling, stopPolling, isClientConnected, fetchNewGames } from "./lcu";
 import { startLiveTracking, stopLiveTracking } from "./live";
@@ -60,9 +61,10 @@ function createWindow(): BrowserWindow {
     backgroundColor: "#0b0e14",
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
-      // The preload only touches contextBridge and ipcRenderer, so it runs
-      // fine sandboxed. These are all Electron defaults; stated explicitly so
-      // a future default change can't quietly relax them.
+      additionalArguments: localeArguments(),
+      // The preload only touches contextBridge, ipcRenderer and process.argv,
+      // so it runs fine sandboxed. These are all Electron defaults; stated
+      // explicitly so a future default change can't quietly relax them.
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,

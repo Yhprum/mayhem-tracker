@@ -31,13 +31,13 @@ import {
   XIcon,
   ZapIcon,
 } from "../components/icons";
-import { formatDuration, formatKDA, kdaRatio } from "../lib/format";
+import { LOCALE, formatDuration, formatKDA, kdaRatio } from "../lib/format";
 import { scoreColor } from "../../shared/opScore";
 
 // Records are moments, not recency — "3 months ago" undersells a trophy, so
 // they get a real date.
 function recordDate(ts: number): string {
-  return new Date(ts).toLocaleDateString(undefined, {
+  return new Date(ts).toLocaleDateString(LOCALE, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -198,7 +198,7 @@ function statCards(bests: RecordsData["bests"]): CardDef[] {
   ) => {
     if (record) cards.push({ ...def, value: def.value(record), match: record.match });
   };
-  const n = (v: number) => Math.round(v).toLocaleString();
+  const n = (v: number) => Math.round(v).toLocaleString(LOCALE);
 
   add(bests.kills, {
     key: "kills",

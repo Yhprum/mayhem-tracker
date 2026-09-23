@@ -858,6 +858,10 @@ export interface ChallengesResult {
 }
 
 export interface ElectronAPI {
+  // Windows' regional format, for every date and number the page prints.
+  // Undefined when Windows reports something that isn't a locale tag, which
+  // leaves formatting to the page's own default.
+  locale: string | undefined;
   getMatchHistory: (
     limit: number,
     offset: number,
@@ -966,9 +970,12 @@ export interface ElectronAPI {
 // ---- Channels ----
 
 // The ElectronAPI methods that ask the main process for something, as opposed
-// to the on* ones that subscribe to what it pushes.
+// to the on* ones that subscribe to what it pushes and the values the preload
+// hands over as they are.
 export type InvokeMethod = {
-  [K in keyof ElectronAPI]: ReturnType<ElectronAPI[K]> extends Promise<unknown> ? K : never;
+  [K in keyof ElectronAPI]: ElectronAPI[K] extends (...args: never[]) => Promise<unknown>
+    ? K
+    : never;
 }[keyof ElectronAPI];
 
 // The channel each request travels on. The preload builds its methods from this
@@ -1046,3 +1053,7 @@ export interface RendererEvents {
   "window:maximized-changed": boolean;
   "data:import-progress": ImportProgress;
 }
+
+// The command-line switch every window is created with to carry
+// ElectronAPI.locale to the preload
+export const LOCALE_SWITCH = "--mayhem-locale";

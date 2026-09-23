@@ -1,5 +1,5 @@
 import type { ChallengeLevel } from "./types";
-import { formatCompact } from "./format";
+import { LOCALE, formatCompact } from "./format";
 
 // The display half of shared/challenges.ts, which holds the data rules. Both
 // the Challenges tab and the post-game recap draw tiers, so the colours and the
@@ -32,5 +32,5 @@ export function challengeLevelName(level: ChallengeLevel | null): string {
 export function formatChallengeValue(value: number): string {
   const rounded = Math.round(value);
   if (rounded >= 1_000_000) return `${(rounded / 1_000_000).toFixed(1)}M`;
-  return rounded >= 10000 ? formatCompact(rounded) : rounded.toLocaleString();
+  return rounded >= 10000 ? formatCompact(rounded) : rounded.toLocaleString(LOCALE);
 }

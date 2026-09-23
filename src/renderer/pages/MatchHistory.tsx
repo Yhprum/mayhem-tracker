@@ -39,6 +39,7 @@ import {
 } from "../components/icons";
 import { ExportImageMessage, useGameImageExport } from "../components/ExportImage";
 import {
+  LOCALE,
   formatDateTime,
   formatDuration,
   formatPlaytime,
@@ -172,7 +173,7 @@ function dayLabel(day: number): string {
   yesterday.setDate(today.getDate() - 1);
   if (d.toDateString() === today.toDateString()) return "Today";
   if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(LOCALE, {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -188,7 +189,7 @@ function weekLabel(week: number): string {
   lastWeek.setDate(thisWeek.getDate() - 7);
   if (d.toDateString() === thisWeek.toDateString()) return "This week";
   if (d.toDateString() === lastWeek.toDateString()) return "Last week";
-  const start = d.toLocaleDateString(undefined, {
+  const start = d.toLocaleDateString(LOCALE, {
     month: "short",
     day: "numeric",
     ...(d.getFullYear() !== thisWeek.getFullYear() && { year: "numeric" }),

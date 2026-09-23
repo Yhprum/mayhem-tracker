@@ -11,7 +11,14 @@ import WinRateBar from "../components/WinRateBar";
 import PatchSelect from "../components/PatchSelect";
 import QueueSelect from "../components/QueueSelect";
 import SortHeader from "../components/SortHeader";
-import { formatKDA, formatDuration, formatTimeAgo, kdaRatio, kdaColor } from "../lib/format";
+import {
+  LOCALE,
+  formatKDA,
+  formatDuration,
+  formatTimeAgo,
+  kdaRatio,
+  kdaColor,
+} from "../lib/format";
 import { scoreColor } from "../../shared/opScore";
 
 type SortKey =
@@ -327,10 +334,10 @@ export default function Champions() {
                     </span>
                   </td>
                   <td className="px-2 py-2 text-sm text-lol-text">
-                    {(c.avg_damage ?? 0).toLocaleString()}
+                    {(c.avg_damage ?? 0).toLocaleString(LOCALE)}
                   </td>
                   <td className="px-2 py-2 text-sm text-lol-gold">
-                    {(c.avg_gold ?? 0).toLocaleString()}
+                    {(c.avg_gold ?? 0).toLocaleString(LOCALE)}
                   </td>
                   <td className="px-2 py-2">
                     <div className="flex gap-1 text-[10px] tabular-nums">
