@@ -5,6 +5,7 @@ import { useIpc } from "../hooks/useIpc";
 import { useLcuStatus } from "../hooks/useLcuStatus";
 import { useBackfill } from "../hooks/useBackfill";
 import { useViewState } from "../hooks/useViewState";
+import { EMPTY_FILTER_OPTIONS } from "../hooks/useFilterOptions";
 import type {
   MatchListItem,
   MatchDetail,
@@ -271,13 +272,10 @@ export default function MatchHistory() {
     [championFilter, patchFilter, queueFilter, accountFilter, multikillFilter, favoritesOnly],
   );
 
-  const [filterOptions, setFilterOptions] = useState<MatchFilterOptions>({
-    patches: [],
-    champions: [],
-    queues: [],
-    accounts: [],
-    hasFavorites: false,
-  });
+  // Null until the first answer. The effects below drop selections the data no
+  // longer supports, and an empty stand-in would read as data supporting none.
+  const [loadedOptions, setLoadedOptions] = useState<MatchFilterOptions | null>(null);
+  const filterOptions = loadedOptions ?? EMPTY_FILTER_OPTIONS;
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -331,7 +329,7 @@ export default function MatchHistory() {
           queue: queueFilter,
           account: accountFilter,
         })
-        .then(setFilterOptions),
+        .then(setLoadedOptions),
     [championFilter, patchFilter, queueFilter, accountFilter],
   );
 
@@ -348,26 +346,26 @@ export default function MatchHistory() {
 
   // Clear a selection if new data leaves it without any matching games
   useEffect(() => {
-    if (filterOptions.champions.length === 0 && filterOptions.patches.length === 0) return;
-    if (championFilter !== undefined && !filterOptions.champions.includes(championFilter)) {
+    if (!loadedOptions) return;
+    if (championFilter !== undefined && !loadedOptions.champions.includes(championFilter)) {
       setChampionFilter(undefined);
     }
-    if (patchFilter !== undefined && !filterOptions.patches.includes(patchFilter)) {
+    if (patchFilter !== undefined && !loadedOptions.patches.includes(patchFilter)) {
       setPatchFilter(undefined);
     }
-    if (queueFilter !== undefined && !filterOptions.queues.includes(queueFilter)) {
+    if (queueFilter !== undefined && !loadedOptions.queues.includes(queueFilter)) {
       setQueueFilter(undefined);
     }
     if (
       accountFilter !== undefined &&
-      !filterOptions.accounts.some((a) => a.puuid === accountFilter)
+      !loadedOptions.accounts.some((a) => a.puuid === accountFilter)
     ) {
       setAccountFilter(undefined);
     }
     // Settles rather than loops: clearing a filter sets it to undefined, and
     // the undefined branch does nothing on the re-run.
   }, [
-    filterOptions,
+    loadedOptions,
     championFilter,
     patchFilter,
     queueFilter,
@@ -380,9 +378,10 @@ export default function MatchHistory() {
 
   // Unfavoriting the last game takes the toggle button away with it, so the
   // filter can't be left on with no way to turn it off.
+  const hasFavorites = loadedOptions?.hasFavorites;
   useEffect(() => {
-    if (!filterOptions.hasFavorites) setFavoritesOnly(false);
-  }, [filterOptions.hasFavorites, setFavoritesOnly]);
+    if (hasFavorites === false) setFavoritesOnly(false);
+  }, [hasFavorites, setFavoritesOnly]);
 
   const championOptions = useMemo(
     () =>
