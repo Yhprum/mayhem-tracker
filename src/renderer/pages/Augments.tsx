@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { useIpc } from "../hooks/useIpc";
 import { useViewState } from "../hooks/useViewState";
 import { useSort } from "../hooks/useSort";
@@ -183,9 +183,8 @@ export default function Augments() {
               const isExpanded = expanded.has(a.augment_id);
               const pickRate = totalGames > 0 ? ((a.picks / totalGames) * 100).toFixed(1) : "0.0";
               return (
-                <>
+                <Fragment key={a.augment_id}>
                   <tr
-                    key={a.augment_id}
                     onClick={() => toggleExpand(a.augment_id)}
                     className="border-t border-lol-border/50 hover:bg-lol-card-hover cursor-pointer transition-colors"
                   >
@@ -227,7 +226,7 @@ export default function Augments() {
                         </td>
                       </tr>
                     ))}
-                </>
+                </Fragment>
               );
             })}
           </tbody>
