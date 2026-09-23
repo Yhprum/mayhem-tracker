@@ -64,7 +64,7 @@ function ChampionExpanded({
   const topItems = itemStats.slice(0, 6);
 
   return (
-    <td colSpan={11} className="px-4 py-4">
+    <td colSpan={COLUMN_COUNT} className="px-4 py-4">
       <div className="grid grid-cols-3 gap-6">
         {/* Augments */}
         <div className="min-w-0">
