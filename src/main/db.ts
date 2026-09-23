@@ -3954,13 +3954,23 @@ export function repairPuuids(): {
   // Step 2: Sort puuids by frequency (most games first)
   const sortedPuuids = Array.from(puuidToGames.entries()).sort((a, b) => b[1].size - a[1].size);
 
-  // Step 3: Greedily identify user accounts — a puuid is a user account if it
-  // never co-occurs in the same game as an already-identified user account.
-  // This filters out friends (who always appear alongside a user account)
-  // while correctly identifying alt accounts (which never share a game).
-  const userPuuids = new Set<string>();
+  // Step 3: Settle which puuids are our accounts. The ones the client itself
+  // reported are ours outright: upsertSummoner keeps the summoner and account
+  // ids it hands over, which no account discovered here ever has. The rest are
+  // taken greedily, most games first, and only if they never share a game with
+  // an account already settled. That filters out friends, who always appear
+  // alongside one of ours, while still finding alt accounts, which never share
+  // a game with each other. A friend who played every one of an alt's games
+  // ties with it on count, and only the client's word tells those two apart.
+  const reported = db
+    .prepare("SELECT puuid FROM summoner WHERE summoner_id IS NOT NULL OR account_id IS NOT NULL")
+    .all() as { puuid: string }[];
+  const userPuuids = new Set(
+    reported.map((row) => row.puuid).filter((puuid) => puuidToGames.has(puuid)),
+  );
 
   for (const [puuid, gameIds] of sortedPuuids) {
+    if (userPuuids.has(puuid)) continue;
     let coOccurs = false;
     for (const gameId of gameIds) {
       const puuidsInGame = gameToPuuids.get(gameId)!;
@@ -3978,12 +3988,21 @@ export function repairPuuids(): {
     }
   }
 
-  // Step 4: For each game, find which user account is present and update puuid
+  // Step 4: Point each game at the account that played it. A recorded owner
+  // that is one of our accounts and among the game's players stands; only a
+  // game whose owner is missing or not in it takes the account found there.
+  const ownerRows = db.prepare("SELECT game_id, puuid FROM games").all() as {
+    game_id: number;
+    puuid: string;
+  }[];
+  const owners = new Map(ownerRows.map((row) => [row.game_id, row.puuid]));
   const updateStmt = db.prepare("UPDATE games SET puuid = ? WHERE game_id = ?");
   let repairedGames = 0;
 
   const repairTx = db.transaction(() => {
     for (const [gameId, puuidsInGame] of gameToPuuids) {
+      const owner = owners.get(gameId);
+      if (owner && userPuuids.has(owner) && puuidsInGame.has(owner)) continue;
       for (const puuid of puuidsInGame) {
         if (userPuuids.has(puuid)) {
           updateStmt.run(puuid, gameId);
