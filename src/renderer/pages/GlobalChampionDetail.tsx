@@ -1,6 +1,7 @@
-import { useMemo, useEffect, useCallback, type ReactNode } from "react";
-import { useParams, useSearchParams, Link } from "react-router-dom";
+import { useMemo, useEffect, type ReactNode } from "react";
+import { useParams, Link } from "react-router-dom";
 import { useIpc } from "../hooks/useIpc";
+import { useQueryFilters } from "../hooks/useQueryFilters";
 import { useViewState } from "../hooks/useViewState";
 import {
   useChampionData,
@@ -238,27 +239,8 @@ export default function GlobalChampionDetailPage() {
   const { championId = "" } = useParams();
   const id = Number(championId);
   const champData = useChampionData();
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const patch = searchParams.get("patch") ?? undefined;
-  const queueParam = searchParams.get("queue");
-  const queue = queueParam ? Number(queueParam) : undefined;
-
   // Filters live in the URL so the back link returns to the same view
-  const setFilter = useCallback(
-    (key: "patch" | "queue", value: string | number | undefined) => {
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          if (value == null || value === "") next.delete(key);
-          else next.set(key, String(value));
-          return next;
-        },
-        { replace: true },
-      );
-    },
-    [setSearchParams],
-  );
+  const { searchParams, setParam, patch, queue } = useQueryFilters();
 
   const { data, refetch } = useIpc<GlobalChampionDetail>(
     () => window.api.getGlobalChampionDetail(id, patch, queue),
@@ -306,8 +288,8 @@ export default function GlobalChampionDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <QueueSelect value={queue} onChange={(q) => setFilter("queue", q)} />
-          <PatchSelect value={patch} onChange={(p) => setFilter("patch", p)} />
+          <QueueSelect value={queue} onChange={(q) => setParam("queue", q)} />
+          <PatchSelect value={patch} onChange={(p) => setParam("patch", p)} />
         </div>
       </div>
 

@@ -25,6 +25,13 @@ export function kdaColor(ratio: number): string {
   return "text-slate-300";
 }
 
+export function scoreColor(score: number): string {
+  if (score >= 9) return "text-amber-400";
+  if (score >= 7) return "text-sky-400";
+  if (score >= 5) return "text-emerald-400";
+  return "text-slate-400";
+}
+
 // Large stats at a glance, for table cells and bar labels: 12345 reads "12.3k".
 export function formatCompact(value: number): string {
   return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : Math.round(value).toString();

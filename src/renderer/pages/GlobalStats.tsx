@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { useQueryFilters } from "../hooks/useQueryFilters";
 import { useIpc } from "../hooks/useIpc";
 import { useViewState } from "../hooks/useViewState";
 import { readViewState, writeViewState } from "../lib/viewState";
@@ -19,6 +20,7 @@ import PatchSelect from "../components/PatchSelect";
 import QueueSelect from "../components/QueueSelect";
 import RarityFilter, { type Rarity } from "../components/RarityFilter";
 import SortHeader from "../components/SortHeader";
+import SearchInput from "../components/SearchInput";
 import { useSort } from "../hooks/useSort";
 
 type Tab = "champions" | "augments" | "items";
@@ -26,71 +28,16 @@ type ChampSortKey = "games" | "winRate" | "pickRate" | "name";
 type AugSortKey = "picks" | "winRate" | "pickRate" | "name";
 type ItemSortKey = "picks" | "winRate" | "name";
 
-function SearchInput({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-}) {
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="input w-48 pr-7"
-      />
-      {value && (
-        <button
-          onClick={() => onChange("")}
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-lol-text/50 hover:text-lol-text-bright transition-colors"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 16 16"
-            fill="currentColor"
-            className="w-3.5 h-3.5"
-          >
-            <path
-              fillRule="evenodd"
-              d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14Zm2.78-4.22a.75.75 0 0 1-1.06 0L8 9.06l-1.72 1.72a.75.75 0 1 1-1.06-1.06L6.94 8 5.22 6.28a.75.75 0 0 1 1.06-1.06L8 6.94l1.72-1.72a.75.75 0 1 1 1.06 1.06L9.06 8l1.72 1.72a.75.75 0 0 1 0 1.06Z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </button>
-      )}
-    </div>
-  );
-}
-
 export default function GlobalStats() {
   const champData = useChampionData();
   const augmentData = useAugmentData();
   const navigate = useNavigate();
   // Filters and tab live in the URL so returning from a champion page lands
   // back on the same view
-  const [searchParams, setSearchParams] = useSearchParams();
-  const patch = searchParams.get("patch") ?? undefined;
-  const queueParam = searchParams.get("queue");
-  const queue = queueParam ? Number(queueParam) : undefined;
+  const { searchParams, setSearchParams, setParam, patch, queue } = useQueryFilters();
   const tabParam = searchParams.get("tab");
   const tab: Tab = tabParam === "augments" || tabParam === "items" ? tabParam : "champions";
 
-  const setParam = (key: string, value: string | number | undefined) => {
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (value == null || value === "") next.delete(key);
-        else next.set(key, String(value));
-        return next;
-      },
-      { replace: true },
-    );
-  };
   const setPatch = (p: string | undefined) => setParam("patch", p);
   const setQueue = (q: number | undefined) => setParam("queue", q);
   const setTab = (t: Tab) => setParam("tab", t === "champions" ? undefined : t);

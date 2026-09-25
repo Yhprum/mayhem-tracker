@@ -1,4 +1,4 @@
-import { scoreColor } from "../../shared/opScore";
+import { scoreColor } from "../lib/format";
 
 type Badge = "MVP" | "ACE" | null;
 

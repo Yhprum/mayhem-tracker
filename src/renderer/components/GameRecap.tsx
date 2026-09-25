@@ -17,6 +17,7 @@ import {
   kdaColor,
   kdaRatio,
   winRatePercent,
+  scoreColor,
 } from "../lib/format";
 import {
   CHALLENGE_LEVEL_COLORS,
@@ -24,7 +25,6 @@ import {
   formatChallengeValue,
 } from "../lib/challenges";
 import { ordinal } from "../../shared/text";
-import { scoreColor } from "../../shared/opScore";
 import { queueLabel } from "./QueueSelect";
 import ChallengeToken from "./ChallengeToken";
 import ChampionIcon from "./ChampionIcon";

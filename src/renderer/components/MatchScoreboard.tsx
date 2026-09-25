@@ -1,11 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react";
-import type { MatchDetail, ParsedParticipant } from "../lib/types";
+import type { ChampionData, MatchDetail, ParsedParticipant } from "../lib/types";
 import { parseParticipants, groupByTeam } from "../lib/participants";
 import { getChampionName } from "../hooks/useChampions";
-import { formatCompact, kdaHighlight, kdaRatio } from "../lib/format";
+import { formatCompact, kdaHighlight, kdaRatio, scoreColor } from "../lib/format";
 import {
   computeMatchScoreBreakdowns,
-  scoreColor,
   type ScoreBreakdown,
   type ScoreComponent,
   type ScoreComponentKey,
@@ -32,7 +31,7 @@ export default function MatchScoreboard({
   multikills = false,
 }: {
   detail: MatchDetail;
-  champData: any;
+  champData: ChampionData;
   puuids: string[] | null;
   // Off by default: only a caller that knows its rows are wide should ask
   multikills?: boolean;
@@ -44,7 +43,7 @@ export default function MatchScoreboard({
   const teams = useMemo(() => groupByTeam(participants), [participants]);
   const scores = useMemo(() => {
     const classes: Record<number, string | undefined> = {};
-    for (const p of participants) classes[p.championId] = champData?.[p.championId]?.class;
+    for (const p of participants) classes[p.championId] = champData[p.championId]?.class;
     return computeMatchScoreBreakdowns(participants, classes);
   }, [participants, champData]);
 
@@ -98,7 +97,7 @@ function TeamScoreboard({
   teamId: number;
   players: ParsedParticipant[];
   maxStats: { dmg: number; taken: number; gold: number; heal: number };
-  champData: any;
+  champData: ChampionData;
   scores: Map<number, ScoreBreakdown>;
   patch?: string | null;
   multikills: boolean;
@@ -244,7 +243,7 @@ function PlayerRow({
 }: {
   player: ParsedParticipant;
   maxStats: { dmg: number; taken: number; gold: number; heal: number };
-  champData: any;
+  champData: ChampionData;
   score?: ScoreBreakdown;
   patch?: string | null;
   multikills: boolean;

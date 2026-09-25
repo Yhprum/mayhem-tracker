@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
 import { useIpc } from "../hooks/useIpc";
+import { useViewState } from "../hooks/useViewState";
 import { useChampionData, getChampionName } from "../hooks/useChampions";
 import type {
   ChampionData,
@@ -31,8 +31,7 @@ import {
   XIcon,
   ZapIcon,
 } from "../components/icons";
-import { LOCALE, formatDuration, kdaRatio } from "../lib/format";
-import { scoreColor } from "../../shared/opScore";
+import { LOCALE, formatDuration, kdaRatio, scoreColor } from "../lib/format";
 import Kda from "../components/Kda";
 
 // Records are moments, not recency — "3 months ago" undersells a trophy, so
@@ -314,23 +313,8 @@ function streakCard(streak: StreakRecord, win: boolean): CardDef {
 }
 
 export default function Records() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const queueParam = searchParams.get("queue");
-  const queue = queueParam ? Number(queueParam) : undefined;
-  const account = searchParams.get("account") ?? undefined;
-  const setParam = (key: string, value: string | undefined) => {
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (value == null) next.delete(key);
-        else next.set(key, value);
-        return next;
-      },
-      { replace: true },
-    );
-  };
-  const setQueue = (q: number | undefined) => setParam("queue", q == null ? undefined : String(q));
-  const setAccount = (a: string | undefined) => setParam("account", a);
+  const [queue, setQueue] = useViewState<number | undefined>("records.queue", undefined);
+  const [account, setAccount] = useViewState<string | undefined>("records.account", undefined);
 
   const { data, refetch } = useIpc<RecordsData>(
     () => window.api.getRecords(queue, account),

@@ -69,6 +69,16 @@ const CARRY_KNEE = 1.2;
 const CARRY_SPAN = 0.5;
 const CARRY_MAX = 0.6;
 
+// Only the best multikill of the game counts, so the list runs biggest first
+const MULTIKILL_BONUSES = [
+  { field: "pentaKills", label: "Penta kill", points: 0.6 },
+  { field: "quadraKills", label: "Quadra kill", points: 0.45 },
+  { field: "tripleKills", label: "Triple kill", points: 0.3 },
+  { field: "doubleKills", label: "Double kill", points: 0.15 },
+] as const;
+
+const WIN_BONUS = 0.6;
+
 // Per-class component weights so champions are graded on their job: tanks on
 // soaking damage, supports on healing and participation, assassins/mages/
 // marksmen on damage output. Every row sums to 9.8 (matching DEFAULT_WEIGHTS)
@@ -177,11 +187,8 @@ function buildBreakdown(
   component("heal", p.totalHeal, max.heal, w.heal);
   component("gold", p.goldEarned, max.gold, w.gold);
 
-  let multikill: ScoreBreakdown["multikill"] = null;
-  if (p.pentaKills > 0) multikill = { label: "Penta kill", points: 0.6 * SCALE };
-  else if (p.quadraKills > 0) multikill = { label: "Quadra kill", points: 0.45 * SCALE };
-  else if (p.tripleKills > 0) multikill = { label: "Triple kill", points: 0.3 * SCALE };
-  else if (p.doubleKills > 0) multikill = { label: "Double kill", points: 0.15 * SCALE };
+  const best = MULTIKILL_BONUSES.find((m) => p[m.field] > 0);
+  const multikill = best ? { label: best.label, points: best.points * SCALE } : null;
 
   // A tie for top damage doesn't count as leading: runnerUpDmg then equals the
   // leader's own damage, putting `lead` at 1 — already below the knee.
@@ -193,12 +200,9 @@ function buildBreakdown(
     if (carryPoints > 0) carry = { lead, points: carryPoints * SCALE };
   }
 
-  if (p.pentaKills > 0) sum += 0.6;
-  else if (p.quadraKills > 0) sum += 0.45;
-  else if (p.tripleKills > 0) sum += 0.3;
-  else if (p.doubleKills > 0) sum += 0.15;
+  if (best) sum += best.points;
   sum += carryPoints;
-  if (p.win) sum += 0.6;
+  if (p.win) sum += WIN_BONUS;
 
   const raw = sum * SCALE;
   return {
@@ -206,7 +210,7 @@ function buildBreakdown(
     components,
     multikill,
     carry,
-    win: p.win ? 0.6 * SCALE : 0,
+    win: p.win ? WIN_BONUS * SCALE : 0,
     raw,
     score: Math.min(10, Math.max(1, Math.round(raw * 10) / 10)),
     badge: null,
@@ -276,14 +280,4 @@ export function computeMatchScores(
     scores.set(id, { score: b.score, raw: b.raw, badge: b.badge });
   }
   return scores;
-}
-
-// Build score inputs straight from a stored raw game JSON (LCU shape, both
-// old nested-stats and new flat variants).
-
-export function scoreColor(score: number): string {
-  if (score >= 9) return "text-amber-400";
-  if (score >= 7) return "text-sky-400";
-  if (score >= 5) return "text-emerald-400";
-  return "text-slate-400";
 }

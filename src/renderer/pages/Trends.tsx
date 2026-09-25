@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { useIpc } from "../hooks/useIpc";
+import { useViewState } from "../hooks/useViewState";
 import type { TrendsData, TrendsDay } from "../lib/types";
 import { LOCALE, formatPatch } from "../lib/format";
 import QueueSelect from "../components/QueueSelect";
@@ -659,20 +659,7 @@ function HourChart({ hours }: { hours: TrendsData["hours"] }) {
 // ---- Page ----
 
 export default function Trends() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const queueParam = searchParams.get("queue");
-  const queue = queueParam ? Number(queueParam) : undefined;
-  const setQueue = (q: number | undefined) => {
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (q == null) next.delete("queue");
-        else next.set("queue", String(q));
-        return next;
-      },
-      { replace: true },
-    );
-  };
+  const [queue, setQueue] = useViewState<number | undefined>("trends.queue", undefined);
 
   const { data, refetch } = useIpc<TrendsData>(() => window.api.getTrends(queue), [queue]);
 
@@ -690,7 +677,10 @@ export default function Trends() {
 
   // Weekly buckets by default for short histories, monthly once months exist
   // to compare
-  const [granularity, setGranularity] = useState<Granularity | null>(null);
+  const [granularity, setGranularity] = useViewState<Granularity | undefined>(
+    "trends.granularity",
+    undefined,
+  );
   const effectiveGranularity: Granularity = granularity ?? (spanDays > 120 ? "month" : "week");
 
   const buckets = useMemo(

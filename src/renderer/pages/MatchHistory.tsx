@@ -17,6 +17,7 @@ import type {
   MultikillType,
   LcuStatus,
   BackfillProgress,
+  ChampionData,
 } from "../lib/types";
 import ChampionIcon from "../components/ChampionIcon";
 import AugmentIcon from "../components/AugmentIcon";
@@ -49,9 +50,9 @@ import {
   kdaColor,
   kdaHighlight,
   formatPatch,
+  scoreColor,
 } from "../lib/format";
 import { queueLabel } from "../components/QueueSelect";
-import { scoreColor } from "../../shared/opScore";
 import {
   SESSION_GROUPING_SETTING,
   parseSessionGrouping,
@@ -1017,7 +1018,7 @@ function SessionHeader({ session }: { session: Session }) {
 
 interface GameRowProps {
   match: MatchListItem;
-  champData: any;
+  champData: ChampionData;
   expanded: boolean;
   detail: MatchDetail | null;
   detailLoading: boolean;
