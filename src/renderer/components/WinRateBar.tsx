@@ -16,7 +16,9 @@ export default function WinRateBar({ wins, total }: WinRateBarProps) {
           style={{ width: `${rate}%` }}
         />
       </div>
-      <span className={`text-xs font-medium min-w-10 text-right ${winRateColor(wins, total)}`}>
+      <span
+        className={`text-xs font-medium min-w-10 text-right tabular-nums ${winRateColor(wins, total)}`}
+      >
         {winRatePercent(wins, total)}
       </span>
     </div>

@@ -5,6 +5,7 @@ import { formatDuration, kdaRatio, winRateColor } from "../lib/format";
 import ChampionIcon from "./ChampionIcon";
 import ItemIcon from "./ItemIcon";
 import SummonerSpellIcon from "./SummonerSpellIcon";
+import Kda from "./Kda";
 
 const GRID_COLS = "grid-cols-[44px_minmax(90px,1fr)_34px_72px_44px_minmax(176px,auto)_108px]";
 
@@ -60,7 +61,7 @@ function LiveTeam({
         </span>
         <span className="ml-auto text-[11px] text-lol-text">
           <span className="text-lol-text-bright font-medium">
-            {kills} / {deaths} / {assists}
+            <Kda kills={kills} deaths={deaths} assists={assists} />
           </span>{" "}
           team KDA
         </span>
@@ -71,9 +72,9 @@ function LiveTeam({
       >
         <span />
         <span>Player</span>
-        <span className="text-center">Lvl</span>
+        <span className="text-right">Lvl</span>
         <span className="text-center">KDA</span>
-        <span className="text-center">CS</span>
+        <span className="text-right">CS</span>
         <span>Items</span>
         <span className="text-right">On this champ</span>
       </div>
@@ -100,7 +101,7 @@ function LivePlayerRow({ player, champData }: { player: LivePlayer; champData: C
         <div className="relative">
           <ChampionIcon championId={player.championId} size={32} />
           {player.isDead && player.respawnTimer > 0 && (
-            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/60 text-[10px] font-bold text-lol-loss">
+            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/60 text-[10px] font-bold text-lol-loss tabular-nums">
               {player.respawnTimer}
             </span>
           )}
@@ -132,18 +133,20 @@ function LivePlayerRow({ player, champData }: { player: LivePlayer; champData: C
         <div className="text-[10px] text-lol-text truncate">{championName}</div>
       </div>
 
-      <div className="text-center text-[11px] text-lol-text-bright">{player.level || "-"}</div>
+      <div className="text-right text-[11px] text-lol-text-bright tabular-nums">
+        {player.level || "-"}
+      </div>
 
-      <div className="text-center">
+      <div className="text-center tabular-nums">
         <div className="text-[11px] text-lol-text-bright">
-          {player.kills} / {player.deaths} / {player.assists}
+          <Kda kills={player.kills} deaths={player.deaths} assists={player.assists} />
         </div>
         <div className="text-[10px] text-lol-text">
           {kdaRatio(player.kills, player.deaths, player.assists)}
         </div>
       </div>
 
-      <div className="text-center text-[11px] text-lol-text">{player.creepScore}</div>
+      <div className="text-right text-[11px] text-lol-text tabular-nums">{player.creepScore}</div>
 
       <div className="flex gap-0.5">
         {player.items.slice(0, 6).map((itemId, i) => (

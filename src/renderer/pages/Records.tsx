@@ -31,8 +31,9 @@ import {
   XIcon,
   ZapIcon,
 } from "../components/icons";
-import { LOCALE, formatDuration, formatKDA, kdaRatio } from "../lib/format";
+import { LOCALE, formatDuration, kdaRatio } from "../lib/format";
 import { scoreColor } from "../../shared/opScore";
+import Kda from "../components/Kda";
 
 // Records are moments, not recency — "3 months ago" undersells a trophy, so
 // they get a real date.
@@ -96,7 +97,7 @@ function RecordCard({
               {match.win ? "W" : "L"}
             </span>
             {" · "}
-            {formatKDA(match.kills, match.deaths, match.assists)}
+            <Kda kills={match.kills} deaths={match.deaths} assists={match.assists} />
             {" · "}
             {recordDate(match.game_creation)}
           </div>
@@ -152,7 +153,7 @@ function MatchModal({
               </span>
               {" — "}
               {getChampionName(champData, match.champion_id)}{" "}
-              {formatKDA(match.kills, match.deaths, match.assists)}
+              <Kda kills={match.kills} deaths={match.deaths} assists={match.assists} />
             </div>
             <div className="text-xs text-lol-text truncate">
               {queueLabel(match.queue_id)} · {formatDuration(match.game_duration)} ·{" "}

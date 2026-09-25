@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import type { MatchDetail, ParsedParticipant } from "../lib/types";
 import { parseParticipants, groupByTeam } from "../lib/participants";
 import { getChampionName } from "../hooks/useChampions";
-import { formatCompact, formatKDA, kdaHighlight, kdaRatio } from "../lib/format";
+import { formatCompact, kdaHighlight, kdaRatio } from "../lib/format";
 import {
   computeMatchScoreBreakdowns,
   scoreColor,
@@ -16,6 +16,7 @@ import ItemIcon from "./ItemIcon";
 import SummonerSpellIcon from "./SummonerSpellIcon";
 import MultikillBadge from "./MultikillBadge";
 import { ScoreBadge } from "./ScoreCell";
+import Kda from "./Kda";
 
 const GRID_COLS = "grid-cols-[52px_minmax(80px,1fr)_52px_76px_110px_110px_56px_56px_176px_100px]";
 // An eleventh column is only affordable where the rows are laid out wider than
@@ -127,7 +128,7 @@ function TeamScoreboard({
           </TeamStat>
           <TeamStat label="KDA">
             <span className="text-lol-text-bright">
-              {formatKDA(totals.kills, totals.deaths, totals.assists)}
+              <Kda kills={totals.kills} deaths={totals.deaths} assists={totals.assists} />
             </span>
           </TeamStat>
           <TeamStat label="Damage">
@@ -226,7 +227,7 @@ function ScoreboardBar({ value, max, color }: { value: number; max: number; colo
   return (
     <div className="h-4 bg-white/5 rounded-sm overflow-hidden relative">
       <div className={`h-full rounded-sm ${color}`} style={{ width: `${pct}%` }} />
-      <span className="absolute inset-0 flex items-center justify-end pr-1 text-[10px] font-medium text-white/90 leading-none">
+      <span className="absolute inset-0 flex items-center justify-end pr-1 text-[10px] font-medium text-white/90 leading-none tabular-nums">
         {formatCompact(value)}
       </span>
     </div>
@@ -283,7 +284,7 @@ function PlayerRow({
       {/* KDA */}
       <div className="text-center">
         <div className="text-[11px] text-lol-text-bright">
-          {formatKDA(p.kills, p.deaths, p.assists)}
+          <Kda kills={p.kills} deaths={p.deaths} assists={p.assists} />
         </div>
         <div className={`text-[10px] ${kdaHighlight(kda)}`}>{kda}</div>
       </div>
@@ -299,10 +300,14 @@ function PlayerRow({
       <ScoreboardBar value={p.totalDamageTaken} max={maxStats.taken} color="bg-sky-400/50" />
 
       {/* Gold */}
-      <div className="text-right text-[11px] text-lol-gold">{formatCompact(p.goldEarned)}</div>
+      <div className="text-right text-[11px] text-lol-gold tabular-nums">
+        {formatCompact(p.goldEarned)}
+      </div>
 
       {/* Heal */}
-      <div className="text-right text-[11px] text-emerald-400">{formatCompact(p.totalHeal)}</div>
+      <div className="text-right text-[11px] text-emerald-400 tabular-nums">
+        {formatCompact(p.totalHeal)}
+      </div>
 
       {/* Items */}
       <div className="flex gap-0.5">
@@ -347,7 +352,7 @@ function ScoreCell({ score }: { score?: ScoreBreakdown }) {
       onMouseLeave={() => setAnchor(null)}
     >
       <div
-        className={`text-[11px] font-semibold ${score ? scoreColor(score.score) : "text-lol-text"}`}
+        className={`text-[11px] font-semibold tabular-nums ${score ? scoreColor(score.score) : "text-lol-text"}`}
       >
         {score ? score.score.toFixed(1) : "-"}
       </div>

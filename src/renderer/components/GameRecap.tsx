@@ -47,6 +47,7 @@ import {
   TrendingDownIcon,
   TrendingUpIcon,
 } from "./icons";
+import Kda from "./Kda";
 
 // A stat against the average of every game on record. Small differences aren't
 // worth colouring, so anything inside a tenth of the average reads as neutral.
@@ -134,7 +135,7 @@ export default function GameRecap({
             <div className="mt-1 text-sm text-lol-text-bright">
               {getChampionName(champData, stats?.champion_id ?? 0)}
               <span className="mx-2 text-lol-text/40">·</span>
-              {formatKDA(kills, deaths, assists)}
+              <Kda kills={kills} deaths={deaths} assists={assists} />
               <span
                 className={`ml-2 ${kdaColor(deaths === 0 ? Infinity : (kills + assists) / deaths)}`}
               >
@@ -306,7 +307,7 @@ export default function GameRecap({
             </div>
             <div>
               <div className="text-sm text-lol-text-bright">
-                {formatKDA(session.kills, session.deaths, session.assists)}
+                <Kda kills={session.kills} deaths={session.deaths} assists={session.assists} />
               </div>
               <div className="text-[11px] text-lol-text">
                 {kdaRatio(session.kills, session.deaths, session.assists)} KDA
@@ -378,7 +379,8 @@ export default function GameRecap({
             <WinRateBar wins={champion.wins} total={champion.games} />
           </div>
           <div className="mt-2 text-[11px] text-lol-text">
-            {formatKDA(champion.kills, champion.deaths, champion.assists)} lifetime
+            <Kda kills={champion.kills} deaths={champion.deaths} assists={champion.assists} />{" "}
+            lifetime
             {champion.previousBest != null && recap.score != null && (
               <>
                 {" · "}

@@ -11,15 +11,9 @@ import WinRateBar from "../components/WinRateBar";
 import PatchSelect from "../components/PatchSelect";
 import QueueSelect from "../components/QueueSelect";
 import SortHeader from "../components/SortHeader";
-import {
-  LOCALE,
-  formatKDA,
-  formatDuration,
-  formatTimeAgo,
-  kdaRatio,
-  kdaColor,
-} from "../lib/format";
+import { LOCALE, formatDuration, formatTimeAgo, kdaRatio, kdaColor } from "../lib/format";
 import { scoreColor } from "../../shared/opScore";
+import Kda from "../components/Kda";
 
 type SortKey =
   | "games"
@@ -142,14 +136,14 @@ function ChampionExpanded({
                     {m.is_remake ? "-" : m.win ? "W" : "L"}
                   </span>
                   <span className="text-lol-text-bright shrink-0">
-                    {formatKDA(m.kills, m.deaths, m.assists)}
+                    <Kda kills={m.kills} deaths={m.deaths} assists={m.assists} />
                   </span>
                   {m.score != null && !m.is_remake && (
-                    <span className={`font-semibold shrink-0 ${scoreColor(m.score)}`}>
+                    <span className={`font-semibold shrink-0 tabular-nums ${scoreColor(m.score)}`}>
                       {m.score.toFixed(1)}
                     </span>
                   )}
-                  <span className="text-lol-text ml-auto shrink-0">
+                  <span className="text-lol-text ml-auto shrink-0 tabular-nums">
                     {formatDuration(m.game_duration)}
                   </span>
                   <span className="text-lol-text shrink-0">{formatTimeAgo(m.game_creation)}</span>
@@ -268,23 +262,57 @@ export default function Champions() {
         <table className="w-full">
           <thead className="bg-lol-dark/50">
             <tr>
-              <th className="px-2 py-2 text-left text-xs font-medium text-lol-text uppercase tracking-wider whitespace-nowrap w-12">
+              <th className="px-2 py-2 text-right text-xs font-medium text-lol-text uppercase tracking-wider whitespace-nowrap w-12">
                 #
               </th>
               <th className="px-2 py-2 text-left text-xs font-medium text-lol-text uppercase tracking-wider whitespace-nowrap">
                 Champion
               </th>
-              <SortHeader {...sort} compact label="Games" field="games" />
-              <SortHeader {...sort} compact label="Win %" field="wins" />
-              <SortHeader {...sort} compact label="K" field="avg_kills" />
-              <SortHeader {...sort} compact label="D" field="avg_deaths" />
-              <SortHeader {...sort} compact label="A" field="avg_assists" />
-              <SortHeader {...sort} compact label="KDA" field="kda" />
-              <SortHeader {...sort} compact label="Score" field="avg_score" />
-              <SortHeader {...sort} compact label="MVP / ACE" field="badges" />
-              <SortHeader {...sort} compact label="Dmg" field="avg_damage" />
-              <SortHeader {...sort} compact label="Gold" field="avg_gold" />
-              <SortHeader {...sort} compact label="Multikills" field="multikills" />
+              <SortHeader {...sort} compact numeric label="Games" field="games" className="w-16" />
+              <SortHeader {...sort} compact numeric label="Win %" field="wins" />
+              <SortHeader {...sort} compact numeric label="K" field="avg_kills" className="w-12" />
+              <SortHeader {...sort} compact numeric label="D" field="avg_deaths" className="w-12" />
+              <SortHeader
+                {...sort}
+                compact
+                numeric
+                label="A"
+                field="avg_assists"
+                className="w-12"
+              />
+              <SortHeader {...sort} compact numeric label="KDA" field="kda" className="w-12" />
+              <SortHeader
+                {...sort}
+                compact
+                numeric
+                label="Score"
+                field="avg_score"
+                className="w-14"
+              />
+              <SortHeader {...sort} compact label="MVP / ACE" field="badges" className="w-22" />
+              <SortHeader
+                {...sort}
+                compact
+                numeric
+                label="Dmg"
+                field="avg_damage"
+                className="w-16"
+              />
+              <SortHeader
+                {...sort}
+                compact
+                numeric
+                label="Gold"
+                field="avg_gold"
+                className="w-16"
+              />
+              <SortHeader
+                {...sort}
+                compact
+                label="Multikills"
+                field="multikills"
+                className="w-36"
+              />
             </tr>
           </thead>
           <tbody>
@@ -296,7 +324,9 @@ export default function Champions() {
                     expandedId === c.champion_id ? "bg-lol-card-hover" : ""
                   }`}
                 >
-                  <td className="px-2 py-2 text-xs text-lol-text">{i + 1}</td>
+                  <td className="px-2 py-2 text-xs text-lol-text text-right tabular-nums">
+                    {i + 1}
+                  </td>
                   <td className="px-2 py-2">
                     <div className="flex items-center gap-2">
                       <ChampionIcon championId={c.champion_id} size={28} />
@@ -305,26 +335,34 @@ export default function Champions() {
                       </span>
                     </div>
                   </td>
-                  <td className="px-2 py-2 text-sm text-lol-text-bright">{c.games}</td>
+                  <td className="px-2 py-2 text-sm text-lol-text-bright text-right tabular-nums">
+                    {c.games}
+                  </td>
                   <td className="px-2 py-2 w-32">
                     <WinRateBar wins={c.wins} total={c.games} />
                   </td>
-                  <td className="px-2 py-2 text-sm text-lol-text">{c.avg_kills}</td>
-                  <td className="px-2 py-2 text-sm text-lol-text">{c.avg_deaths}</td>
-                  <td className="px-2 py-2 text-sm text-lol-text">{c.avg_assists}</td>
+                  <td className="px-2 py-2 text-sm text-lol-text text-right tabular-nums">
+                    {c.avg_kills.toFixed(1)}
+                  </td>
+                  <td className="px-2 py-2 text-sm text-lol-text text-right tabular-nums">
+                    {c.avg_deaths.toFixed(1)}
+                  </td>
+                  <td className="px-2 py-2 text-sm text-lol-text text-right tabular-nums">
+                    {c.avg_assists.toFixed(1)}
+                  </td>
                   <td
-                    className={`px-2 py-2 text-sm ${kdaColor(c.deaths > 0 ? (c.kills + c.assists) / c.deaths : Infinity)}`}
+                    className={`px-2 py-2 text-sm text-right tabular-nums ${kdaColor(c.deaths > 0 ? (c.kills + c.assists) / c.deaths : Infinity)}`}
                   >
                     {kdaRatio(c.kills, c.deaths, c.assists)}
                   </td>
                   <td
-                    className={`px-2 py-2 text-sm font-semibold ${
+                    className={`px-2 py-2 text-sm font-semibold text-right tabular-nums ${
                       c.avg_score != null ? scoreColor(c.avg_score) : "text-lol-text"
                     }`}
                   >
                     {c.avg_score != null ? c.avg_score.toFixed(1) : "—"}
                   </td>
-                  <td className="px-2 py-2 text-sm whitespace-nowrap">
+                  <td className="px-2 py-2 text-sm whitespace-nowrap tabular-nums">
                     <span className={c.mvps > 0 ? "text-amber-300" : "text-lol-text/40"}>
                       {c.mvps}
                     </span>
@@ -333,10 +371,10 @@ export default function Champions() {
                       {c.aces}
                     </span>
                   </td>
-                  <td className="px-2 py-2 text-sm text-lol-text">
+                  <td className="px-2 py-2 text-sm text-lol-text text-right tabular-nums">
                     {(c.avg_damage ?? 0).toLocaleString(LOCALE)}
                   </td>
-                  <td className="px-2 py-2 text-sm text-lol-gold">
+                  <td className="px-2 py-2 text-sm text-lol-gold text-right tabular-nums">
                     {(c.avg_gold ?? 0).toLocaleString(LOCALE)}
                   </td>
                   <td className="px-2 py-2">

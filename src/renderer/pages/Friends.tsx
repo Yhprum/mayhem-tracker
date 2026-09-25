@@ -10,6 +10,7 @@ import SummonerIcon from "../components/SummonerIcon";
 import WinRateBar from "../components/WinRateBar";
 import SortHeader from "../components/SortHeader";
 import { formatTimeAgo, kdaRatio, kdaColor } from "../lib/format";
+import Kda from "../components/Kda";
 
 type SortKey = "games" | "winRate" | "kda" | "lastPlayed";
 
@@ -100,19 +101,19 @@ export default function Friends() {
         <table className="w-full">
           <thead className="bg-lol-dark/50">
             <tr>
-              <th className="px-3 py-2 text-left text-xs font-medium text-lol-text uppercase tracking-wider w-12">
+              <th className="px-3 py-2 text-right text-xs font-medium text-lol-text uppercase tracking-wider w-12">
                 #
               </th>
               <th className="px-3 py-2 text-left text-xs font-medium text-lol-text uppercase tracking-wider">
                 Player
               </th>
-              <SortHeader {...sort} label="Games" field="games" />
-              <SortHeader {...sort} label="Win Rate" field="winRate" />
-              <SortHeader {...sort} label="Their KDA" field="kda" />
-              <th className="px-3 py-2 text-left text-xs font-medium text-lol-text uppercase tracking-wider">
+              <SortHeader {...sort} numeric label="Games" field="games" className="w-24" />
+              <SortHeader {...sort} numeric label="Win Rate" field="winRate" className="w-32" />
+              <SortHeader {...sort} label="Their KDA" field="kda" className="w-32" />
+              <th className="px-3 py-2 text-left text-xs font-medium text-lol-text uppercase tracking-wider w-36">
                 Top Champions
               </th>
-              <SortHeader {...sort} label="Last Played" field="lastPlayed" />
+              <SortHeader {...sort} label="Last Played" field="lastPlayed" className="w-32" />
             </tr>
           </thead>
           <tbody>
@@ -130,14 +131,18 @@ export default function Friends() {
                   onClick={() => navigate(`/friends/${encodeURIComponent(t.key)}`)}
                   className="border-t border-lol-border/50 hover:bg-lol-card-hover cursor-pointer transition-colors"
                 >
-                  <td className="px-3 py-2 text-xs text-lol-text">{i + 1}</td>
+                  <td className="px-3 py-2 text-xs text-lol-text text-right tabular-nums">
+                    {i + 1}
+                  </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
                       <SummonerIcon iconId={t.profileIcon} size={28} />
                       <span className="text-sm text-lol-text-bright">{t.name}</span>
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-sm text-lol-text-bright">{t.games}</td>
+                  <td className="px-3 py-2 text-sm text-lol-text-bright text-right tabular-nums">
+                    {t.games}
+                  </td>
                   <td className="px-3 py-2 w-32">
                     <WinRateBar wins={t.wins} total={t.games} />
                   </td>
@@ -145,7 +150,11 @@ export default function Friends() {
                     <div className="flex flex-col">
                       <span className={`text-sm ${kdaColor(ratio)}`}>{ratioStr}</span>
                       <span className="text-[10px] text-lol-text">
-                        {avgKills.toFixed(1)} / {avgDeaths.toFixed(1)} / {avgAssists.toFixed(1)}
+                        <Kda
+                          kills={avgKills.toFixed(1)}
+                          deaths={avgDeaths.toFixed(1)}
+                          assists={avgAssists.toFixed(1)}
+                        />
                       </span>
                     </div>
                   </td>

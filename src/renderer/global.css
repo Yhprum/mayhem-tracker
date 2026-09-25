@@ -25,8 +25,6 @@ body {
   background-attachment: fixed;
   color: var(--color-lol-text);
   font-family: var(--font-sans);
-  /* Stat columns line up digit for digit. */
-  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }

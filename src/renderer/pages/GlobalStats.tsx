@@ -308,13 +308,25 @@ export default function GlobalStats() {
             <table className="w-full">
               <thead className="bg-lol-dark/50">
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-lol-text uppercase tracking-wider w-12">
+                  <th className="px-3 py-2 text-right text-xs font-medium text-lol-text uppercase tracking-wider w-12">
                     #
                   </th>
                   <SortHeader {...champSort} label="Champion" field="name" />
-                  <SortHeader {...champSort} label="Games" field="games" />
-                  <SortHeader {...champSort} label="Pick Rate" field="pickRate" />
-                  <SortHeader {...champSort} label="Win Rate" field="winRate" className="w-32" />
+                  <SortHeader {...champSort} numeric label="Games" field="games" className="w-24" />
+                  <SortHeader
+                    {...champSort}
+                    numeric
+                    label="Pick Rate"
+                    field="pickRate"
+                    className="w-24"
+                  />
+                  <SortHeader
+                    {...champSort}
+                    numeric
+                    label="Win Rate"
+                    field="winRate"
+                    className="w-32"
+                  />
                 </tr>
               </thead>
               <tbody>
@@ -329,7 +341,9 @@ export default function GlobalStats() {
                       onClick={() => navigate(`/global/champion/${c.champion_id}${filterQuery}`)}
                       className="group border-t border-lol-border/50 hover:bg-lol-card-hover cursor-pointer transition-colors"
                     >
-                      <td className="px-3 py-2 text-xs text-lol-text">{i + 1}</td>
+                      <td className="px-3 py-2 text-xs text-lol-text text-right tabular-nums">
+                        {i + 1}
+                      </td>
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">
                           <ChampionIcon championId={c.champion_id} size={28} />
@@ -338,8 +352,12 @@ export default function GlobalStats() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-sm text-lol-text-bright">{c.games}</td>
-                      <td className="px-3 py-2 text-sm text-lol-text">{pickRate}%</td>
+                      <td className="px-3 py-2 text-sm text-lol-text-bright text-right tabular-nums">
+                        {c.games}
+                      </td>
+                      <td className="px-3 py-2 text-sm text-lol-text text-right tabular-nums">
+                        {pickRate}%
+                      </td>
                       <td className="px-3 py-2 w-32">
                         <WinRateBar wins={c.wins} total={c.games} />
                       </td>
@@ -367,11 +385,17 @@ export default function GlobalStats() {
               <thead className="bg-lol-dark/50">
                 <tr>
                   <SortHeader {...itemSort} label="Item" field="name" />
-                  <SortHeader {...itemSort} label="Picks" field="picks" />
-                  <th className="px-3 py-2 text-left text-xs font-medium text-lol-text uppercase tracking-wider">
+                  <SortHeader {...itemSort} numeric label="Picks" field="picks" className="w-24" />
+                  <th className="px-3 py-2 text-right text-xs font-medium text-lol-text uppercase tracking-wider w-24">
                     Pick Rate
                   </th>
-                  <SortHeader {...itemSort} label="Win Rate" field="winRate" className="w-32" />
+                  <SortHeader
+                    {...itemSort}
+                    numeric
+                    label="Win Rate"
+                    field="winRate"
+                    className="w-32"
+                  />
                 </tr>
               </thead>
               <tbody>
@@ -393,8 +417,12 @@ export default function GlobalStats() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-sm text-lol-text-bright">{item.picks}</td>
-                      <td className="px-3 py-2 text-sm text-lol-text">{pickRate}%</td>
+                      <td className="px-3 py-2 text-sm text-lol-text-bright text-right tabular-nums">
+                        {item.picks}
+                      </td>
+                      <td className="px-3 py-2 text-sm text-lol-text text-right tabular-nums">
+                        {pickRate}%
+                      </td>
                       <td className="px-3 py-2 w-32">
                         <WinRateBar wins={item.wins} total={item.picks} />
                       </td>
@@ -431,11 +459,17 @@ export default function GlobalStats() {
               <thead className="bg-lol-dark/50">
                 <tr>
                   <SortHeader {...augSort} label="Augment" field="name" />
-                  <SortHeader {...augSort} label="Picks" field="picks" />
-                  <th className="px-3 py-2 text-left text-xs font-medium text-lol-text uppercase tracking-wider">
+                  <SortHeader {...augSort} numeric label="Picks" field="picks" className="w-24" />
+                  <th className="px-3 py-2 text-right text-xs font-medium text-lol-text uppercase tracking-wider w-24">
                     Pick Rate
                   </th>
-                  <SortHeader {...augSort} label="Win Rate" field="winRate" className="w-32" />
+                  <SortHeader
+                    {...augSort}
+                    numeric
+                    label="Win Rate"
+                    field="winRate"
+                    className="w-32"
+                  />
                 </tr>
               </thead>
               <tbody>
@@ -452,8 +486,12 @@ export default function GlobalStats() {
                       <td className="px-3 py-2">
                         <AugmentIcon augmentId={a.augment_id} showName />
                       </td>
-                      <td className="px-3 py-2 text-sm text-lol-text-bright">{a.picks}</td>
-                      <td className="px-3 py-2 text-sm text-lol-text">{pickRate}%</td>
+                      <td className="px-3 py-2 text-sm text-lol-text-bright text-right tabular-nums">
+                        {a.picks}
+                      </td>
+                      <td className="px-3 py-2 text-sm text-lol-text text-right tabular-nums">
+                        {pickRate}%
+                      </td>
                       <td className="px-3 py-2 w-32">
                         <WinRateBar wins={a.wins} total={a.picks} />
                       </td>

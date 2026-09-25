@@ -171,11 +171,11 @@ export default function Augments() {
             <tr>
               <th className="px-3 py-2 text-left text-xs font-medium text-lol-text uppercase tracking-wider w-8"></th>
               <SortHeader {...sort} label="Augment" field="name" />
-              <SortHeader {...sort} label="Picks" field="picks" />
-              <th className="px-3 py-2 text-left text-xs font-medium text-lol-text uppercase tracking-wider">
+              <SortHeader {...sort} numeric label="Picks" field="picks" className="w-24" />
+              <th className="px-3 py-2 text-right text-xs font-medium text-lol-text uppercase tracking-wider w-24">
                 Pick Rate
               </th>
-              <SortHeader {...sort} label="Win Rate" field="winRate" className="w-32" />
+              <SortHeader {...sort} numeric label="Win Rate" field="winRate" className="w-32" />
             </tr>
           </thead>
           <tbody>
@@ -198,8 +198,12 @@ export default function Augments() {
                     <td className="px-3 py-2">
                       <AugmentIcon augmentId={a.augment_id} showName />
                     </td>
-                    <td className="px-3 py-2 text-sm text-lol-text-bright">{a.picks}</td>
-                    <td className="px-3 py-2 text-sm text-lol-text">{pickRate}%</td>
+                    <td className="px-3 py-2 text-sm text-lol-text-bright text-right tabular-nums">
+                      {a.picks}
+                    </td>
+                    <td className="px-3 py-2 text-sm text-lol-text text-right tabular-nums">
+                      {pickRate}%
+                    </td>
                     <td className="px-3 py-2 w-32">
                       <WinRateBar wins={a.wins} total={a.picks} />
                     </td>
@@ -219,7 +223,9 @@ export default function Augments() {
                             </span>
                           </div>
                         </td>
-                        <td className="px-3 py-1.5 text-xs text-lol-text">{c.picks}</td>
+                        <td className="px-3 py-1.5 text-xs text-lol-text text-right tabular-nums">
+                          {c.picks}
+                        </td>
                         <td></td>
                         <td className="px-3 py-1.5 w-32">
                           <WinRateBar wins={c.wins} total={c.picks} />

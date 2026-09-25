@@ -37,7 +37,7 @@ function StatBar({
       <span className="text-[10px] text-lol-text w-6 text-right shrink-0">{label}</span>
       <div className="flex-1 h-3.5 bg-white/5 rounded-sm overflow-hidden relative">
         <div className={`h-full rounded-sm ${color}`} style={{ width: `${pct}%` }} />
-        <span className="absolute inset-0 flex items-center justify-end pr-1 text-[10px] font-medium text-white/90 leading-none">
+        <span className="absolute inset-0 flex items-center justify-end pr-1 text-[10px] font-medium text-white/90 leading-none tabular-nums">
           {value > 0 ? formatCompact(value) : ""}
         </span>
       </div>

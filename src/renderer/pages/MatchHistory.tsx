@@ -60,6 +60,7 @@ import {
   sessionWeek,
   type SessionGrouping,
 } from "../../shared/session";
+import Kda from "../components/Kda";
 
 // An empty list means something different depending on whether we're still
 // waiting on the client, mid-import, or genuinely out of games.
@@ -525,11 +526,7 @@ export default function MatchHistory() {
               /* Three numbers where the other cards show one — a notch smaller
                  keeps it on one line in the narrowest column */
               <span className="text-xl">
-                {avgKills}
-                <Slash />
-                {avgDeaths}
-                <Slash />
-                {avgAssists}
+                <Kda kills={avgKills} deaths={avgDeaths} assists={avgAssists} />
               </span>
             }
             subtext={
@@ -539,7 +536,12 @@ export default function MatchHistory() {
             }
           >
             <div className="text-[11px] text-lol-text">
-              {dashboard.totalKills} / {dashboard.totalDeaths} / {dashboard.totalAssists} total
+              <Kda
+                kills={dashboard.totalKills}
+                deaths={dashboard.totalDeaths}
+                assists={dashboard.totalAssists}
+              />{" "}
+              total
             </div>
           </StatCard>
 
@@ -878,10 +880,6 @@ function ProfileCard({
 }
 
 // Muted separators keep the three averages on one line in a narrow card
-function Slash() {
-  return <span className="text-lol-text/40 mx-0.5">/</span>;
-}
-
 // 0-10 track for the average score, warming up as the score climbs
 function ScoreMeter({ score }: { score: number | null }) {
   return (
@@ -1105,7 +1103,7 @@ function GameRow({
         </div>
         <div className="w-24 shrink-0">
           <div className="text-sm text-lol-text-bright">
-            {formatKDA(match.kills, match.deaths, match.assists)}
+            <Kda kills={match.kills} deaths={match.deaths} assists={match.assists} />
           </div>
           <div className={`text-xs ${kdaHighlight(kda)}`}>{kda} KDA</div>
         </div>
@@ -1149,7 +1147,7 @@ function GameRow({
           />
         </div>
         <div className="text-xs text-lol-text text-right shrink-0">
-          <div>{formatDuration(match.game_duration)}</div>
+          <div className="tabular-nums">{formatDuration(match.game_duration)}</div>
           <div className="w-fit ml-auto" title={formatDateTime(match.game_creation)}>
             {formatTimeAgo(match.game_creation)}
           </div>

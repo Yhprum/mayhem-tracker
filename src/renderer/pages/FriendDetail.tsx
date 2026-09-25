@@ -14,15 +14,9 @@ import MatchScoreboard from "../components/MatchScoreboard";
 import ScoreCell from "../components/ScoreCell";
 import StatBars from "../components/StatBars";
 import WinRateBar from "../components/WinRateBar";
-import {
-  formatDuration,
-  formatTimeAgo,
-  formatKDA,
-  kdaRatio,
-  kdaColor,
-  kdaHighlight,
-} from "../lib/format";
+import { formatDuration, formatTimeAgo, kdaRatio, kdaColor, kdaHighlight } from "../lib/format";
 import { scoreColor } from "../../shared/opScore";
+import Kda from "../components/Kda";
 
 export default function FriendDetail() {
   const { key = "" } = useParams();
@@ -127,7 +121,12 @@ export default function FriendDetail() {
                 {kdaRatio(player.kills, player.deaths, player.assists)}
               </div>
               <div className="text-xs text-lol-text mt-1">
-                {avg(player.kills)} / {avg(player.deaths)} / {avg(player.assists)} per game
+                <Kda
+                  kills={avg(player.kills)}
+                  deaths={avg(player.deaths)}
+                  assists={avg(player.assists)}
+                />{" "}
+                per game
               </div>
             </div>
             <div className="flex-1 px-4 py-2.5">
@@ -263,7 +262,9 @@ function PlayerBlock({
         </div>
       </div>
       <div className="w-20 shrink-0">
-        <div className="text-xs text-lol-text-bright">{formatKDA(kills, deaths, assists)}</div>
+        <div className="text-xs text-lol-text-bright">
+          <Kda kills={kills} deaths={deaths} assists={assists} />
+        </div>
         <div className={`text-[10px] ${kdaHighlight(kda)}`}>{kda} KDA</div>
       </div>
       <ScoreCell score={score} badge={badge} />
@@ -351,7 +352,7 @@ function SharedGameRow({
 
         <div className="flex-1" />
         <div className="text-xs text-lol-text text-right shrink-0">
-          <div>{formatDuration(match.game_duration)}</div>
+          <div className="tabular-nums">{formatDuration(match.game_duration)}</div>
           <div>{formatTimeAgo(match.game_creation)}</div>
         </div>
       </button>

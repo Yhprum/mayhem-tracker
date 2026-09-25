@@ -21,6 +21,7 @@ import RarityFilter, { type Rarity } from "../components/RarityFilter";
 import SortHeader from "../components/SortHeader";
 import { useSort, type SortDir } from "../hooks/useSort";
 import { LOCALE, kdaRatio } from "../lib/format";
+import Kda from "../components/Kda";
 
 type SortKey = "picks" | "winRate" | "name";
 
@@ -118,11 +119,18 @@ function ItemSection({
           <thead className="bg-lol-dark/50">
             <tr>
               <SortHeader {...sort} label="Item" field="name" compact />
-              <SortHeader {...sort} label="Picks" field="picks" compact />
-              <th className="px-2 py-2 text-left text-[11px] font-medium text-lol-text uppercase tracking-wider">
+              <SortHeader {...sort} label="Picks" field="picks" compact numeric className="w-16" />
+              <th className="px-2 py-2 text-right text-[11px] font-medium text-lol-text uppercase tracking-wider w-16">
                 Build
               </th>
-              <SortHeader {...sort} label="Win Rate" field="winRate" compact className="w-28" />
+              <SortHeader
+                {...sort}
+                label="Win Rate"
+                field="winRate"
+                compact
+                numeric
+                className="w-28"
+              />
             </tr>
           </thead>
           <tbody>
@@ -136,8 +144,10 @@ function ItemSection({
                     </span>
                   </div>
                 </td>
-                <td className="px-2 py-1.5 text-xs text-lol-text-bright">{item.picks}</td>
-                <td className="px-2 py-1.5 text-xs text-lol-text">
+                <td className="px-2 py-1.5 text-xs text-lol-text-bright text-right tabular-nums">
+                  {item.picks}
+                </td>
+                <td className="px-2 py-1.5 text-xs text-lol-text text-right tabular-nums">
                   {games > 0 ? percent(item.picks / games) : "0.0%"}
                 </td>
                 <td className="px-2 py-1.5 w-28">
@@ -183,11 +193,18 @@ function AugmentSection({ augments, games }: { augments: AugmentStats[]; games: 
           <thead className="bg-lol-dark/50">
             <tr>
               <SortHeader {...sort} label="Augment" field="name" compact />
-              <SortHeader {...sort} label="Picks" field="picks" compact />
-              <th className="px-2 py-2 text-left text-[11px] font-medium text-lol-text uppercase tracking-wider">
+              <SortHeader {...sort} label="Picks" field="picks" compact numeric className="w-16" />
+              <th className="px-2 py-2 text-right text-[11px] font-medium text-lol-text uppercase tracking-wider w-16">
                 Pick
               </th>
-              <SortHeader {...sort} label="Win Rate" field="winRate" compact className="w-28" />
+              <SortHeader
+                {...sort}
+                label="Win Rate"
+                field="winRate"
+                compact
+                numeric
+                className="w-28"
+              />
             </tr>
           </thead>
           <tbody>
@@ -196,8 +213,10 @@ function AugmentSection({ augments, games }: { augments: AugmentStats[]; games: 
                 <td className="px-2 py-1.5 max-w-0 w-full">
                   <AugmentIcon augmentId={a.augment_id} size={24} showName />
                 </td>
-                <td className="px-2 py-1.5 text-xs text-lol-text-bright">{a.picks}</td>
-                <td className="px-2 py-1.5 text-xs text-lol-text">
+                <td className="px-2 py-1.5 text-xs text-lol-text-bright text-right tabular-nums">
+                  {a.picks}
+                </td>
+                <td className="px-2 py-1.5 text-xs text-lol-text text-right tabular-nums">
                   {games > 0 ? percent(a.picks / games) : "0.0%"}
                 </td>
                 <td className="px-2 py-1.5 w-28">
@@ -306,8 +325,19 @@ export default function GlobalChampionDetailPage() {
             />
             <StatCard
               label="KDA"
-              value={`${avg(data.kills)} / ${avg(data.deaths)} / ${avg(data.assists)}`}
-              subtext={`${kdaRatio(data.kills, data.deaths, data.assists)} ratio · ${data.kills} / ${data.deaths} / ${data.assists} total`}
+              value={
+                <Kda
+                  kills={avg(data.kills)}
+                  deaths={avg(data.deaths)}
+                  assists={avg(data.assists)}
+                />
+              }
+              subtext={
+                <>
+                  {kdaRatio(data.kills, data.deaths, data.assists)} ratio ·{" "}
+                  <Kda kills={data.kills} deaths={data.deaths} assists={data.assists} /> total
+                </>
+              }
             />
             <StatCard
               label="Damage"
