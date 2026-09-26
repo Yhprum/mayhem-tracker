@@ -1,5 +1,5 @@
 {
-  "patch": "16.18",
+  "patch": "16.19",
   "descriptions": {
     "1001": "Gain stacks when taking or dealing damage. For every 10 stacks, gain <scaleAF>Adaptive Force</scaleAF>, <scaleArmor>Armor</scaleArmor>, <scaleMR>Magic Resist</scaleMR>, <attention>Size</attention>, and <status>Tenacity</status>.",
     "1002": "Gain <scaleBonus>100 Item Haste</scaleBonus> (equivalent to 50% Item CDR).<br><br><rules>Item Haste reduces the cooldown %i:cooldown% of all Item Abilities.</rules>",
@@ -70,7 +70,6 @@
     "1086": "When you damage a champion from far away, fire a <abilityName>Trueshot Barrage</abilityName> at them.",
     "1087": "Your Attacks shoot a missile at an additional target, dealing reduced damage and applying %i:OnHit% <OnHit>On-Hit</OnHit> effects.",
     "1088": "Refresh your <attention>Ultimate</attention> after casting it (75 seconds Cooldown or reset on death).",
-    "1091": "Your <healing>Heals</healing> grant extra <shield>Shield</shield> and your <shield>Shields</shield> grant extra <healing>Healing</healing>.",
     "1092": "Your Item and damage over time effects can <crit>Critically Strike</crit>. <br><br>Gain <crit>%i:scaleCrit% 25% Crit chance</crit>.",
     "1095": "Your <healing>Healing</healing> and <shield>Shielding</shield> also increases the target's <scaleArmor>Armor</scaleArmor> and <scaleMR>Magic Resist</scaleMR> for 3 seconds.",
     "1097": "Gain %i:scaleAP% <scaleAP>20 - 80 Ability Power</scaleAP>.",
@@ -118,7 +117,7 @@
     "1301": "Every 35 seconds, <keywordMajor>Autocast</keywordMajor> a protective star. Upon its landing, you and nearby allies become <keywordMajor>Invulnerable</keywordMajor> for a few seconds.",
     "1305": "Gain <speed>50 Movement Speed</speed> and <speed>40% Slow Resist</speed>.",
     "1308": "<keywordMajor>Autocast</keywordMajor><br>Gain <speed>Movement Speed</speed> and conjure three flames that orbit you, targetting the closest visible enemy in range and dealing <magicDamage>magic damage</magicDamage>.",
-    "1310": "Gain <spellName>Deceive</spellName> Summoner Spell.<br>Gain <spellName>Backstab</spellName> Passive.<br><br>When you die, spawn an exploding box that deals a large amount of <trueDamage>true damage</trueDamage> and <status>Fear</status> nearby enemies.",
+    "1310": "Gain <spellName>Deceive</spellName> Summoner Spell.<br>Gain <spellName>Backstab</spellName> Passive.<br><br>When you die, deal a large amount of <trueDamage>true damage</trueDamage> and <status>Fear</status> nearby enemies.",
     "1311": "Your <scaleMana>Mana</scaleMana> costs are doubled. <br><br>Your Ability <healing>Heals</healing>, <shield>Shields</shield>, and damage are increased based on your <scaleMana>max Mana</scaleMana>.",
     "1313": "Press Recall to return to base, buy items, and acquire augments.",
     "1314": "Gain %i:miniAdaptiveForce%<font color = '#8347ff'>40 - 100 Adaptive Force</font> for 3 seconds when you gain a Shield (5 seconds Cooldown).",
@@ -162,7 +161,6 @@
     "1361": "Immediately: Gain a Bami's Cinder.<br><br><font color='#F0C200'>QUEST:</font> Possess <keywordMajor>Sunfire Aegis</keywordMajor> and <keywordMajor>Hollow Radiance</keywordMajor>.<br><br><font color='#F0C200'>REWARD:</font> These Items combine into <keywordMajor>Void Immolation</keywordMajor>.",
     "1372": "Standing next to an ally marks them as your mama. <br>Gain <speed>Movement Speed</speed> when moving towards Mama. Gain <speed>Movement Speed</speed> and <healing>heal</healing> and <shield>Shield Power</shield> when close to your mama.",
     "1373": "Takedowns makes you smaller and grant Ability Haste and <speed>Movement Speed</speed>.<br><br>Lose 65% stacks on death.",
-    "1374": "Gain bonus <speed>Movement Speed</speed> toward enemies marked by <spellName>Snowball</spellName>. You can pick up an ally's Snowball to refresh your own.<br><br><rules>If you don't have one, gain a <spellName>Snowball</spellName>.</rules>",
     "1375": "<status>Immobilizing</status> an enemy champion grants <scaleHealth>20 max Health</scaleHealth>.<br><br>If taken as your second Augment, starts with <scaleHealth>300 Health</scaleHealth>.",
     "1379": "Gain <speed>100% Attack Speed</speed>.<br><br>Increase Sword of Blossoming Dawn's healing to <scaleHealth>250%</scaleHealth> when you attack enemy champions.",
     "1384": "Get <font color=\"#ffd138\">1750</font> Gold. No questions asked.",
@@ -266,7 +264,7 @@
     "2143": "Reduce Sundered Sky's per target cooldown to 5 seconds and heal you for 9% of missing health.<br><br>Gain<gold> 500 Gold</gold>.",
     "2144": "Shields granted from <font color='#F0C200'>Ability</font> are stronger and scaling with target's missing Health.",
     "2148": "<font color='#F0C200'>Ability</font> applies %i:OnHit% <OnHit>On-Hit</OnHit> effects an additional time.",
-    "2157": "Gain <gold>%i:goldCoins% 250</gold>.<br><br>40% of damage taken is dealt to you overtime.<br><healing>Heal for more</healing> instantly when scoring a takedown.",
+    "2157": "Gain <gold>%i:goldCoins% 250</gold>.<br><br><keywordMajor>Death's Dance's</keywordMajor> <passive>Ignore Pain</passive> is increased to 40% of damage received, and <healing>heals for more</healing> <keywordMajor>instantly</keywordMajor> when scoring a takedown.",
     "12317": "Transmute all of your augments into <keywordMajor>random Prismatic%i:Augment% Augments</keywordMajor>."
   }
 }
