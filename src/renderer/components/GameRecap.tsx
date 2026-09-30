@@ -32,9 +32,9 @@ import ItemIcon from "./ItemIcon";
 import AugmentIcon from "./AugmentIcon";
 import MatchScoreboard from "./MatchScoreboard";
 import MultikillBadge from "./MultikillBadge";
+import Panel from "./Panel";
 import { ScoreBadge } from "./ScoreCell";
 import WinRateBar from "./WinRateBar";
-import { ACCENTS, type StatAccent } from "./StatCard";
 import {
   AwardIcon,
   FlameIcon,
@@ -419,37 +419,6 @@ function HeadlineStat({
       <div className="text-[10px] uppercase tracking-wider text-lol-text">{label}</div>
       <div className="text-sm font-semibold text-lol-text-bright">{value}</div>
       {delta && <div className="text-[10px]">{delta}</div>}
-    </div>
-  );
-}
-
-function Panel({
-  title,
-  subtitle,
-  icon,
-  accent,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  icon: ReactNode;
-  accent: StatAccent;
-  children: ReactNode;
-}) {
-  const a = ACCENTS[accent];
-  return (
-    <div className="relative overflow-hidden rounded-xl border border-lol-border/60 bg-lol-card p-4">
-      <span
-        className={`pointer-events-none absolute -top-14 -right-8 h-32 w-32 rounded-full blur-2xl ${a.glow}`}
-      />
-      <div className="relative mb-3 flex items-baseline gap-2">
-        <span className={`flex h-5 w-5 items-center justify-center rounded-md ${a.chip}`}>
-          {icon}
-        </span>
-        <span className="text-sm font-semibold text-lol-text-bright">{title}</span>
-        {subtitle && <span className="text-[11px] text-lol-text">{subtitle}</span>}
-      </div>
-      <div className="relative">{children}</div>
     </div>
   );
 }

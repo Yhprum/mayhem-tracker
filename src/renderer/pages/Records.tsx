@@ -1,110 +1,16 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useIpc } from "../hooks/useIpc";
 import { useViewState } from "../hooks/useViewState";
 import { useChampionData, getChampionName } from "../hooks/useChampions";
-import type {
-  ChampionData,
-  MatchDetail,
-  RecordMatchRef,
-  RecordsData,
-  StatRecord,
-  StreakRecord,
-} from "../lib/types";
+import type { ChampionData, MatchDetail, RecordMatchRef, RecordsData } from "../lib/types";
 import ChampionIcon from "../components/ChampionIcon";
 import MatchScoreboard from "../components/MatchScoreboard";
 import QueueSelect, { queueLabel } from "../components/QueueSelect";
 import AccountSelect from "../components/AccountSelect";
-import { ACCENTS, type StatAccent } from "../components/StatCard";
-import {
-  CoinsIcon,
-  FlameIcon,
-  HeartIcon,
-  HourglassIcon,
-  ShieldIcon,
-  SkullIcon,
-  StarIcon,
-  SwordsIcon,
-  TimerIcon,
-  TrendingDownIcon,
-  TrendingUpIcon,
-  UsersIcon,
-  XIcon,
-  ZapIcon,
-} from "../components/icons";
-import { LOCALE, formatDuration, kdaRatio, scoreColor } from "../lib/format";
+import { RecordCard, recordCards, recordDate, streakCard } from "../components/RecordCard";
+import { XIcon } from "../components/icons";
+import { formatDuration } from "../lib/format";
 import Kda from "../components/Kda";
-
-// Records are moments, not recency — "3 months ago" undersells a trophy, so
-// they get a real date.
-function recordDate(ts: number): string {
-  return new Date(ts).toLocaleDateString(LOCALE, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-// ---- Record cards ----
-
-// The same tile treatment as StatCard, but a button: every record opens the
-// game it was set in.
-function RecordCard({
-  label,
-  icon,
-  accent,
-  value,
-  sub,
-  match,
-  champData,
-  onOpen,
-}: {
-  label: string;
-  icon: ReactNode;
-  accent: StatAccent;
-  value: ReactNode;
-  sub?: ReactNode;
-  match: RecordMatchRef;
-  champData: ChampionData;
-  onOpen: (match: RecordMatchRef) => void;
-}) {
-  const a = ACCENTS[accent];
-  return (
-    <button
-      onClick={() => onOpen(match)}
-      title="View match"
-      className="relative flex flex-col overflow-hidden bg-lol-card rounded-xl border border-lol-border/60 p-4 text-left transition-colors cursor-pointer hover:border-lol-gold/40 hover:bg-lol-card-hover"
-    >
-      <span
-        className={`pointer-events-none absolute -top-14 -right-8 h-32 w-32 rounded-full blur-2xl ${a.glow}`}
-      />
-      <div className="relative flex items-center gap-1.5 mb-1">
-        <span className={`flex h-5 w-5 items-center justify-center rounded-md ${a.chip}`}>
-          {icon}
-        </span>
-        <span className="text-[11px] text-lol-text uppercase tracking-wider">{label}</span>
-      </div>
-      <div className="relative text-2xl font-bold text-lol-text-bright">{value}</div>
-      {sub && <div className="relative text-xs text-lol-text mt-0.5">{sub}</div>}
-      <div className="relative mt-auto pt-3 flex items-center gap-2">
-        <ChampionIcon championId={match.champion_id} size={24} />
-        <div className="min-w-0 flex-1">
-          <div className="text-xs text-lol-text-bright truncate">
-            {getChampionName(champData, match.champion_id)}
-          </div>
-          <div className="text-[11px] text-lol-text truncate">
-            <span className={match.win ? "text-lol-win" : "text-lol-loss"}>
-              {match.win ? "W" : "L"}
-            </span>
-            {" · "}
-            <Kda kills={match.kills} deaths={match.deaths} assists={match.assists} />
-            {" · "}
-            {recordDate(match.game_creation)}
-          </div>
-        </div>
-      </div>
-    </button>
-  );
-}
 
 // ---- Match modal ----
 
@@ -180,138 +86,6 @@ function MatchModal({
 
 // ---- Page ----
 
-interface CardDef {
-  key: string;
-  label: string;
-  icon: ReactNode;
-  accent: StatAccent;
-  value: ReactNode;
-  sub?: ReactNode;
-  match: RecordMatchRef;
-}
-
-function statCards(bests: RecordsData["bests"]): CardDef[] {
-  const cards: CardDef[] = [];
-  const add = (
-    record: StatRecord | null,
-    def: Omit<CardDef, "match" | "value"> & { value: (r: StatRecord) => ReactNode },
-  ) => {
-    if (record) cards.push({ ...def, value: def.value(record), match: record.match });
-  };
-  const n = (v: number) => Math.round(v).toLocaleString(LOCALE);
-
-  add(bests.kills, {
-    key: "kills",
-    label: "Most Kills",
-    icon: <SwordsIcon className="w-3 h-3" />,
-    accent: "gold",
-    value: (r) => r.value,
-  });
-  add(bests.kda, {
-    key: "kda",
-    label: "Best KDA",
-    icon: <ZapIcon className="w-3 h-3" />,
-    accent: "sky",
-    // kdaRatio turns a deathless game into "Perfect" — better than the raw
-    // rank value, which pretends one death happened
-    value: (r) => kdaRatio(r.match.kills, r.match.deaths, r.match.assists),
-  });
-  add(bests.score, {
-    key: "score",
-    label: "Highest Score",
-    icon: <StarIcon className="w-3 h-3" />,
-    accent: "gold",
-    value: (r) => (
-      <span className={scoreColor(r.value)}>
-        {r.value.toFixed(1)}
-        <span className="text-sm font-semibold text-lol-text/60"> / 10</span>
-      </span>
-    ),
-  });
-  add(bests.killingSpree, {
-    key: "spree",
-    label: "Longest Killing Spree",
-    icon: <FlameIcon className="w-3 h-3" />,
-    accent: "purple",
-    value: (r) => r.value,
-    sub: "kills without dying",
-  });
-  add(bests.damage, {
-    key: "damage",
-    label: "Most Damage Dealt",
-    icon: <SwordsIcon className="w-3 h-3" />,
-    accent: "sky",
-    value: (r) => n(r.value),
-  });
-  add(bests.damageTaken, {
-    key: "taken",
-    label: "Most Damage Taken",
-    icon: <ShieldIcon className="w-3 h-3" />,
-    accent: "win",
-    value: (r) => n(r.value),
-  });
-  add(bests.healing, {
-    key: "healing",
-    label: "Most Healing",
-    icon: <HeartIcon className="w-3 h-3" />,
-    accent: "win",
-    value: (r) => n(r.value),
-  });
-  add(bests.gold, {
-    key: "gold",
-    label: "Most Gold Earned",
-    icon: <CoinsIcon className="w-3 h-3" />,
-    accent: "gold",
-    value: (r) => n(r.value),
-  });
-  add(bests.assists, {
-    key: "assists",
-    label: "Most Assists",
-    icon: <UsersIcon className="w-3 h-3" />,
-    accent: "sky",
-    value: (r) => r.value,
-  });
-  add(bests.deaths, {
-    key: "deaths",
-    label: "Most Deaths",
-    icon: <SkullIcon className="w-3 h-3" />,
-    accent: "purple",
-    value: (r) => r.value,
-    sub: "we don't talk about this one",
-  });
-  add(bests.fastestWin, {
-    key: "fastestWin",
-    label: "Fastest Win",
-    icon: <TimerIcon className="w-3 h-3" />,
-    accent: "win",
-    value: (r) => formatDuration(r.value),
-  });
-  add(bests.longestGame, {
-    key: "longestGame",
-    label: "Longest Game",
-    icon: <HourglassIcon className="w-3 h-3" />,
-    accent: "purple",
-    value: (r) => formatDuration(r.value),
-  });
-  return cards;
-}
-
-function streakCard(streak: StreakRecord, win: boolean): CardDef {
-  const range =
-    recordDate(streak.start) === recordDate(streak.end)
-      ? recordDate(streak.start)
-      : `${recordDate(streak.start)} – ${recordDate(streak.end)}`;
-  return {
-    key: win ? "winStreak" : "lossStreak",
-    label: win ? "Longest Win Streak" : "Longest Loss Streak",
-    icon: win ? <TrendingUpIcon className="w-3 h-3" /> : <TrendingDownIcon className="w-3 h-3" />,
-    accent: win ? "win" : "purple",
-    value: `${streak.length} ${win ? "wins" : "losses"}`,
-    sub: range,
-    match: streak.match,
-  };
-}
-
 export default function Records() {
   const [queue, setQueue] = useViewState<number | undefined>("records.queue", undefined);
   const [account, setAccount] = useViewState<string | undefined>("records.account", undefined);
@@ -365,7 +139,7 @@ export default function Records() {
     );
   }
 
-  const cards = statCards(data.bests);
+  const cards = recordCards(data.bests);
   if (data.winStreak) cards.push(streakCard(data.winStreak, true));
   if (data.lossStreak && data.lossStreak.length > 1) {
     // A single loss is just a loss; it only becomes a "streak" worth

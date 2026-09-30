@@ -165,7 +165,13 @@ export function loadAugmentData(patch?: string): Promise<Record<number, AugmentI
   return promise;
 }
 
-export type ItemInfo = { name: string; description: string; iconPath: string; branch: string };
+export type ItemInfo = {
+  name: string;
+  description: string;
+  iconPath: string;
+  branch: string;
+  boots: boolean;
+};
 
 const itemCache = new Map<string, Record<number, ItemInfo>>();
 const itemPromises = new Map<string, Promise<Record<number, ItemInfo>>>();
@@ -223,6 +229,7 @@ export function loadItemData(patch?: string): Promise<Record<number, ItemInfo>> 
             description: item.description || "",
             iconPath: item.iconPath || "",
             branch,
+            boots: Array.isArray(item.categories) && item.categories.includes("Boots"),
           };
         }
       }

@@ -105,6 +105,13 @@ body {
   border-radius: 8px;
 }
 
+/* The track keeps its room whether or not the page scrolls, so a page's width
+   never depends on its own height. The Season Recap preview scales to that
+   width, and its height decides whether the page scrolls. */
+.scrollbar-edge {
+  scrollbar-gutter: stable;
+}
+
 /* Drag region for custom title bar */
 .titlebar-drag {
   -webkit-app-region: drag;

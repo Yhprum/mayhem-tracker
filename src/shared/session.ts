@@ -31,12 +31,19 @@ export function sessionWeek(ms: number): number {
   return d.getTime();
 }
 
-// The same day as a calendar date, taking what sessionDay returned rather than
-// a game's own timestamp: SQLite has no local-midnight epoch to hand back, so
-// its session totals are keyed by date string, and this is what matches a
-// session grouped in the renderer up with them.
-function sessionDayKey(day: number): string {
+// Local midnight some days on from another local midnight, which a multiple of
+// 24 hours isn't across a daylight saving change
+export function addDays(day: number, count: number): number {
   const d = new Date(day);
+  d.setDate(d.getDate() + count);
+  return d.getTime();
+}
+
+// The local calendar date a moment falls on, as YYYY-MM-DD. SQLite has no
+// local-midnight epoch to hand back, so its per-day totals are keyed by date
+// string, and this is what matches a day worked out here up with them.
+export function dayKey(when: number | Date): string {
+  const d = new Date(when);
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const date = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${month}-${date}`;
@@ -51,10 +58,10 @@ export function sessionKey(
 ): string {
   switch (grouping) {
     case "week":
-      return sessionDayKey(sessionWeek(game.game_creation));
+      return dayKey(sessionWeek(game.game_creation));
     case "patch":
       return game.game_version || "";
     default:
-      return sessionDayKey(sessionDay(game.game_creation));
+      return dayKey(sessionDay(game.game_creation));
   }
 }

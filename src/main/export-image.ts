@@ -12,13 +12,16 @@ import * as db from "./db";
 import * as dragon from "./dragon";
 import { localeArguments } from "./locale";
 import { hardenSession } from "./security";
-import { CARD_STATUS_KEY, cardRoute, type CardStatus } from "../shared/card";
+import {
+  CARD_STATUS_KEY,
+  CARD_WIDTH,
+  cardRoute,
+  type CardSpec,
+  type CardStatus,
+} from "../shared/card";
+import { ALL_TIME_ID, findSeason } from "../shared/seasons";
+import { dayKey } from "../shared/session";
 
-// The card is drawn by a second window running the same renderer at a fixed
-// width, rather than by a drawing routine of its own: the image is then the
-// app's own markup, it stays in step with the page for free, and it looks the
-// same whatever size the visible window has been dragged to.
-const CARD_WIDTH = 1200;
 // Rasterised a little above the layout size, so the small text holds up where
 // the image is scaled up a bit rather than pinned at 1:1. Past this the file
 // grows faster than it reads any better.
@@ -56,20 +59,25 @@ function slug(name: string): string {
   return name.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-function defaultFileName(gameId: number): string {
-  const detail = db.getMatchDetail(gameId);
-  if (!detail) return `mayhem-game-${gameId}.png`;
+function defaultFileName(card: CardSpec): string {
+  if (card.kind === "season") {
+    const name = card.seasonId === ALL_TIME_ID ? "all-time" : findSeason(card.seasonId)?.name;
+    // Dated by the day it was taken: a recap of a season still running, or of
+    // all time, says something different next week
+    return `mayhem-${slug(name ?? card.seasonId).toLowerCase()}-recap-${dayKey(Date.now())}.png`;
+  }
+  const detail = db.getMatchDetail(card.gameId);
+  if (!detail) return `mayhem-game-${card.gameId}.png`;
   const champion = dragon.getChampionData()[detail.stats?.champion_id]?.name;
-  const date = new Date(detail.game.game_creation);
-  const day = [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ].join("-");
   // The game id rides along so two games on the same champion on the same day
   // are offered different names rather than one overwriting the other
-  return `mayhem-${champion ? `${slug(champion)}-` : ""}${day}-${gameId}.png`;
+  return `mayhem-${champion ? `${slug(champion)}-` : ""}${dayKey(detail.game.game_creation)}-${card.gameId}.png`;
 }
+
+const DIALOG_TITLES: Record<CardSpec["kind"], string> = {
+  game: "Export Game Image",
+  season: "Export Season Recap",
+};
 
 function createCardWindow(): BrowserWindow {
   hardenSession(session.fromPartition(CARD_PARTITION));
@@ -110,13 +118,19 @@ function createCardWindow(): BrowserWindow {
   return win;
 }
 
-async function loadCard(win: BrowserWindow, gameId: number): Promise<void> {
-  const hash = cardRoute(gameId);
+async function loadCard(win: BrowserWindow, card: CardSpec): Promise<void> {
+  const hash = cardRoute(card);
   if (process.env.ELECTRON_RENDERER_URL) {
     await win.loadURL(`${process.env.ELECTRON_RENDERER_URL}#${hash}`);
   } else {
     await win.loadFile(path.join(__dirname, "../renderer/index.html"), { hash });
   }
+  // zoomFactor above is only the default: a zoom level the persistent session
+  // already holds for this host wins over it, and one left behind at any other
+  // scale lays the card out at the wrong width and sizes the capture short of
+  // the card. Setting it here, before the page has its data to measure, puts
+  // the scale back and overwrites whatever was stored.
+  win.webContents.setZoomFactor(CARD_SCALE);
 }
 
 // Resolves once the page has drawn everything it is going to draw, or throws
@@ -147,10 +161,10 @@ function nextPaint(win: BrowserWindow): Promise<void> {
   });
 }
 
-async function renderCard(gameId: number): Promise<NativeImage> {
+async function renderCard(card: CardSpec): Promise<NativeImage> {
   const win = createCardWindow();
   try {
-    await loadCard(win, gameId);
+    await loadCard(win, card);
     const status = await waitForCard(win);
     // The window was only ever tall enough to lay the card out in; a capture is
     // of what is on screen, so the screen has to become the whole card first.
@@ -164,13 +178,13 @@ async function renderCard(gameId: number): Promise<NativeImage> {
   }
 }
 
-export async function exportGameImage(
+export async function exportCardImage(
   parent: BrowserWindow | null,
-  gameId: number,
+  card: CardSpec,
 ): Promise<ExportImageResult> {
   const options = {
-    title: "Export Game Image",
-    defaultPath: defaultFileName(gameId),
+    title: DIALOG_TITLES[card.kind],
+    defaultPath: defaultFileName(card),
     filters: [{ name: "PNG Image", extensions: ["png"] }],
   };
   // Parented to the window when there is one, so the dialog is modal
@@ -181,7 +195,7 @@ export async function exportGameImage(
   if (chosen.canceled || !chosen.filePath) return { success: false };
 
   try {
-    const image = await renderCard(gameId);
+    const image = await renderCard(card);
     await fs.promises.writeFile(chosen.filePath, image.toPNG());
     return { success: true, path: chosen.filePath };
   } catch (err: any) {
@@ -191,9 +205,9 @@ export async function exportGameImage(
 
 // The same card, straight onto the clipboard: no dialog, no file, nothing to
 // clean up afterwards when all you wanted was to paste it into a chat.
-export async function copyGameImage(gameId: number): Promise<ExportImageResult> {
+export async function copyCardImage(card: CardSpec): Promise<ExportImageResult> {
   try {
-    const png = (await renderCard(gameId)).toPNG();
+    const png = (await renderCard(card)).toPNG();
     await clipboard.write([
       new ClipboardItem({ "image/png": new Blob([png], { type: "image/png" }) }),
     ]);

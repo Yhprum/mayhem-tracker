@@ -8,6 +8,8 @@ interface AugmentIconProps {
   augmentId: number;
   size?: number;
   showName?: boolean;
+  // Type size and weight of the name, when it's shown
+  nameClassName?: string;
   patch?: string | null;
 }
 
@@ -65,6 +67,7 @@ export default function AugmentIcon({
   augmentId,
   size = 28,
   showName = false,
+  nameClassName = "text-xs",
   patch,
 }: AugmentIconProps) {
   const augmentData = useAugmentData(patch);
@@ -171,7 +174,7 @@ export default function AugmentIcon({
             style={{ width: size, height: size }}
           />
         )}
-        {showName && <span className={`text-xs truncate ${nameColor}`}>{name}</span>}
+        {showName && <span className={`truncate ${nameClassName} ${nameColor}`}>{name}</span>}
       </div>
     </HoverCard>
   );

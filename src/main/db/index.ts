@@ -32,6 +32,7 @@ export {
 export { getTeammateStats, getTeammateDetail } from "./teammates";
 export { getRecords } from "./records";
 export { getGameRecap } from "./recap";
+export { getSeasonRecap, getSeasons } from "./season";
 export {
   saveChallenges,
   getStoredChallenges,

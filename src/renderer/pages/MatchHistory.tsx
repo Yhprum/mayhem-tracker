@@ -38,7 +38,7 @@ import {
   SwordsIcon,
   ZapIcon,
 } from "../components/icons";
-import { ExportImageMessage, useGameImageExport } from "../components/ExportImage";
+import { ExportImageMessage, useImageExport } from "../components/ExportImage";
 import {
   LOCALE,
   formatDateTime,
@@ -289,7 +289,7 @@ export default function MatchHistory() {
   const [detailLoading, setDetailLoading] = useState(false);
   // One instance for the page: both of the right-click menu's image items
   // report through the same message
-  const exporting = useGameImageExport();
+  const exporting = useImageExport();
   const [puuids, setPuuids] = useState<string[] | null>(null);
   const [profile, setProfile] = useState<{
     name: string | null;
@@ -793,7 +793,7 @@ export default function MatchHistory() {
             onClick={() => {
               const gameId = contextMenu.match.game_id;
               setContextMenu(null);
-              void exporting.run(gameId, "copy");
+              void exporting.run({ kind: "game", gameId }, "copy");
             }}
             className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-lol-text-bright hover:bg-white/5 text-left"
           >
@@ -804,7 +804,7 @@ export default function MatchHistory() {
             onClick={() => {
               const gameId = contextMenu.match.game_id;
               setContextMenu(null);
-              void exporting.run(gameId, "save");
+              void exporting.run({ kind: "game", gameId }, "save");
             }}
             className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-lol-text-bright hover:bg-white/5 text-left"
           >

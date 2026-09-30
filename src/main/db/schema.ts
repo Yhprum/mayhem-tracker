@@ -116,7 +116,7 @@ function createTables() {
       total_heal           INTEGER NOT NULL DEFAULT 0,
       largest_killing_spree INTEGER NOT NULL DEFAULT 0,
       score                REAL,
-      -- Unclamped score, ordering key only — see PlayerScore.raw
+      -- Unclamped score, for ordering and the best-score record (PlayerScore.raw)
       score_raw            REAL,
       score_badge          TEXT,
       spell1 INTEGER, spell2 INTEGER,

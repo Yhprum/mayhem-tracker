@@ -98,3 +98,13 @@ export function winRateColor(wins: number, total: number): string {
   if (rate >= 0.5) return "text-sky-400";
   return "text-lol-loss";
 }
+
+const TOTAL_FORMAT = new Intl.NumberFormat(LOCALE, {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+// Season-sized totals, which run into the millions: 12,345,678 reads "12.3M"
+export function formatTotal(value: number): string {
+  return TOTAL_FORMAT.format(value);
+}

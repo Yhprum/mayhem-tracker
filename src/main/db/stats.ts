@@ -14,10 +14,10 @@ import { applyQueueFilter } from "./filters";
 // Poro-Snax (base and upgraded) is handed out for free, so it skews item stats
 const EXCLUDED_ITEM_IDS = [2052, 220013];
 
-const EXCLUDED_ITEMS_SQL = EXCLUDED_ITEM_IDS.join(", ");
+export const EXCLUDED_ITEMS_SQL = EXCLUDED_ITEM_IDS.join(", ");
 
 // item0..item6 on both player_stats and match_participants; slot 6 is the trinket
-const ITEM_SLOTS = [0, 1, 2, 3, 4, 5, 6];
+export const ITEM_SLOTS = [0, 1, 2, 3, 4, 5, 6];
 
 export function getChampionStatsAll(patch?: string, queue?: number): ChampionStats[] {
   const where = ["g.is_remake = 0"];
@@ -267,7 +267,7 @@ export function getChampionItemStats(
 
 // The seven item slots are columns, and every item stat wants them as rows.
 // `row` builds one slot's SELECT; the caller's params repeat once per slot.
-function itemSlotUnion(row: (slot: number) => string): string {
+export function itemSlotUnion(row: (slot: number) => string): string {
   return ITEM_SLOTS.map(row).join("\n        UNION ALL\n        ");
 }
 

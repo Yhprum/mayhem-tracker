@@ -4,6 +4,8 @@ import { useViewState } from "../hooks/useViewState";
 import type { TrendsData, TrendsDay } from "../lib/types";
 import { LOCALE, formatPatch } from "../lib/format";
 import QueueSelect from "../components/QueueSelect";
+import ActivityCalendar from "../components/ActivityCalendar";
+import { dayKey } from "../../shared/session";
 
 // ---- Time helpers ----
 
@@ -12,16 +14,6 @@ import QueueSelect from "../components/QueueSelect";
 function parseDay(day: string): Date {
   const [y, m, d] = day.split("-").map(Number);
   return new Date(y, m - 1, d);
-}
-
-function dayKey(date: Date): string {
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${m}-${d}`;
-}
-
-function shortDate(date: Date): string {
-  return date.toLocaleDateString(LOCALE, { month: "short", day: "numeric", year: "numeric" });
 }
 
 // ---- Bucketing ----
@@ -357,118 +349,25 @@ function TimeSeriesChart({
 
 // ---- Activity heatmap ----
 
-const HEATMAP_CELL = 11;
-const HEATMAP_GAP = 2;
-const HEATMAP_PITCH = HEATMAP_CELL + HEATMAP_GAP;
+// The trailing 52 full weeks plus the current partial one, at GitHub's size
 const HEATMAP_WEEKS = 53;
-const HEATMAP_LEVELS = [0.25, 0.45, 0.7, 1];
+const HEATMAP_CELL = 11;
 
 function ActivityHeatmap({ daily }: { daily: TrendsDay[] }) {
-  const byDay = useMemo(() => new Map(daily.map((d) => [d.day, d])), [daily]);
+  const days = useMemo(() => new Map(daily.map((d) => [parseDay(d.day).getTime(), d])), [daily]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  // Sunday-start columns, trailing 52 full weeks plus the current partial one
-  const start = new Date(today);
-  start.setDate(start.getDate() - start.getDay() - 52 * 7);
-
-  let maxGames = 1;
-  for (let i = 0; i < HEATMAP_WEEKS * 7; i++) {
-    const d = new Date(start);
-    d.setDate(d.getDate() + i);
-    if (d > today) break;
-    maxGames = Math.max(maxGames, byDay.get(dayKey(d))?.games ?? 0);
-  }
-
-  const left = 28;
-  const top = 14;
-  const width = left + HEATMAP_WEEKS * HEATMAP_PITCH;
-  const height = top + 7 * HEATMAP_PITCH;
-
-  const cells: React.ReactNode[] = [];
-  const monthLabels: React.ReactNode[] = [];
-  let prevMonth = -1;
-  for (let w = 0; w < HEATMAP_WEEKS; w++) {
-    const colDate = new Date(start);
-    colDate.setDate(colDate.getDate() + w * 7);
-    if (colDate.getMonth() !== prevMonth) {
-      // Skip a first-column label that the next column would immediately repeat
-      const next = new Date(colDate);
-      next.setDate(next.getDate() + 7);
-      if (!(w === 0 && next.getMonth() !== colDate.getMonth())) {
-        monthLabels.push(
-          <text
-            key={w}
-            x={left + w * HEATMAP_PITCH}
-            y={9}
-            fontSize={9}
-            fill="var(--color-lol-text)"
-          >
-            {colDate.toLocaleDateString(LOCALE, { month: "short" })}
-          </text>,
-        );
-      }
-      prevMonth = colDate.getMonth();
-    }
-    for (let dow = 0; dow < 7; dow++) {
-      const d = new Date(colDate);
-      d.setDate(d.getDate() + dow);
-      if (d > today) continue;
-      const row = byDay.get(dayKey(d));
-      const games = row?.games ?? 0;
-      const level = games === 0 ? 0 : Math.min(Math.ceil((games / maxGames) * 4), 4);
-      const date = shortDate(d);
-      const label = row
-        ? `${date} — ${games} game${games === 1 ? "" : "s"} (${row.wins}W–${games - row.wins}L)`
-        : `${date} — no games`;
-      cells.push(
-        <rect
-          key={dayKey(d)}
-          x={left + w * HEATMAP_PITCH}
-          y={top + dow * HEATMAP_PITCH}
-          width={HEATMAP_CELL}
-          height={HEATMAP_CELL}
-          rx={2}
-          fill={level === 0 ? "white" : "var(--color-lol-gold)"}
-          fillOpacity={level === 0 ? 0.05 : HEATMAP_LEVELS[level - 1]}
-        >
-          <title>{label}</title>
-        </rect>,
-      );
-    }
-  }
+  const first = new Date(today);
+  first.setDate(first.getDate() - first.getDay() - (HEATMAP_WEEKS - 1) * 7);
 
   return (
-    <div className="overflow-x-auto">
-      <svg width={width} height={height} className="block">
-        {monthLabels}
-        {(["Mon", "Wed", "Fri"] as const).map((label, i) => (
-          <text
-            key={label}
-            x={left - 5}
-            y={top + (i * 2 + 1) * HEATMAP_PITCH + 9}
-            textAnchor="end"
-            fontSize={9}
-            fill="var(--color-lol-text)"
-          >
-            {label}
-          </text>
-        ))}
-        {cells}
-      </svg>
-      <div className="flex items-center justify-end gap-1 mt-2 text-[10px] text-lol-text">
-        <span className="mr-1">Less</span>
-        <span className="w-2.5 h-2.5 rounded-xs bg-white/5" />
-        {HEATMAP_LEVELS.map((opacity) => (
-          <span
-            key={opacity}
-            className="w-2.5 h-2.5 rounded-xs"
-            style={{ backgroundColor: "var(--color-lol-gold)", opacity }}
-          />
-        ))}
-        <span className="ml-1">More</span>
-      </div>
-    </div>
+    <ActivityCalendar
+      days={days}
+      first={first.getTime()}
+      last={today.getTime()}
+      cell={HEATMAP_CELL}
+    />
   );
 }
 

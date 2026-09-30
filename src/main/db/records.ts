@@ -30,15 +30,40 @@ export interface CareerRow {
   penta_kills: number;
 }
 
-export function careerRows(queue?: number, account?: string): CareerRow[] {
+// Which games a career walk counts. Every field is optional, and none at all is
+// every game on every account in the visible queues.
+export interface CareerFilter {
+  queue?: number;
+  // The account that owns the game, as every account filter reads it
+  account?: string;
+  // game_creation bounds, from inclusive and to exclusive, null for an open end
+  from?: number | null;
+  to?: number | null;
+}
+
+// The WHERE for those games, over games g joined to player_stats. Exported so a
+// query that totals them up in SQL counts exactly the games careerRows walks.
+export function careerWhere(filter: CareerFilter = {}): { sql: string; params: any[] } {
   const where = ["g.is_remake = 0"];
   const params: any[] = [];
-  applyQueueFilter(where, params, queue);
-  if (account) {
+  applyQueueFilter(where, params, filter.queue);
+  if (filter.account) {
     where.push("g.puuid = ?");
-    params.push(account);
+    params.push(filter.account);
   }
+  if (filter.from != null) {
+    where.push("g.game_creation >= ?");
+    params.push(filter.from);
+  }
+  if (filter.to != null) {
+    where.push("g.game_creation < ?");
+    params.push(filter.to);
+  }
+  return { sql: where.join(" AND "), params };
+}
 
+export function careerRows(filter: CareerFilter = {}): CareerRow[] {
+  const where = careerWhere(filter);
   return db
     .prepare(`
       SELECT g.game_id, g.game_creation, g.game_duration, g.queue_id,
@@ -49,19 +74,22 @@ export function careerRows(queue?: number, account?: string): CareerRow[] {
              ps.double_kills, ps.triple_kills, ps.quadra_kills, ps.penta_kills
       FROM games g
       JOIN player_stats ps ON g.game_id = ps.game_id
-      WHERE ${where.join(" AND ")}
+      WHERE ${where.sql}
       ORDER BY g.game_creation ASC
     `)
-    .all(...params) as CareerRow[];
+    .all(...where.params) as CareerRow[];
+}
+
+export function getRecords(queue?: number, account?: string): RecordsData {
+  return computeRecords(careerRows({ queue, account }));
 }
 
 // The trophy case: best single-game marks and longest streaks, from one
 // chronological pass over our own rows — streaks need the ordering anyway, and
 // the maxima fall out of the same loop. On ties the earliest game keeps the
-// record, so a mark has to be strictly beaten to change hands.
-export function getRecords(queue?: number, account?: string): RecordsData {
-  const rows = careerRows(queue, account);
-
+// record, so a mark has to be strictly beaten to change hands. Takes the rows
+// rather than reading them so a season recap can ask the same of its slice.
+export function computeRecords(rows: CareerRow[]): RecordsData {
   // Just enough of the game to render a record's context and open its match
   const matchOf = (r: CareerRow): RecordMatchRef => ({
     game_id: r.game_id,
@@ -89,21 +117,15 @@ export function getRecords(queue?: number, account?: string): RecordsData {
     fastestWin: null,
     longestGame: null,
   };
-  // What each record is ranked on, where that differs from the value the card
-  // shows: the score displays the clamped 1-10 number and ranks on the raw one.
-  const ranks: Partial<Record<keyof RecordsData["bests"], number>> = {};
   const track = (
     key: keyof RecordsData["bests"],
     value: number | null,
     row: CareerRow,
     better = higher,
-    rank: number | null = value,
   ) => {
-    if (value == null || rank == null) return;
-    if (!bests[key] || better(rank, ranks[key]!)) {
-      bests[key] = { value, match: matchOf(row) };
-      ranks[key] = rank;
-    }
+    if (value == null) return;
+    const best = bests[key];
+    if (!best || better(value, best.value)) bests[key] = { value, match: matchOf(row) };
   };
 
   let winStreak: StreakRecord | null = null;
@@ -117,7 +139,9 @@ export function getRecords(queue?: number, account?: string): RecordsData {
     // Deathless games rank by kills+assists rather than dividing by zero; the
     // renderer still labels them "Perfect"
     track("kda", (r.kills + r.assists) / Math.max(r.deaths, 1), r);
-    track("score", r.score, r, higher, r.score_raw ?? r.score);
+    // Unclamped: every great game shows as 10, so the clamped score would make
+    // the best of them indistinguishable from the rest
+    track("score", r.score_raw ?? r.score, r);
     track("killingSpree", r.largest_killing_spree, r);
     track("damage", r.total_damage_dealt, r);
     track("damageTaken", r.total_damage_taken, r);

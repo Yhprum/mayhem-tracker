@@ -1,8 +1,17 @@
 import { NavLink } from "react-router-dom";
-import { useState, useCallback, useEffect, useRef, type ComponentType, type SVGProps } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  type ComponentType,
+  type ReactNode,
+  type SVGProps,
+} from "react";
 import { useLcuStatus } from "../hooks/useLcuStatus";
 import { useBackfill } from "../hooks/useBackfill";
-import type { LcuStatus, UpdateInfo } from "../lib/types";
+import { useRecapBadge } from "../hooks/useRecapBadge";
+import type { LcuStatus, SeasonSummary, UpdateInfo } from "../lib/types";
 import UpdateDialog from "./UpdateDialog";
 import {
   MayhemIcon,
@@ -17,6 +26,7 @@ import {
   RefreshIcon,
   RadioIcon,
   AwardIcon,
+  CalendarIcon,
 } from "./icons";
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
@@ -29,6 +39,7 @@ const links: { to: string; label: string; icon: IconComponent }[] = [
   { to: "/friends", label: "Friends", icon: UsersIcon },
   { to: "/trends", label: "Trends", icon: TrendingUpIcon },
   { to: "/records", label: "Records", icon: MedalIcon },
+  { to: "/season", label: "Season Recap", icon: CalendarIcon },
   { to: "/challenges", label: "Challenges", icon: AwardIcon },
   { to: "/global", label: "Total Stats", icon: GlobeIcon },
 ];
@@ -51,11 +62,29 @@ const statusLabels: Record<LcuStatus, string> = {
   disconnected: "Disconnected",
 };
 
-function NavItem({ to, label, icon: Icon }: { to: string; label: string; icon: IconComponent }) {
+function NavItem({
+  to,
+  label,
+  icon: Icon,
+  search,
+  title,
+  badge,
+  onClick,
+}: {
+  to: string;
+  label: string;
+  icon: IconComponent;
+  search?: string;
+  title?: string;
+  badge?: ReactNode;
+  onClick?: () => void;
+}) {
   return (
     <NavLink
-      to={to}
+      to={search ? { pathname: to, search } : to}
       end={to === "/"}
+      title={title}
+      onClick={onClick}
       className={({ isActive }) =>
         `flex items-center gap-3 px-3 py-2 rounded-md text-[13px] font-medium transition-colors ${
           isActive
@@ -66,13 +95,25 @@ function NavItem({ to, label, icon: Icon }: { to: string; label: string; icon: I
     >
       <Icon className="w-4 h-4 shrink-0" />
       <span>{label}</span>
+      {badge}
     </NavLink>
+  );
+}
+
+// A season that has just ended, named beside the Season Recap link until the
+// recap has been opened
+function RecapBadge({ season }: { season: SeasonSummary }) {
+  return (
+    <span className="ml-auto rounded-full border border-lol-gold/40 bg-lol-gold/15 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-lol-gold">
+      {season.name}
+    </span>
   );
 }
 
 export default function Sidebar() {
   const status = useLcuStatus();
   const { running: backfilling, progress, percent } = useBackfill();
+  const recapBadge = useRecapBadge();
   const [refreshing, setRefreshing] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
   const [version, setVersion] = useState("");
@@ -163,9 +204,22 @@ export default function Sidebar() {
         </div>
       </div>
       <div className="flex flex-col gap-0.5 p-3 mt-1 flex-1">
-        {links.map((link) => (
-          <NavItem key={link.to} {...link} />
-        ))}
+        {links.map((link) =>
+          link.to === "/season" && recapBadge.season ? (
+            // Straight to the season that ended, whichever one the page would
+            // otherwise open on
+            <NavItem
+              key={link.to}
+              {...link}
+              search={`?season=${encodeURIComponent(recapBadge.season.id)}`}
+              title={`Your ${recapBadge.season.name} recap is ready to share`}
+              badge={<RecapBadge season={recapBadge.season} />}
+              onClick={recapBadge.dismiss}
+            />
+          ) : (
+            <NavItem key={link.to} {...link} />
+          ),
+        )}
       </div>
       <div className="px-3 pb-1">
         <NavItem to="/settings" label="Settings" icon={SettingsIcon} />

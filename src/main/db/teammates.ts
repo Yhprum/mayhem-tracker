@@ -4,6 +4,7 @@ import { getChampionClasses } from "../dragon";
 import { db } from "./connection";
 import { applyQueueFilter } from "./filters";
 import { MATCH_ROW_SQL } from "./matches";
+import type { CareerFilter } from "./records";
 import { groupByGame, SCORE_ROW_COLUMNS, type ScoreRow, scoreInputsFromRows } from "./scoring";
 import { displayName, getAllPuuids } from "./summoner";
 
@@ -44,16 +45,39 @@ interface TeammateRow {
 // per account, where the correlated form makes SQLite build a throwaway index
 // on every call. DISTINCT is what keeps the row count honest when two of our
 // own accounts played the same game on the same side.
-function teammateRows(puuids: string[]): TeammateRow[] {
-  const ours = puuids.map(() => "?").join(", ");
-  const where = ["o.is_remake = 0", `(o.puuid IS NULL OR o.puuid NOT IN (${ours}))`];
-  const params: any[] = [...puuids];
-  applyQueueFilter(where, params, undefined, "o");
+//
+// Narrowed to one account, the games are the ones it owns, as the account
+// filter counts them everywhere else, and the team is the side it played on.
+// Every tracked account is still kept out of the results, and so is the one
+// asked for, which an imported library can hold games for without a summoner
+// row: an alt is never a friend.
+function teammateRows(puuids: string[], filter: CareerFilter = {}): TeammateRow[] {
+  const teamOwners = filter.account ? [filter.account] : puuids;
+  const ours = filter.account ? [...puuids, filter.account] : puuids;
+  const where = [
+    "o.is_remake = 0",
+    `(o.puuid IS NULL OR o.puuid NOT IN (${ours.map(() => "?").join(", ")}))`,
+  ];
+  const params: any[] = [...ours];
+  applyQueueFilter(where, params, filter.queue, "o");
+  if (filter.account) {
+    where.push("g.puuid = ?");
+    params.push(filter.account);
+  }
+  if (filter.from != null) {
+    where.push("g.game_creation >= ?");
+    params.push(filter.from);
+  }
+  if (filter.to != null) {
+    where.push("g.game_creation < ?");
+    params.push(filter.to);
+  }
 
   return db
     .prepare(`
       WITH our_teams AS (
-        SELECT DISTINCT game_id, team_id FROM match_participants WHERE puuid IN (${ours})
+        SELECT DISTINCT game_id, team_id FROM match_participants
+        WHERE puuid IN (${teamOwners.map(() => "?").join(", ")})
       )
       SELECT o.game_id, g.game_creation, o.participant_id, o.puuid, o.game_name, o.tag_line,
              o.profile_icon, o.champion_id, o.win, o.kills, o.deaths, o.assists
@@ -63,10 +87,12 @@ function teammateRows(puuids: string[]): TeammateRow[] {
       WHERE ${where.join(" AND ")}
       ORDER BY g.game_creation DESC
     `)
-    .all(...puuids, ...params) as TeammateRow[];
+    .all(...teamOwners, ...params) as TeammateRow[];
 }
 
-export function getTeammateStats(): TeammateStats[] {
+// Narrowed by the same filter as careerRows, so a season recap's friends come
+// from the games the rest of the recap counts
+export function getTeammateStats(filter?: CareerFilter): TeammateStats[] {
   const puuids = getAllPuuids();
   if (puuids.length === 0) return [];
 
@@ -86,7 +112,7 @@ export function getTeammateStats(): TeammateStats[] {
     }
   >();
 
-  for (const row of teammateRows(puuids)) {
+  for (const row of teammateRows(puuids, filter)) {
     const name = teammateName(row.game_name, row.tag_line, row.participant_id);
     const key = teammateKey(row.puuid, name);
 

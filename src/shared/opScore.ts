@@ -17,10 +17,11 @@ export type ScoreBadge = "MVP" | "ACE" | null;
 
 export interface PlayerScore {
   score: number;
-  // Unclamped, unrounded total. Stored alongside `score` purely as an ordering
-  // key: `score` tops out at 10 and rounds to 0.1, so sorting on it leaves the
-  // whole top of a score-sorted list to the secondary sort. Never display it;
-  // it can exceed 10 and fall below 1.
+  // Unclamped, unrounded total. Stored alongside `score` as an ordering key:
+  // `score` tops out at 10 and rounds to 0.1, so sorting on it leaves the whole
+  // top of a score-sorted list to the secondary sort. It can exceed 10 and fall
+  // below 1, so the only place it is displayed is the best-score record, where
+  // the clamp would otherwise show a tie between every 10.
   raw: number;
   badge: ScoreBadge;
 }

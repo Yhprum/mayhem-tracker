@@ -11,6 +11,7 @@ Desktop app for tracking ARAM Mayhem match history in League of Legends. Connect
 - Match history with detailed game breakdowns
 - Live scoreboard while a game is running, and a post-game recap when it ends
 - Export any game as a shareable PNG from the recap or the match list
+- Season recaps for each Mayhem set (or all time), shareable as an image the same way
 - Champion, augment, and friend stats with win rates
 - Aggregate statistics from all players in your games
 - Local SQLite database

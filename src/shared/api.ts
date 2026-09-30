@@ -5,9 +5,10 @@
 // src/renderer/lib/types.ts re-exports all of it, so renderer imports are
 // unchanged.
 
+import type { CardSpec } from "./card";
 import type { ChallengeLevel } from "./challenges";
 
-export type { ChallengeLevel };
+export type { CardSpec, ChallengeLevel };
 
 export interface GameRecord {
   game_id: number;
@@ -42,7 +43,7 @@ export interface PlayerStatsRecord {
   // Null for a remake, and for a game without the other players' stats to
   // grade against
   score: number | null;
-  // Unclamped, for ordering only; never shown
+  // Unclamped, for ordering and the best-score record; see PlayerScore.raw
   score_raw: number | null;
   score_badge: "MVP" | "ACE" | null;
   spell1: number | null;
@@ -295,6 +296,9 @@ export interface ItemData {
     description: string;
     iconPath: string;
     branch: string;
+    // Boots fill a slot nearly every game, so a list of favourite items sets
+    // them apart rather than letting them crowd out everything else
+    boots: boolean;
   };
 }
 
@@ -781,6 +785,104 @@ export interface GameCardData {
   profileIcon: number | null;
 }
 
+// ---- Season recap ----
+
+// One season as the recap's picker lists it
+export interface SeasonSummary {
+  id: string;
+  name: string;
+  // Local calendar dates, as the season defines them. The all-time entry has
+  // neither, and a season whose end Riot hasn't announced has no end.
+  start: string | null;
+  end: string | null;
+  // Under the recap's queue and account filters
+  games: number;
+}
+
+export interface SeasonChampion {
+  champion_id: number;
+  games: number;
+  wins: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  // Null when none of its games have a stored score
+  avgScore: number | null;
+}
+
+export interface SeasonPlayer {
+  gameName: string | null;
+  tagLine: string | null;
+  profileIcon: number | null;
+}
+
+// A session day, which starts at DAY_START_HOUR the way the match list's do,
+// keyed by its local midnight
+export interface SeasonDay {
+  day: number;
+  games: number;
+  wins: number;
+}
+
+// A season in one object: everything the shareable recap card draws.
+export interface SeasonRecap {
+  season: SeasonSummary;
+  // Every season that has begun, oldest first, then the all-time entry
+  seasons: SeasonSummary[];
+  // The account that played the most of these games, named and pictured as it
+  // was in the last of them
+  player: SeasonPlayer;
+  // Tracked accounts these games pool together
+  accounts: number;
+  // Newest patch played, which augment and item names and art are read from
+  patch: string | null;
+  firstGame: number | null;
+  lastGame: number | null;
+  games: number;
+  wins: number;
+  // Seconds of game time
+  duration: number;
+  // Every day with a game in it, in order
+  days: SeasonDay[];
+  busiestDay: SeasonDay | null;
+  // The most days played back to back, the earliest such run on a tie
+  dayStreak: { days: number; from: number; to: number } | null;
+  // Local hour (0-23) the most games started in
+  peakHour: number | null;
+  // Session weekday with the most games, 0 = Sunday
+  topWeekday: number | null;
+  kills: number;
+  deaths: number;
+  assists: number;
+  damage: number;
+  damageTaken: number;
+  healing: number;
+  gold: number;
+  multikills: DashboardData["multikills"];
+  // Per-game shares of the team's totals, averaged over the season, 0-1
+  killParticipation: number | null;
+  damageShare: number | null;
+  avgScore: number | null;
+  mvps: number;
+  aces: number;
+  // The denominators for those two, as on the dashboard: MVP only goes to a
+  // winner and ACE only to a loser, and only in games that were scored
+  scoredWins: number;
+  scoredLosses: number;
+  // Most played first
+  champions: SeasonChampion[];
+  uniqueChampions: number;
+  // Most picked first
+  augments: AugmentStats[];
+  // Most picked first, boots included: deep enough that the card can set them
+  // apart and still fill its list
+  items: ItemStats[];
+  // Single-game bests and streaks, within the season
+  records: RecordsData;
+  // Most games together first, with the Friends page's 2-game minimum
+  friends: TeammateStats[];
+}
+
 // ---- Challenges ----
 
 export interface ChallengeReward {
@@ -901,6 +1003,15 @@ export interface ElectronAPI {
   onLiveGame: (callback: (snapshot: LiveGameSnapshot) => void) => () => void;
   getGameRecap: (gameId?: number) => Promise<GameRecap | null>;
   getGameCard: (gameId: number) => Promise<GameCardData | null>;
+  // The latest season with games in it when none is named, and null for one
+  // named that isn't on offer
+  getSeasonRecap: (
+    seasonId?: string,
+    queue?: number,
+    account?: string,
+  ) => Promise<SeasonRecap | null>;
+  // Every season that has begun and its games, with no recap attached
+  getSeasons: () => Promise<SeasonSummary[]>;
   getGlobalChampionDetail: (
     championId: number,
     patch?: string,
@@ -928,14 +1039,14 @@ export interface ElectronAPI {
   isAutoStartSupported: () => Promise<boolean>;
   setSetting: (key: string, value: string) => Promise<void>;
   // No error alongside success: false means the save dialog was dismissed
-  exportGameImage: (gameId: number) => Promise<{
+  exportCardImage: (card: CardSpec) => Promise<{
     success: boolean;
     path?: string;
     error?: string;
   }>;
   // Nothing to report on success beyond that it worked: the image is on the
   // clipboard, not anywhere on disk
-  copyGameImage: (gameId: number) => Promise<{ success: boolean; error?: string }>;
+  copyCardImage: (card: CardSpec) => Promise<{ success: boolean; error?: string }>;
   exportData: () => Promise<{
     success: boolean;
     path?: string;
@@ -1003,6 +1114,8 @@ export const INVOKE_CHANNELS = {
   getLiveGame: "live:snapshot",
   getGameRecap: "db:game-recap",
   getGameCard: "db:game-card",
+  getSeasonRecap: "db:season-recap",
+  getSeasons: "db:seasons",
   getGlobalChampionDetail: "db:global-champion-detail",
   getChallenges: "challenges:get",
   getAllSummonerPuuids: "db:all-summoner-puuids",
@@ -1020,8 +1133,8 @@ export const INVOKE_CHANNELS = {
   getSetting: "settings:get",
   isAutoStartSupported: "autostart:supported",
   setSetting: "settings:set",
-  exportGameImage: "export:game-image",
-  copyGameImage: "export:copy-game-image",
+  exportCardImage: "export:card-image",
+  copyCardImage: "export:copy-card-image",
   exportData: "data:export",
   importData: "data:import",
   repairPuuids: "data:repair-puuids",

@@ -14,11 +14,7 @@ import { queueLabel } from "../components/QueueSelect";
 import GameRecap from "../components/GameRecap";
 import LiveScoreboard, { LiveEventFeed } from "../components/LiveScoreboard";
 import { MapPinIcon, RadioIcon, SwordsIcon } from "../components/icons";
-import {
-  ExportImageButton,
-  ExportImageMessage,
-  useGameImageExport,
-} from "../components/ExportImage";
+import { ExportImageButton, ExportImageMessage, useImageExport } from "../components/ExportImage";
 
 // How long to keep waiting for a finished game's results before giving up and
 // showing the most recent recorded one instead. The post-game capture normally
@@ -178,7 +174,7 @@ function RecapView({
 }) {
   const [recap, setRecap] = useState<GameRecapData | null>(null);
   const [loading, setLoading] = useState(true);
-  const exporting = useGameImageExport();
+  const exporting = useImageExport();
   // Set when a game finished but its results never turned up, so the page can
   // say why it is showing an older one
   const [gaveUp, setGaveUp] = useState(false);
@@ -313,25 +309,17 @@ function RecapHeading({
   children,
 }: {
   recap: GameRecapData;
-  exporting: ReturnType<typeof useGameImageExport>;
+  exporting: ReturnType<typeof useImageExport>;
   children: ReactNode;
 }) {
-  const gameId = recap.detail.game.game_id;
+  const card = { kind: "game", gameId: recap.detail.game.game_id } as const;
 
   return (
     <div className="flex items-center gap-2 px-1">
       {children}
       <div className="ml-auto flex items-center gap-2">
-        <ExportImageButton
-          action="copy"
-          busy={exporting.busyWith(gameId, "copy")}
-          onClick={() => exporting.run(gameId, "copy")}
-        />
-        <ExportImageButton
-          action="save"
-          busy={exporting.busyWith(gameId, "save")}
-          onClick={() => exporting.run(gameId, "save")}
-        />
+        <ExportImageButton action="copy" card={card} exporting={exporting} />
+        <ExportImageButton action="save" card={card} exporting={exporting} />
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ import * as challenges from "./challenges";
 import * as dragon from "./dragon";
 import * as updater from "./updater";
 import * as backup from "./backup";
-import { copyGameImage, exportGameImage } from "./export-image";
+import { copyCardImage, exportCardImage } from "./export-image";
 import { importBackupFile } from "./import";
 import { getBackupDir, getLogDir } from "./paths";
 import { openExternalUrl } from "./security";
@@ -181,6 +181,12 @@ export function registerIpcHandlers() {
     };
   });
 
+  handle("getSeasonRecap", (_event, seasonId, queue, account) =>
+    db.getSeasonRecap(seasonId, queue, account),
+  );
+
+  handle("getSeasons", () => db.getSeasons());
+
   handle("getGlobalChampionDetail", (_event, championId, patch, queue) =>
     db.getGlobalChampionDetail(championId, patch, queue),
   );
@@ -275,19 +281,19 @@ export function registerIpcHandlers() {
     }
   });
 
-  // One game as a PNG, drawn by the renderer in a window of its own. Separate
-  // from exportData, which is the whole database as JSON.
-  handle("exportGameImage", async (event, gameId) => {
-    // The card carries the scoreboard, which scores every player from their
-    // champion's class
+  // A game or a season recap as a PNG, drawn by the renderer in a window of its
+  // own. Separate from exportData, which is the whole database as JSON.
+  handle("exportCardImage", async (event, card) => {
+    // A game card carries the scoreboard, which scores every player from their
+    // champion's class, and both kinds name champions
     await dragon.waitForChampionData();
-    return exportGameImage(senderWindow(event), gameId);
+    return exportCardImage(senderWindow(event), card);
   });
 
   // The same card, onto the clipboard instead of into a file
-  handle("copyGameImage", async (_event, gameId) => {
+  handle("copyCardImage", async (_event, card) => {
     await dragon.waitForChampionData();
-    return copyGameImage(gameId);
+    return copyCardImage(card);
   });
 
   handle("importData", async (event) => {
