@@ -21,8 +21,8 @@ export const SEASONS: Season[] = [
   // pass of its own.
   { id: "set-0", name: "Set 0", start: "2025-10-22", end: "2026-02-03" },
   { id: "set-1", name: "Set 1", start: "2026-02-04", end: "2026-04-29" },
-  { id: "set-2", name: "Set 2", start: "2026-06-10", end: "2026-10-05" },
-  { id: "set-3", name: "Set 3", start: "2026-10-07", end: null },
+  { id: "set-2", name: "Set 2", start: "2026-06-10", end: "2026-10-20" },
+  { id: "set-3", name: "Set 3", start: "2026-10-21", end: null },
 ];
 
 // Every game on record, whichever season it fell in or between

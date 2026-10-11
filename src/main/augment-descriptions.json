@@ -1,5 +1,5 @@
 {
-  "patch": "16.19",
+  "patch": "16.20",
   "descriptions": {
     "1001": "Gain stacks when taking or dealing damage. For every 10 stacks, gain <scaleAF>Adaptive Force</scaleAF>, <scaleArmor>Armor</scaleArmor>, <scaleMR>Magic Resist</scaleMR>, <attention>Size</attention>, and <status>Tenacity</status>.",
     "1002": "Gain <scaleBonus>100 Item Haste</scaleBonus> (equivalent to 50% Item CDR).<br><br><rules>Item Haste reduces the cooldown %i:cooldown% of all Item Abilities.</rules>",
@@ -115,7 +115,7 @@
     "1243": "Gain <keywordMajor>2 random %i:Augment%Augments</keywordMajor>.",
     "1250": "Your <speed>Attack Speed</speed> becomes 0.63. All Bonus <speed>Attack Speed</speed> is converted to <scaleAD>Attack Damage</scaleAD>. (<scaleAD>25 Plus 100 AD</scaleAD> per <speed>1% AS</speed>).",
     "1301": "Every 35 seconds, <keywordMajor>Autocast</keywordMajor> a protective star. Upon its landing, you and nearby allies become <keywordMajor>Invulnerable</keywordMajor> for a few seconds.",
-    "1305": "Gain <speed>50 Movement Speed</speed> and <speed>40% Slow Resist</speed>.",
+    "1305": "Gain <speed>50 Movement Speed</speed> and <speed>50% Slow Resist</speed>.",
     "1308": "<keywordMajor>Autocast</keywordMajor><br>Gain <speed>Movement Speed</speed> and conjure three flames that orbit you, targetting the closest visible enemy in range and dealing <magicDamage>magic damage</magicDamage>.",
     "1310": "Gain <spellName>Deceive</spellName> Summoner Spell.<br>Gain <spellName>Backstab</spellName> Passive.<br><br>When you die, deal a large amount of <trueDamage>true damage</trueDamage> and <status>Fear</status> nearby enemies.",
     "1311": "Your <scaleMana>Mana</scaleMana> costs are doubled. <br><br>Your Ability <healing>Heals</healing>, <shield>Shields</shield>, and damage are increased based on your <scaleMana>max Mana</scaleMana>.",
@@ -199,7 +199,7 @@
     "2008": "Striking enemies with Abilities grants you stacks of <keyword>Popoff</keyword>, reducing your non-Ultimate Ability Cooldowns.",
     "2009": "Gain <attention>(25% + 5%%i:scaleAP%) Critical Strike Chance</attention> and <attackSpeed>(35% + 5%%i:scaleAP%) Attack Speed</attackSpeed>.",
     "2010": "Your <crit>Critical Strikes</crit> apply <OnHit>%i:OnHit% On-Hit</OnHit> effects an additional time.<br><br>Gain <crit>%i:scaleCrit% 25% Crit chance</crit>.",
-    "2016": "<OnHit>%i:OnHit% On-Hit</OnHit> consume <scaleMana>2.5%%i:scaleMana% max Mana</scaleMana> to deal <magicDamage>4.5%%i:scaleMana% magic damage</magicDamage>, this damage can <crit>Critically Strike</crit>.",
+    "2016": "<OnHit>%i:OnHit% On-Hit</OnHit> deal <magicDamage>7%%i:scaleMana% magic damage</magicDamage>, this damage can <crit>Critically Strike</crit>.",
     "2018": "Gain percent cooldown reduction and convert all of your <attackSpeed>Attack Speed</attackSpeed> into Ability Haste.",
     "2024": "Gain Ability Haste equal to 40% of your <crit>%i:scaleCrit% Critical Strike Chance</crit>.",
     "2026": "Gain increased <speed>Movement Speed</speed> towards enemies at low Health.",

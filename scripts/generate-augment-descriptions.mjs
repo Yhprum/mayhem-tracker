@@ -237,17 +237,16 @@ function renderCalculation(calc, values) {
 // says plain "@SpinDamageAmp@" rather than the usual "@SpinDamageAmp*100@%".
 // "QUEST: Score @QuestRequirement@ takedowns" — the target is not in the spell
 // at all but in a quest object under ModeSpecificData/ModesQuests, which the
-// augment points at through its Quest field. Whether that field and the path
-// it holds come through by name or as hashes depends on CommunityDragon's
-// known-hashes list at export time (16.19 names both, 16.18 hashed both), so
-// either form is accepted; hashing the paths back is what reconnects the
-// hashed form, the same trick the hashed calculation names need. The target
-// sits in the quest's Milestones.
+// augment points at through QuestData.Quest. Whether those fields and the path
+// they hold come through by name or as hashes depends on CommunityDragon's
+// known-hashes list at export time (16.20 names all three, 16.18 hashed them
+// all, 16.19 was a mix), so either form is accepted; hashing the paths back is
+// what reconnects the hashed form, the same trick the hashed calculation names
+// need. The target sits in the quest's Milestones.
 //
 // Only a quest with one milestone has a fixed number to print. Several means it
 // levels up — Multishot runs 50, 250, 700, 2000 — and the figure on screen
 // climbs with it, so those are left to read generically.
-const QUEST_LINK = "{3ed971bd}";
 const MILESTONE_TARGET = "{7fec0982}";
 
 const namedField = (node, name) => node?.[name] ?? node?.[binHash(name)];
@@ -269,7 +268,7 @@ function put(values, name, entry) {
 }
 
 function questMilestone(augment, bin) {
-  const link = namedField(augment?.[QUEST_LINK], "Quest");
+  const link = namedField(namedField(augment, "QuestData"), "Quest");
   if (!link) return undefined;
   const quest = bin[link] ?? questIndex(bin).get(link);
   const targets = (quest?.Milestones ?? []).map((milestone) => milestone?.[MILESTONE_TARGET]);
