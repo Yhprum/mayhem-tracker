@@ -79,13 +79,31 @@ function collectAugments(bin) {
   return found;
 }
 
+// mMultiplier scales the whole sum: Salvation's health threshold is its 0.5
+// data value times 100, so the string can put a "%" after it, and Pursuit of
+// Haste's cap is 2 times its per-level reward. Only a multiplier that comes to
+// one number can be applied; any other kind leaves the formula unrendered, the
+// same as a term that can't be read.
+function multiplierOf(calc, values) {
+  const part = calc?.mMultiplier;
+  if (!part) return 1;
+  if (part.__type === "NumberCalculationPart") return part.mNumber;
+  if (part.__type === "NamedDataValueCalculationPart") {
+    const value = values.get(String(dataValueName(part)).toLowerCase())?.value;
+    return typeof value === "number" ? value : undefined;
+  }
+  return undefined;
+}
+
 // A formula that is one constant is a plain number, so it stays one: the loc
 // string may still scale it ("@Calc*100@%") and the percent flag still applies.
-function constantCalculation(calc) {
+function constantCalculation(calc, values) {
   const parts = calc?.mFormulaParts;
   if (!Array.isArray(parts) || parts.length !== 1) return undefined;
   const part = parts[0];
-  return part?.__type === "NumberCalculationPart" ? part.mNumber : undefined;
+  if (part?.__type !== "NumberCalculationPart") return undefined;
+  const multiplier = multiplierOf(calc, values);
+  return multiplier === undefined ? undefined : part.mNumber * multiplier;
 }
 
 // Anything else is a formula the game prints as a sum — Warlock Juicebox's
@@ -156,7 +174,10 @@ function dataValueName(part) {
 
 function renderCalculation(calc, values) {
   const percent = calc?.mDisplayAsPercent === true;
-  const scalar = (value) => (percent ? `${formatNumber(value * 100)}%` : formatNumber(value));
+  const multiplier = multiplierOf(calc, values);
+  if (multiplier === undefined) return undefined;
+  const scalar = (value) =>
+    percent ? `${formatNumber(value * multiplier * 100)}%` : formatNumber(value * multiplier);
   const named = (part) => values.get(String(dataValueName(part)).toLowerCase())?.value;
   const terms = [];
 
@@ -165,7 +186,7 @@ function renderCalculation(calc, values) {
     if (part.__type === RESOURCE_BY_DATA_VALUE) {
       const value = named(part);
       if (typeof value !== "number") return undefined;
-      const resourceTerm = statTerm(value, percent, part, RESOURCE_MARKER);
+      const resourceTerm = statTerm(value * multiplier, percent, part, RESOURCE_MARKER);
       if (!resourceTerm) return undefined;
       terms.push(resourceTerm);
       continue;
@@ -173,7 +194,7 @@ function renderCalculation(calc, values) {
     switch (part.__type) {
       case "AbilityResourceByCoefficientCalculationPart": {
         if (typeof part.mCoefficient !== "number") return undefined;
-        const term = statTerm(part.mCoefficient, percent, part, RESOURCE_MARKER);
+        const term = statTerm(part.mCoefficient * multiplier, percent, part, RESOURCE_MARKER);
         if (!term) return undefined;
         terms.push(term);
         break;
@@ -205,14 +226,14 @@ function renderCalculation(calc, values) {
       case "StatByNamedDataValueCalculationPart": {
         const value = named(part);
         if (typeof value !== "number" || !marker) return undefined;
-        const term = statTerm(value, percent, part, marker);
+        const term = statTerm(value * multiplier, percent, part, marker);
         if (!term) return undefined;
         terms.push(term);
         break;
       }
       case "StatByCoefficientCalculationPart": {
         if (typeof part.mCoefficient !== "number" || !marker) return undefined;
-        const term = statTerm(part.mCoefficient, percent, part, marker);
+        const term = statTerm(part.mCoefficient * multiplier, percent, part, marker);
         if (!term) return undefined;
         terms.push(term);
         break;
@@ -309,12 +330,16 @@ function valuesFor(augment, bin) {
   };
 
   // Data values first and across every spell: a formula can cite one by name,
-  // so they all have to be in hand before any calculation is rendered.
+  // so they all have to be in hand before any calculation is rendered. It can
+  // cite one by hash as well (Salvation's threshold reads "{9d8c75c8}", its
+  // HealthPercentTrigger), so each is filed under both.
   const dataValueNames = [];
   for (const spell of spells) {
     for (const value of spell.DataValues ?? []) {
       dataValueNames.push(value.name);
-      put(value.name, { value: value.values?.[0], percent: false });
+      const entry = { value: value.values?.[0], percent: false };
+      put(value.name, entry);
+      put(binHash(value.name), entry);
     }
     const cooldown = spell.Cooldown ?? spell.cooldownTime;
     if (typeof cooldown === "number") put("cooldown", { value: cooldown, percent: false });
@@ -329,7 +354,7 @@ function valuesFor(augment, bin) {
 
   for (const spell of spells) {
     for (const [name, calc] of Object.entries(spell.mSpellCalculations ?? {})) {
-      const constant = constantCalculation(calc);
+      const constant = constantCalculation(calc, values);
       if (constant !== undefined) {
         put(name, { value: constant, percent: calc?.mDisplayAsPercent === true });
         continue;
@@ -353,6 +378,120 @@ function binHash(name) {
   return `{${hash.toString(16).padStart(8, "0")}}`;
 }
 
+// The stringtable has the same gap: an entry whose key is not on the list is
+// filed under "{0ae9f2e881}" instead, and every one of Set 3's augments arrived
+// that way on 16.21. Its hash is a different one, XXH3-64 of the lowercased key
+// cut to the low 38 bits, which is the width every hashed key in the table fits.
+const STRING_HASH_BITS = 38n;
+
+function lookupString(strings, key) {
+  const lower = key.toLowerCase();
+  return strings[lower] ?? strings[stringHash(lower)];
+}
+
+function stringHash(key) {
+  const hash = xxh3(Buffer.from(key, "utf8"));
+  if (hash === undefined) return undefined;
+  const truncated = hash & ((1n << STRING_HASH_BITS) - 1n);
+  return `{${truncated.toString(16).padStart(10, "0")}}`;
+}
+
+// XXH3-64 with the default secret and seed, for inputs up to 240 bytes: the
+// longer path stripes the input in blocks no loc key comes close to needing.
+const U64 = (1n << 64n) - 1n;
+const XXH_PRIME64_1 = 0x9e3779b185ebca87n;
+const XXH_PRIME64_2 = 0xc2b2ae3d27d4eb4fn;
+const XXH_PRIME64_3 = 0x165667b19e3779f9n;
+const XXH_PRIME_MX1 = 0x165667919e3779f9n;
+const XXH_PRIME_MX2 = 0x9fb21c651e98df25n;
+const XXH3_SECRET = Buffer.from(
+  "b8fe6c3923a44bbe7c01812cf721ad1cded46de9839097db7240a4a4b7b3671f" +
+    "cb79e64eccc0e578825ad07dccff7221b8084674f743248ee03590e6813a264c" +
+    "3c2852bb91c300cb88d0658b1b532ea371644897a20df94e3819ef46a9deacd8" +
+    "a8fa763fe39c343ff9dcbbc7c70b4f1d8a51e04bcdb45931c89f7ec9d9787364" +
+    "eac5ac8334d3ebc3c581a0fffa1363eb170ddd51b7f0da49d316552629d4689e" +
+    "2b16be587d47a1fc8ff8b8d17ad031ce45cb3a8f95160428afd7fbcabb4b407e",
+  "hex",
+);
+
+const rotl64 = (x, bits) => ((x << BigInt(bits)) | (x >> BigInt(64 - bits))) & U64;
+const read64 = (buf, at) => buf.readBigUInt64LE(at);
+const read32 = (buf, at) => BigInt(buf.readUInt32LE(at));
+
+function foldedMultiply(a, b) {
+  const product = a * b;
+  return (product & U64) ^ (product >> 64n);
+}
+
+function byteSwap64(x) {
+  const buf = Buffer.alloc(8);
+  buf.writeBigUInt64LE(x);
+  return buf.readBigUInt64BE();
+}
+
+function xxh64Avalanche(h) {
+  h = ((h ^ (h >> 33n)) * XXH_PRIME64_2) & U64;
+  h = ((h ^ (h >> 29n)) * XXH_PRIME64_3) & U64;
+  return h ^ (h >> 32n);
+}
+
+function xxh3Avalanche(h) {
+  h = ((h ^ (h >> 37n)) * XXH_PRIME_MX1) & U64;
+  return h ^ (h >> 32n);
+}
+
+function xxh3Mix16(input, at, secretAt) {
+  return foldedMultiply(
+    read64(input, at) ^ read64(XXH3_SECRET, secretAt),
+    read64(input, at + 8) ^ read64(XXH3_SECRET, secretAt + 8),
+  );
+}
+
+function xxh3(input) {
+  const len = input.length;
+  if (len === 0) return xxh64Avalanche(read64(XXH3_SECRET, 56) ^ read64(XXH3_SECRET, 64));
+  if (len <= 3) {
+    const combined =
+      (BigInt(input[0]) << 16n) |
+      (BigInt(input[len >> 1]) << 24n) |
+      BigInt(input[len - 1]) |
+      (BigInt(len) << 8n);
+    return xxh64Avalanche(combined ^ (read32(XXH3_SECRET, 0) ^ read32(XXH3_SECRET, 4)));
+  }
+  if (len <= 8) {
+    const combined = (read32(input, len - 4) + (read32(input, 0) << 32n)) & U64;
+    let h = combined ^ (read64(XXH3_SECRET, 8) ^ read64(XXH3_SECRET, 16));
+    h ^= rotl64(h, 49) ^ rotl64(h, 24);
+    h = (h * XXH_PRIME_MX2) & U64;
+    h ^= (h >> 35n) + BigInt(len);
+    h = (h * XXH_PRIME_MX2) & U64;
+    return h ^ (h >> 28n);
+  }
+  if (len <= 16) {
+    const low = read64(input, 0) ^ (read64(XXH3_SECRET, 24) ^ read64(XXH3_SECRET, 32));
+    const high = read64(input, len - 8) ^ (read64(XXH3_SECRET, 40) ^ read64(XXH3_SECRET, 48));
+    return xxh3Avalanche((BigInt(len) + byteSwap64(low) + high + foldedMultiply(low, high)) & U64);
+  }
+  let acc = (BigInt(len) * XXH_PRIME64_1) & U64;
+  if (len <= 128) {
+    if (len > 96) acc += xxh3Mix16(input, 48, 96) + xxh3Mix16(input, len - 64, 112);
+    if (len > 64) acc += xxh3Mix16(input, 32, 64) + xxh3Mix16(input, len - 48, 80);
+    if (len > 32) acc += xxh3Mix16(input, 16, 32) + xxh3Mix16(input, len - 32, 48);
+    acc += xxh3Mix16(input, 0, 0) + xxh3Mix16(input, len - 16, 16);
+    return xxh3Avalanche(acc & U64);
+  }
+  if (len <= 240) {
+    for (let i = 0; i < 8; i++) acc += xxh3Mix16(input, 16 * i, 16 * i);
+    acc = xxh3Avalanche(acc & U64);
+    for (let i = 8; i < Math.floor(len / 16); i++) {
+      acc += xxh3Mix16(input, 16 * i, 16 * (i - 8) + 3);
+    }
+    acc += xxh3Mix16(input, len - 16, 119);
+    return xxh3Avalanche(acc & U64);
+  }
+  return undefined;
+}
+
 function formatNumber(value) {
   const rounded = Math.round(value * 100) / 100;
   return String(rounded);
@@ -370,7 +509,7 @@ function expandReferences(text, strings) {
   let out = text;
   for (let pass = 0; pass < MAX_REFERENCE_PASSES && REFERENCE.test(out); pass++) {
     REFERENCE.lastIndex = 0;
-    out = out.replace(REFERENCE, (whole, key) => strings[key.toLowerCase()] ?? "");
+    out = out.replace(REFERENCE, (whole, key) => lookupString(strings, key) ?? "");
     REFERENCE.lastIndex = 0;
   }
   return out;
@@ -561,6 +700,9 @@ async function main() {
 
   // What the app can actually show: the Mayhem augment ids the live export
   // names. Whether they're all covered decides when the branch walk can stop.
+  // cherry-augments.json lists Arena's augments too, and the ARAM_ prefix that
+  // sets Mayhem's apart is one Set 3's never got ("ArmoredImpact"), so the ids
+  // in the live kiwi.bin are added once it arrives.
   const wanted = new Set(
     (Array.isArray(cherry) ? cherry : Object.values(cherry ?? {}))
       .filter((aug) => String(aug?.augmentNameId ?? "").startsWith("ARAM_"))
@@ -583,7 +725,7 @@ async function main() {
       const locKey = String(
         augment.DescriptionTra ?? augment.AugmentTooltipTra ?? "",
       ).toLowerCase();
-      const raw = strings[locKey];
+      const raw = lookupString(strings, locKey);
       if (!raw) {
         if (locKey) unresolvedKeys.add(locKey);
         continue;
@@ -612,6 +754,9 @@ async function main() {
 
   const latest = await fetchJson(kiwiBinUrl("latest"), "kiwi.bin (latest)");
   patch = String(latest.version ?? "").trim() || (await resolveLivePatch());
+  for (const augment of collectAugments(latest)) {
+    if (Number.isFinite(augment.AugmentPlatformId)) wanted.add(augment.AugmentPlatformId);
+  }
   let remaining = harvest(latest, "latest");
 
   if (remaining > 0) {
