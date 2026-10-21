@@ -285,14 +285,22 @@ class SgpHttpError extends Error {
   }
 }
 
-// A shard answers this way for a player it doesn't hold, which is what an
-// account transfer or a Riot re-shard leaves us with: the remembered host is
-// now the wrong one, and stays wrong until we go looking again.
+// Errors that may mean the remembered shard has stopped serving this account
+// rather than that the service is down. A shard asked about a player it simply
+// doesn't hold answers 200 with an empty list instead; see probeSgpHost.
 const SGP_REHOME_STATUSES = new Set([401, 403, 404]);
 
 // The service is sharded by geography, not by game region, so the region map is
-// a first guess only. Probe candidates until one answers, then remember it.
-async function probeSgpHost(puuid: string, token: string, skip?: string): Promise<string | null> {
+// a first guess only. Every shard answers every player with 200, and one that
+// doesn't hold them sends an empty list, exactly what an account with no games
+// gets from its own. So only a shard that returns a game proves it is theirs,
+// and only that one is remembered. When none does, the first that answered is
+// as good as any: the account has nothing to find on any of them.
+async function probeSgpHost(
+  puuid: string,
+  token: string,
+  skip?: string,
+): Promise<{ host: string; holdsPlayer: boolean } | null> {
   let guess: string | undefined;
   try {
     const regionLocale = await lcuRequest("/riotclient/region-locale");
@@ -301,6 +309,7 @@ async function probeSgpHost(puuid: string, token: string, skip?: string): Promis
     // Fall through to probing every shard
   }
 
+  let answered: string | null = null;
   const candidates = guess ? [guess, ...SGP_HOSTS.filter((h) => h !== guess)] : SGP_HOSTS;
   for (const host of candidates) {
     if (host === skip) continue;
@@ -309,17 +318,20 @@ async function probeSgpHost(puuid: string, token: string, skip?: string): Promis
         headers: { Authorization: `Bearer ${token}` },
         signal: AbortSignal.timeout(SGP_PROBE_TIMEOUT_MS),
       });
-      if (response.ok) {
+      if (!response.ok) continue;
+      const body = await response.json();
+      if (Array.isArray(body) && body.length > 0) {
         sgpHost = host;
         db.setSetting("sgp_host", host);
-        return host;
+        return { host, holdsPlayer: true };
       }
+      answered ??= host;
     } catch {
       // Try the next shard
     }
   }
 
-  return null;
+  return answered ? { host: answered, holdsPlayer: false } : null;
 }
 
 async function resolveSgpHost(puuid: string, token: string): Promise<string> {
@@ -331,26 +343,29 @@ async function resolveSgpHost(puuid: string, token: string): Promise<string> {
     return cached;
   }
 
-  const host = await probeSgpHost(puuid, token);
-  if (!host) {
+  const probed = await probeSgpHost(puuid, token);
+  if (!probed) {
     throw new Error("Could not reach Riot's match history service for your region");
   }
-  return host;
+  return probed.host;
 }
 
 // Nothing else ever rewrites the remembered host, so a stale one would fail the
 // same way on every future run with no way out short of editing the database.
-// Re-probe instead — but only replace what we have if another shard actually
-// answers, since an expired token fails everywhere and is not the host's fault.
+// Re-probe instead, but only replace what we have with a shard that actually
+// returns this player's games: an expired token fails everywhere and is not the
+// host's fault, and an account with no games looks the same on every shard.
 async function rehomeSgpHost(puuid: string, token: string, failed: string): Promise<string | null> {
   sgpHost = null;
-  const host = await probeSgpHost(puuid, token, failed);
-  if (!host) {
+  const probed = await probeSgpHost(puuid, token, failed);
+  if (!probed?.holdsPlayer) {
     sgpHost = failed;
     return null;
   }
-  console.warn(`Match history shard ${failed} no longer serves this account; moved to ${host}`);
-  return host;
+  console.warn(
+    `Match history shard ${failed} no longer serves this account; moved to ${probed.host}`,
+  );
+  return probed.host;
 }
 
 // Why a walk stopped. "exhausted" is the ambiguous one: the service ran out of
@@ -492,10 +507,19 @@ export async function backfillHistory(
         (pageIds) => stopAtKnownPage && pageIds.every((id) => known.has(id)),
       );
 
+    // The queue filter is Riot's vocabulary, not ours, and a filtered walk that
+    // came back with nothing looks identical whether the account has no Mayhem
+    // games or the tag names changed under us. Only one of those is worth
+    // being wrong about, so confirm it the slow way before believing it.
+    const walkShard = async (from: string) => {
+      const filtered = await walk(from, SGP_MAYHEM_TAGS);
+      return filtered.ids.length > 0 ? filtered : walk(from, SGP_ALL_TAGS);
+    };
+
     let activeHost = host;
     let walked: { ids: number[]; stoppedBy: WalkStop };
     try {
-      walked = await walk(activeHost, SGP_MAYHEM_TAGS);
+      walked = await walkShard(activeHost);
     } catch (err) {
       // The remembered shard may simply be the wrong one now. Find the right
       // one and restart the walk there; if none answers, the original failure
@@ -504,15 +528,18 @@ export async function backfillHistory(
       const rehomed = await rehomeSgpHost(summoner.puuid, token, activeHost);
       if (!rehomed) throw err;
       activeHost = rehomed;
-      walked = await walk(activeHost, SGP_MAYHEM_TAGS);
+      walked = await walkShard(activeHost);
     }
 
-    // The queue filter is Riot's vocabulary, not ours, and a filtered walk that
-    // came back with nothing looks identical whether the account has no Mayhem
-    // games or the tag names changed under us. Only one of those is worth
-    // being wrong about, so confirm it the slow way before believing it.
+    // No games in any queue is also exactly how a shard that doesn't hold this
+    // player answers, so a remembered host that was wrong all along, or went
+    // wrong when the account moved, would otherwise import nothing forever.
     if (walked.ids.length === 0) {
-      walked = await walk(activeHost, SGP_ALL_TAGS);
+      const rehomed = await rehomeSgpHost(summoner.puuid, token, activeHost);
+      if (rehomed) {
+        activeHost = rehomed;
+        walked = await walkShard(activeHost);
+      }
     }
 
     const { ids, stoppedBy } = walked;
