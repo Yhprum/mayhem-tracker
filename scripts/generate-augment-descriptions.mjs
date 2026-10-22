@@ -310,6 +310,10 @@ const SPELL_NAME_REFERENCE = /\{\{\s*SpellName\s*\}\}/i;
 // capital or every Radius and RecastDelay would read as an R.
 const SLOT_DATA_VALUE = /^([QWER])[A-Z]/;
 
+// A headliner's empowers carry no data values at all, but each one's name ends
+// in the slot it empowers ("GoH_PentakillAug_W").
+const EMPOWERED_SLOT = /_([QWER])$/;
+
 function spellSlot(names) {
   for (const name of names) {
     const slot = String(name).match(SLOT_DATA_VALUE)?.[1];
@@ -350,7 +354,8 @@ function valuesFor(augment, bin) {
     const base = values.get("basecooldown");
     if (base) put("cooldown", base);
   }
-  put("spellname", { text: spellSlot(dataValueNames) });
+  const empowered = String(augment.AugmentNameId ?? "").match(EMPOWERED_SLOT)?.[1];
+  put("spellname", { text: empowered ?? spellSlot(dataValueNames) });
 
   for (const spell of spells) {
     for (const [name, calc] of Object.entries(spell.mSpellCalculations ?? {})) {
