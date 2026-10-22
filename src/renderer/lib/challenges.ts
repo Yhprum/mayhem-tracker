@@ -1,5 +1,5 @@
 import type { ChallengeLevel } from "./types";
-import { LOCALE, formatCompact } from "./format";
+import { LOCALE, formatCompact, formatDecimal } from "./format";
 
 // The display half of shared/challenges.ts, which holds the data rules. Both
 // the Challenges tab and the post-game recap draw tiers, so the colours and the
@@ -31,6 +31,6 @@ export function challengeLevelName(level: ChallengeLevel | null): string {
 // million rendered as "5000.0k" is harder to read than the raw number.
 export function formatChallengeValue(value: number): string {
   const rounded = Math.round(value);
-  if (rounded >= 1_000_000) return `${(rounded / 1_000_000).toFixed(1)}M`;
+  if (rounded >= 1_000_000) return `${formatDecimal(rounded / 1_000_000)}M`;
   return rounded >= 10000 ? formatCompact(rounded) : rounded.toLocaleString(LOCALE);
 }

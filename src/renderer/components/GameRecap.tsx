@@ -10,6 +10,7 @@ import { getChampionName } from "../hooks/useChampions";
 import {
   LOCALE,
   formatCompact,
+  formatDecimal,
   formatDuration,
   formatKDA,
   formatPlaytime,
@@ -55,7 +56,7 @@ function Delta({ value, average, format }: { value: number; average: number; for
   if (average <= 0) return null;
   const diff = value - average;
   const meaningful = Math.abs(diff) > average * 0.1;
-  const text = format === "compact" ? formatCompact(Math.abs(diff)) : Math.abs(diff).toFixed(1);
+  const text = format === "compact" ? formatCompact(Math.abs(diff)) : formatDecimal(Math.abs(diff));
 
   return (
     <span
@@ -161,7 +162,7 @@ export default function GameRecap({
             {recap.score != null && (
               <div className="text-right">
                 <div className={`text-3xl font-bold leading-none ${scoreColor(recap.score)}`}>
-                  {recap.score.toFixed(1)}
+                  {formatDecimal(recap.score)}
                   <span className="text-base font-semibold text-lol-text/50"> / 10</span>
                 </div>
                 <div className="mt-1 text-[11px]">
@@ -316,7 +317,7 @@ export default function GameRecap({
             {session.avgScore != null && (
               <div>
                 <div className={`text-sm font-semibold ${scoreColor(session.avgScore)}`}>
-                  {session.avgScore.toFixed(1)}
+                  {formatDecimal(session.avgScore)}
                 </div>
                 <div className="text-[11px] text-lol-text">avg score</div>
               </div>
@@ -359,18 +360,20 @@ export default function GameRecap({
 
         <Panel
           title={getChampionName(champData, champion.championId)}
-          subtitle={`${champion.games} ${champion.games === 1 ? "game" : "games"} on record`}
+          subtitle={`${champion.games.toLocaleString(LOCALE)} ${champion.games === 1 ? "game" : "games"} on record`}
           icon={<SwordsIcon className="h-3 w-3" />}
           accent="purple"
         >
           <div className="flex items-baseline gap-3">
             <div className="text-2xl font-bold leading-none">
-              <span className="text-lol-win">{champion.wins}W</span>{" "}
-              <span className="text-lol-loss/70">{champion.games - champion.wins}L</span>
+              <span className="text-lol-win">{champion.wins.toLocaleString(LOCALE)}W</span>{" "}
+              <span className="text-lol-loss/70">
+                {(champion.games - champion.wins).toLocaleString(LOCALE)}L
+              </span>
             </div>
             {champion.avgScore != null && (
               <span className={`text-sm font-semibold ${scoreColor(champion.avgScore)}`}>
-                {champion.avgScore.toFixed(1)}
+                {formatDecimal(champion.avgScore)}
                 <span className="ml-1 font-normal text-lol-text">avg score</span>
               </span>
             )}
@@ -385,8 +388,8 @@ export default function GameRecap({
               <>
                 {" · "}
                 {recap.score > champion.previousBest
-                  ? `beat your previous best of ${champion.previousBest.toFixed(1)}`
-                  : `best on this champion: ${champion.previousBest.toFixed(1)}`}
+                  ? `beat your previous best of ${formatDecimal(champion.previousBest)}`
+                  : `best on this champion: ${formatDecimal(champion.previousBest)}`}
               </>
             )}
           </div>
@@ -434,7 +437,7 @@ const RANK_STYLES = [
 function placementValue(placement: RecapPlacement, recap: GameRecapData): string {
   switch (placement.format) {
     case "score":
-      return placement.value.toFixed(1);
+      return formatDecimal(placement.value);
     case "compact":
       return formatCompact(placement.value);
     case "duration":
@@ -477,7 +480,7 @@ function PlacementCard({ placement, recap }: { placement: RecapPlacement; recap:
           ? placement.good
             ? "Best ever"
             : "Most ever"
-          : `${ordinal(placement.rank)} of ${placement.total.toLocaleString(LOCALE)}`}
+          : `${ordinal(placement.rank, LOCALE)} of ${placement.total.toLocaleString(LOCALE)}`}
       </div>
     </div>
   );
@@ -552,7 +555,7 @@ function SessionStrip({
             game.kills,
             game.deaths,
             game.assists,
-          )}${game.score != null ? ` · ${game.score.toFixed(1)} score` : ""}`}
+          )}${game.score != null ? ` · ${formatDecimal(game.score)} score` : ""}`}
           className={`h-6 w-6 rounded ${
             game.win ? "bg-lol-win/70" : "bg-lol-loss/60"
           } ${i === index ? "ring-2 ring-lol-gold ring-offset-1 ring-offset-lol-card" : ""}`}

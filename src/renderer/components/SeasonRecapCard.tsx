@@ -10,9 +10,13 @@ import { getChampionName, useItemData } from "../hooks/useChampions";
 import { CHAMPION_SPLASH_URL } from "../lib/constants";
 import {
   LOCALE,
+  formatDecimal,
   formatDuration,
+  formatHour,
+  formatPercent,
   formatPlaytime,
   formatTotal,
+  formatWeekday,
   kdaColor,
   kdaRatio,
   scoreColor,
@@ -116,27 +120,14 @@ function kdaValue(kills: number, deaths: number, assists: number): number {
   return deaths === 0 ? Infinity : (kills + assists) / deaths;
 }
 
-function hourLabel(hour: number): string {
-  return new Date(2000, 0, 1, hour).toLocaleTimeString(LOCALE, { hour: "numeric" });
-}
-
-function weekdayLabel(weekday: number): string {
-  // January 2, 2000 was a Sunday, which getDay() calls 0
-  return new Date(2000, 0, 2 + weekday).toLocaleDateString(LOCALE, { weekday: "long" });
-}
-
 function perGame(total: number, games: number): string {
-  return (games > 0 ? total / games : 0).toFixed(1);
-}
-
-function percent(ratio: number): string {
-  return `${(ratio * 100).toFixed(1)}%`;
+  return formatDecimal(games > 0 ? total / games : 0);
 }
 
 // MVP and ACE out of the games that could have produced them, as the match
 // list's dashboard counts them
 function share(count: number, of: number, games: string): string {
-  return of > 0 ? `${percent(count / of)} of ${games}` : `no scored ${games}`;
+  return of > 0 ? `${formatPercent(count / of)} of ${games}` : `no scored ${games}`;
 }
 
 /**
@@ -184,8 +175,8 @@ export default function SeasonRecapCard({
           accent="win"
           value={
             <span>
-              <span className="text-lol-win">{recap.wins}W</span>{" "}
-              <span className="text-lol-loss/80">{losses}L</span>
+              <span className="text-lol-win">{recap.wins.toLocaleString(LOCALE)}W</span>{" "}
+              <span className="text-lol-loss/80">{losses.toLocaleString(LOCALE)}L</span>
             </span>
           }
         >
@@ -387,7 +378,8 @@ function Header({
                 {getChampionName(champData, topChampion.champion_id)}
               </div>
               <div className="text-xs text-lol-text">
-                {topChampion.games} {topChampion.games === 1 ? "game" : "games"} ·{" "}
+                {topChampion.games.toLocaleString(LOCALE)}{" "}
+                {topChampion.games === 1 ? "game" : "games"} ·{" "}
                 {winRatePercent(topChampion.wins, topChampion.games)} win rate
               </div>
             </div>
@@ -426,13 +418,17 @@ function Combat({ recap }: { recap: SeasonRecap }) {
         />
         <Figure
           label="Kill share"
-          value={recap.killParticipation != null ? percent(recap.killParticipation) : "-"}
+          value={recap.killParticipation != null ? formatPercent(recap.killParticipation) : "-"}
           sub="kill participation"
         />
         <Figure
           label="Damage dealt"
           value={formatTotal(recap.damage)}
-          sub={recap.damageShare != null ? `${percent(recap.damageShare)} of team` : "to champions"}
+          sub={
+            recap.damageShare != null
+              ? `${formatPercent(recap.damageShare)} of team`
+              : "to champions"
+          }
         />
         <Figure
           label="Damage taken"
@@ -464,7 +460,7 @@ function Combat({ recap }: { recap: SeasonRecap }) {
         />
         <Figure
           label="Avg score"
-          value={recap.avgScore != null ? recap.avgScore.toFixed(1) : "-"}
+          value={recap.avgScore != null ? formatDecimal(recap.avgScore) : "-"}
           tone={recap.avgScore != null ? scoreColor(recap.avgScore) : undefined}
           sub="out of 10"
         />
@@ -532,8 +528,10 @@ function ChampionRow({ champ, champData }: { champ: SeasonChampion; champData: C
           {champ.avgScore != null && (
             <>
               {" · "}
-              <span className={scoreColor(champ.avgScore)}>{champ.avgScore.toFixed(1)}</span> avg
-              score
+              <span className={scoreColor(champ.avgScore)}>
+                {formatDecimal(champ.avgScore)}
+              </span>{" "}
+              avg score
             </>
           )}
         </div>
@@ -541,7 +539,7 @@ function ChampionRow({ champ, champData }: { champ: SeasonChampion; champData: C
       <WinRate
         wins={champ.wins}
         games={champ.games}
-        detail={`${champ.games} ${champ.games === 1 ? "game" : "games"}`}
+        detail={`${champ.games.toLocaleString(LOCALE)} ${champ.games === 1 ? "game" : "games"}`}
       />
     </div>
   );
@@ -551,7 +549,11 @@ function PickRow({ picks, wins, children }: { picks: number; wins: number; child
   return (
     <div className="flex h-9 items-center gap-3">
       <div className="min-w-0 flex-1">{children}</div>
-      <WinRate wins={wins} games={picks} detail={`${picks} ${picks === 1 ? "pick" : "picks"}`} />
+      <WinRate
+        wins={wins}
+        games={picks}
+        detail={`${picks.toLocaleString(LOCALE)} ${picks === 1 ? "pick" : "picks"}`}
+      />
     </div>
   );
 }
@@ -617,7 +619,9 @@ function FriendRow({ friend, hideName }: { friend: TeammateStats; hideName: bool
             {tag && <span className="text-lol-text/60"> #{tag}</span>}
           </div>
         )}
-        <div className="text-[11px] text-lol-text">{friend.games} games together</div>
+        <div className="text-[11px] text-lol-text">
+          {friend.games.toLocaleString(LOCALE)} games together
+        </div>
       </div>
       <div className="flex w-14 shrink-0 -space-x-1.5">
         {friend.champions.slice(0, 3).map((champ) => (
@@ -633,7 +637,7 @@ function FriendRow({ friend, hideName }: { friend: TeammateStats; hideName: bool
         <WinRate
           wins={friend.wins}
           games={friend.games}
-          detail={`${friend.wins}W ${friend.games - friend.wins}L`}
+          detail={`${friend.wins.toLocaleString(LOCALE)}W ${(friend.games - friend.wins).toLocaleString(LOCALE)}L`}
         />
       </div>
     </div>
@@ -662,7 +666,7 @@ function Activity({ recap }: { recap: SeasonRecap }) {
       key: "hour",
       icon: <ClockIcon className="h-3 w-3" />,
       label: "Prime time",
-      value: hourLabel(recap.peakHour),
+      value: formatHour(recap.peakHour),
       sub: "most games started",
     });
   }
@@ -671,7 +675,7 @@ function Activity({ recap }: { recap: SeasonRecap }) {
       key: "weekday",
       icon: <SparklesIcon className="h-3 w-3" />,
       label: "Favorite day",
-      value: weekdayLabel(recap.topWeekday),
+      value: formatWeekday(recap.topWeekday, "long"),
       sub: "most games played",
     });
   }

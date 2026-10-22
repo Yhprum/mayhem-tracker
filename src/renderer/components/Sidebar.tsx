@@ -13,6 +13,7 @@ import { useBackfill } from "../hooks/useBackfill";
 import { useRecapBadge } from "../hooks/useRecapBadge";
 import type { LcuStatus, SeasonSummary, UpdateInfo } from "../lib/types";
 import UpdateDialog from "./UpdateDialog";
+import { LOCALE } from "../lib/format";
 import {
   MayhemIcon,
   SwordsIcon,
@@ -156,9 +157,9 @@ export default function Sidebar() {
         if ("error" in result) {
           setLastResult(`Import failed: ${result.error}`);
         } else if (result.cancelled) {
-          setLastResult(`Import stopped after ${result.added} game(s)`);
+          setLastResult(`Import stopped after ${result.added.toLocaleString(LOCALE)} game(s)`);
         } else if (result.added > 0) {
-          setLastResult(`Imported ${result.added} past game(s)`);
+          setLastResult(`Imported ${result.added.toLocaleString(LOCALE)} past game(s)`);
         }
       }),
     [],
@@ -173,7 +174,9 @@ export default function Sidebar() {
         setLastResult(`Error: ${result.error}`);
       } else {
         setLastResult(
-          result.newGames > 0 ? `Found ${result.newGames} new game(s)` : "No new games",
+          result.newGames > 0
+            ? `Found ${result.newGames.toLocaleString(LOCALE)} new game(s)`
+            : "No new games",
         );
       }
     } catch (err: any) {
@@ -234,7 +237,7 @@ export default function Sidebar() {
           <div className="flex flex-col gap-1.5">
             <span className="text-xs text-lol-text truncate">
               {progress && progress.total > 0
-                ? `Importing history ${progress.current}/${progress.total}`
+                ? `Importing history ${progress.current.toLocaleString(LOCALE)}/${progress.total.toLocaleString(LOCALE)}`
                 : "Importing history..."}
             </span>
             <div className="h-1 rounded-full bg-lol-border overflow-hidden">

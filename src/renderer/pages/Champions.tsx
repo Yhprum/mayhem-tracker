@@ -13,6 +13,7 @@ import QueueSelect from "../components/QueueSelect";
 import SortHeader from "../components/SortHeader";
 import {
   LOCALE,
+  formatDecimal,
   formatDuration,
   formatTimeAgo,
   kdaRatio,
@@ -87,7 +88,9 @@ function ChampionExpanded({
                   <span className="text-xs text-lol-text-bright truncate min-w-0">
                     {augData[a.augment_id]?.name ?? `Augment ${a.augment_id}`}
                   </span>
-                  <span className="text-[11px] text-lol-text shrink-0 ml-auto">{a.picks}x</span>
+                  <span className="text-[11px] text-lol-text shrink-0 ml-auto">
+                    {a.picks.toLocaleString(LOCALE)}x
+                  </span>
                   <div className="shrink-0">
                     <WinRateBar wins={a.wins} total={a.picks} />
                   </div>
@@ -109,7 +112,9 @@ function ChampionExpanded({
                   <div className="shrink-0">
                     <ItemIcon itemId={item.item_id} size={24} patch={patch} />
                   </div>
-                  <span className="text-[11px] text-lol-text shrink-0 ml-auto">{item.picks}x</span>
+                  <span className="text-[11px] text-lol-text shrink-0 ml-auto">
+                    {item.picks.toLocaleString(LOCALE)}x
+                  </span>
                   <div className="shrink-0">
                     <WinRateBar wins={item.wins} total={item.picks} />
                   </div>
@@ -147,7 +152,7 @@ function ChampionExpanded({
                   </span>
                   {m.score != null && !m.is_remake && (
                     <span className={`font-semibold shrink-0 tabular-nums ${scoreColor(m.score)}`}>
-                      {m.score.toFixed(1)}
+                      {formatDecimal(m.score)}
                     </span>
                   )}
                   <span className="text-lol-text ml-auto shrink-0 tabular-nums">
@@ -316,19 +321,19 @@ export default function Champions() {
                     </div>
                   </td>
                   <td className="px-2 py-2 text-sm text-lol-text-bright text-right tabular-nums">
-                    {c.games}
+                    {c.games.toLocaleString(LOCALE)}
                   </td>
                   <td className="px-2 py-2 w-32">
                     <WinRateBar wins={c.wins} total={c.games} />
                   </td>
                   <td className="px-2 py-2 text-sm text-lol-text text-right tabular-nums">
-                    {c.avg_kills.toFixed(1)}
+                    {formatDecimal(c.avg_kills)}
                   </td>
                   <td className="px-2 py-2 text-sm text-lol-text text-right tabular-nums">
-                    {c.avg_deaths.toFixed(1)}
+                    {formatDecimal(c.avg_deaths)}
                   </td>
                   <td className="px-2 py-2 text-sm text-lol-text text-right tabular-nums">
-                    {c.avg_assists.toFixed(1)}
+                    {formatDecimal(c.avg_assists)}
                   </td>
                   <td
                     className={`px-2 py-2 text-sm text-right tabular-nums ${kdaColor(c.deaths > 0 ? (c.kills + c.assists) / c.deaths : Infinity)}`}
@@ -340,7 +345,7 @@ export default function Champions() {
                       c.avg_score != null ? scoreColor(c.avg_score) : "text-lol-text"
                     }`}
                   >
-                    {c.avg_score != null ? c.avg_score.toFixed(1) : "—"}
+                    {c.avg_score != null ? formatDecimal(c.avg_score) : "—"}
                   </td>
                   <td className="px-2 py-2 text-sm whitespace-nowrap tabular-nums">
                     <span className={c.mvps > 0 ? "text-amber-300" : "text-lol-text/40"}>

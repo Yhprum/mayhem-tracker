@@ -7,7 +7,7 @@ import type {
   StreakRecord,
 } from "../lib/types";
 import { getChampionName } from "../hooks/useChampions";
-import { LOCALE, formatDuration, kdaRatio, scoreColor } from "../lib/format";
+import { LOCALE, formatDecimal, formatDuration, kdaRatio, scoreColor } from "../lib/format";
 import ChampionIcon from "./ChampionIcon";
 import Kda from "./Kda";
 import { ACCENTS, type StatAccent } from "./StatCard";
@@ -145,7 +145,7 @@ export function recordCards(bests: RecordsData["bests"]): RecordCardDef[] {
     accent: "gold",
     // The raw score, which runs past the 10 every other score stops at: a best
     // is the one place telling the 10s apart matters
-    value: (r) => <span className={scoreColor(r.value)}>{r.value.toFixed(1)}</span>,
+    value: (r) => <span className={scoreColor(r.value)}>{formatDecimal(r.value)}</span>,
   });
   add(bests.killingSpree, {
     key: "spree",

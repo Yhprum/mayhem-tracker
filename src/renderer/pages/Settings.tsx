@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useBackfill } from "../hooks/useBackfill";
 import { queueLabel } from "../components/QueueSelect";
-import { LOCALE } from "../lib/format";
+import { LOCALE, formatDecimal } from "../lib/format";
 import { setRemembering } from "../lib/viewState";
 import type { BackupInfo, ImportProgress } from "../lib/types";
 import {
@@ -27,7 +27,7 @@ const BACKUP_REASONS: Record<string, string> = {
 };
 
 function formatSize(bytes: number): string {
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${formatDecimal(bytes / 1024 / 1024)} MB`;
 }
 
 function formatTaken(timestamp: number): string {
@@ -180,7 +180,7 @@ export default function Settings() {
       const result = await window.api.createBackup();
       setBackupStatus(
         result.success
-          ? `Backed up ${result.backup?.games} game(s)`
+          ? `Backed up ${result.backup?.games?.toLocaleString(LOCALE)} game(s)`
           : `Error: ${result.error ?? "backup failed"}`,
       );
       refreshBackups();
@@ -200,7 +200,7 @@ export default function Settings() {
         const result = await window.api.restoreBackup(file);
         setBackupStatus(
           result.success
-            ? `Restored ${result.games} game(s) from ${file}`
+            ? `Restored ${result.games?.toLocaleString(LOCALE)} game(s) from ${file}`
             : `Error: ${result.error ?? "restore failed"}`,
         );
         refreshBackups();
@@ -218,7 +218,9 @@ export default function Settings() {
     try {
       const result = await window.api.exportData();
       if (result.success) {
-        setExportStatus(`Exported ${result.games} game(s) to ${result.path}`);
+        setExportStatus(
+          `Exported ${result.games?.toLocaleString(LOCALE)} game(s) to ${result.path}`,
+        );
       } else {
         // No error means the file dialog was dismissed, which needs no message
         setExportStatus(result.error ? `Error: ${result.error}` : null);
@@ -236,7 +238,7 @@ export default function Settings() {
     try {
       const result = await window.api.importData();
       if (result.success) {
-        setImportStatus(`Imported ${result.imported} new game(s)`);
+        setImportStatus(`Imported ${result.imported?.toLocaleString(LOCALE)} new game(s)`);
       } else {
         setImportStatus(result.error ? `Error: ${result.error}` : null);
       }
@@ -254,7 +256,7 @@ export default function Settings() {
   // outcome
   const importLine =
     importing && importProgress
-      ? `Importing game ${importProgress.current} of ${importProgress.total}, ${importProgress.imported} new so far`
+      ? `Importing game ${importProgress.current.toLocaleString(LOCALE)} of ${importProgress.total.toLocaleString(LOCALE)}, ${importProgress.imported.toLocaleString(LOCALE)} new so far`
       : importStatus;
 
   // A run in progress reports how far it has got; the outcome takes over once
@@ -262,7 +264,7 @@ export default function Settings() {
   const backfillLine = progress
     ? progress.total === 0
       ? "Nothing new to check"
-      : `Checking game ${progress.current} of ${progress.total}, ${progress.added} added so far`
+      : `Checking game ${progress.current.toLocaleString(LOCALE)} of ${progress.total.toLocaleString(LOCALE)}, ${progress.added.toLocaleString(LOCALE)} added so far`
     : backfillStatus;
 
   const handleBackfill = useCallback(async () => {
@@ -274,15 +276,15 @@ export default function Settings() {
       } else {
         const summary =
           result.added > 0
-            ? `Added ${result.added} game(s) from ${result.scanned} found in your Riot history`
-            : `No new Mayhem games found (${result.scanned} games checked)`;
+            ? `Added ${result.added.toLocaleString(LOCALE)} game(s) from ${result.scanned.toLocaleString(LOCALE)} found in your Riot history`
+            : `No new Mayhem games found (${result.scanned.toLocaleString(LOCALE)} games checked)`;
         setBackfillStatus(
           result.cancelled
-            ? `Stopped after adding ${result.added} game(s). Run it again to finish.`
+            ? `Stopped after adding ${result.added.toLocaleString(LOCALE)} game(s). Run it again to finish.`
             : result.limit?.kind === "service"
               ? `${summary}. Riot's match history for this account only goes back to ${formatHistoryStart(result.limit.historyStart)}, so older games can't be imported, but every new game from here on is kept.`
               : result.limit?.kind === "paging"
-                ? `${summary}. Stopped at the ${result.scanned}-game paging limit, so anything older was not checked.`
+                ? `${summary}. Stopped at the ${result.scanned.toLocaleString(LOCALE)}-game paging limit, so anything older was not checked.`
                 : summary,
         );
       }
@@ -296,7 +298,7 @@ export default function Settings() {
     try {
       const result = await window.api.repairPuuids();
       setRepairStatus(
-        `Repaired ${result.repairedGames} game(s), found ${result.discoveredAccounts} account(s), rebuilt stats and scores for ${result.rebuiltGames} game(s)`,
+        `Repaired ${result.repairedGames.toLocaleString(LOCALE)} game(s), found ${result.discoveredAccounts} account(s), rebuilt stats and scores for ${result.rebuiltGames.toLocaleString(LOCALE)} game(s)`,
       );
       // A repair takes a snapshot on its way in
       refreshBackups();
@@ -559,8 +561,10 @@ export default function Settings() {
                     <p className="text-lol-text-bright">{formatTaken(backup.created)}</p>
                     <p className="text-lol-text">
                       {BACKUP_REASONS[backup.reason] ?? backup.reason} ·{" "}
-                      {backup.games === null ? "unreadable" : `${backup.games} games`} ·{" "}
-                      {formatSize(backup.size)}
+                      {backup.games === null
+                        ? "unreadable"
+                        : `${backup.games.toLocaleString(LOCALE)} games`}{" "}
+                      · {formatSize(backup.size)}
                     </p>
                   </div>
                   {confirmRestore === backup.file ? (

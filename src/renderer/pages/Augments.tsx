@@ -9,6 +9,7 @@ import {
   getAugmentName,
 } from "../hooks/useChampions";
 import type { AugmentStatsDetailedResult } from "../lib/types";
+import { LOCALE, formatPercent } from "../lib/format";
 import AugmentIcon from "../components/AugmentIcon";
 import ChampionIcon from "../components/ChampionIcon";
 import WinRateBar from "../components/WinRateBar";
@@ -155,7 +156,7 @@ export default function Augments() {
           <tbody>
             {sorted.map((a) => {
               const isExpanded = expanded.has(a.augment_id);
-              const pickRate = totalGames > 0 ? ((a.picks / totalGames) * 100).toFixed(1) : "0.0";
+              const pickRate = formatPercent(totalGames > 0 ? a.picks / totalGames : 0);
               return (
                 <Fragment key={a.augment_id}>
                   <tr
@@ -173,10 +174,10 @@ export default function Augments() {
                       <AugmentIcon augmentId={a.augment_id} showName />
                     </td>
                     <td className="px-3 py-2 text-sm text-lol-text-bright text-right tabular-nums">
-                      {a.picks}
+                      {a.picks.toLocaleString(LOCALE)}
                     </td>
                     <td className="px-3 py-2 text-sm text-lol-text text-right tabular-nums">
-                      {pickRate}%
+                      {pickRate}
                     </td>
                     <td className="px-3 py-2 w-32">
                       <WinRateBar wins={a.wins} total={a.picks} />
@@ -198,7 +199,7 @@ export default function Augments() {
                           </div>
                         </td>
                         <td className="px-3 py-1.5 text-xs text-lol-text text-right tabular-nums">
-                          {c.picks}
+                          {c.picks.toLocaleString(LOCALE)}
                         </td>
                         <td></td>
                         <td className="px-3 py-1.5 w-32">

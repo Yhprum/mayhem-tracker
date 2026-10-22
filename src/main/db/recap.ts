@@ -7,6 +7,7 @@ import type {
   RecapChallenge,
 } from "../../shared/api";
 import { ordinal } from "../../shared/text";
+import { systemLocale } from "../locale";
 import { sessionDay } from "../../shared/session";
 import { ARAM_S_GRADE_CHALLENGE_ID } from "../../shared/challenges";
 import { getGameChallenges } from "./challenges";
@@ -192,6 +193,7 @@ function buildMilestones(rows: CareerRow[], index: number): RecapMilestone[] {
   const milestones: RecapMilestone[] = [];
   const add = (key: string, label: string, detail: string) =>
     milestones.push({ key, label, detail });
+  const locale = systemLocale();
 
   let wins = 0;
   let kills = 0;
@@ -216,15 +218,15 @@ function buildMilestones(rows: CareerRow[], index: number): RecapMilestone[] {
   const games = index + 1;
   const gamesMark =
     crossedMark(games - 1, games, [10, 25, 50]) ?? crossedStep(games - 1, games, 100);
-  if (gamesMark) add("games", `${ordinal(gamesMark)} game`, "Across every tracked account");
+  if (gamesMark) add("games", `${ordinal(gamesMark, locale)} game`, "Across every tracked account");
 
   const winsMark =
     crossedMark(wins - row.win, wins, [10, 25, 50]) ?? crossedStep(wins - row.win, wins, 100);
-  if (winsMark) add("wins", `${ordinal(winsMark)} win`, "Career wins");
+  if (winsMark) add("wins", `${ordinal(winsMark, locale)} win`, "Career wins");
 
   const killsMark = crossedStep(kills - row.kills, kills, 1000);
   if (killsMark)
-    add("kills", `${killsMark.toLocaleString()} career kills`, "Every game, every champion");
+    add("kills", `${killsMark.toLocaleString(locale)} career kills`, "Every game, every champion");
 
   if (champGames === 1) {
     add("champion-first", "First game on this champion", "A new name on the list");
@@ -233,7 +235,7 @@ function buildMilestones(rows: CareerRow[], index: number): RecapMilestone[] {
     if (champMark)
       add(
         "champion-games",
-        `${ordinal(champMark)} game on this champion`,
+        `${ordinal(champMark, locale)} game on this champion`,
         "Career games on this pick",
       );
   }
@@ -242,14 +244,14 @@ function buildMilestones(rows: CareerRow[], index: number): RecapMilestone[] {
   if (champWinMark)
     add(
       "champion-wins",
-      `${ordinal(champWinMark)} win on this champion`,
+      `${ordinal(champWinMark, locale)} win on this champion`,
       "Career wins on this pick",
     );
 
   if (row.penta_kills > 0) {
     add(
       "penta",
-      pentas === row.penta_kills ? "First pentakill" : `${ordinal(pentas)} pentakill`,
+      pentas === row.penta_kills ? "First pentakill" : `${ordinal(pentas, locale)} pentakill`,
       "The rarest one",
     );
   } else if (row.quadra_kills > 0 && quadras === row.quadra_kills) {
@@ -260,7 +262,8 @@ function buildMilestones(rows: CareerRow[], index: number): RecapMilestone[] {
     const mvpMark =
       crossedMark(mvps - 1, mvps, [1, 5, 10, 25, 50]) ?? crossedStep(mvps - 1, mvps, 50);
     if (mvpMark === 1) add("mvp", "First MVP", "Best player on the winning team");
-    else if (mvpMark) add("mvp", `${ordinal(mvpMark)} MVP`, "Best player on the winning team");
+    else if (mvpMark)
+      add("mvp", `${ordinal(mvpMark, locale)} MVP`, "Best player on the winning team");
   }
 
   return milestones;

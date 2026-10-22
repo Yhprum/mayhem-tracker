@@ -16,6 +16,8 @@ import ScoreCell from "../components/ScoreCell";
 import StatBars from "../components/StatBars";
 import WinRateBar from "../components/WinRateBar";
 import {
+  LOCALE,
+  formatDecimal,
   formatDuration,
   formatTimeAgo,
   kdaRatio,
@@ -84,7 +86,7 @@ export default function FriendDetail() {
 
   const { player, matches } = data;
   const losses = player.games - player.wins;
-  const avg = (total: number) => (player.games > 0 ? (total / player.games).toFixed(1) : "0.0");
+  const avg = (total: number) => formatDecimal(player.games > 0 ? total / player.games : 0);
   const ratio =
     player.deaths > 0
       ? (player.kills + player.assists) / player.deaths
@@ -108,7 +110,8 @@ export default function FriendDetail() {
             <div className="min-w-0">
               <h1 className="text-xl font-bold text-lol-text-bright truncate">{player.name}</h1>
               <span className="text-sm text-lol-text">
-                {player.games} games together · last played {formatTimeAgo(player.lastPlayed)}
+                {player.games.toLocaleString(LOCALE)} games together · last played{" "}
+                {formatTimeAgo(player.lastPlayed)}
               </span>
             </div>
           </div>
@@ -119,7 +122,8 @@ export default function FriendDetail() {
             <div className="flex-1 px-4 py-2.5">
               <div className="text-[11px] text-lol-text uppercase tracking-wider">Record</div>
               <div className="text-xl font-bold text-lol-text-bright">
-                {player.wins}W <span className="text-lol-text/60">{losses}L</span>
+                {player.wins.toLocaleString(LOCALE)}W{" "}
+                <span className="text-lol-text/60">{losses.toLocaleString(LOCALE)}L</span>
               </div>
               <div className="mt-1">
                 <WinRateBar wins={player.wins} total={player.games} />
@@ -146,7 +150,7 @@ export default function FriendDetail() {
               <div
                 className={`text-xl font-bold ${avgScore != null ? scoreColor(avgScore) : "text-lol-text"}`}
               >
-                {avgScore != null ? avgScore.toFixed(1) : "—"}
+                {avgScore != null ? formatDecimal(avgScore) : "—"}
               </div>
               <div className="text-xs text-lol-text mt-1">
                 {mvps} MVP · {aces} ACE
@@ -281,7 +285,7 @@ function PlayerBlock({
         <div className="text-xs text-lol-text-bright">
           <Kda kills={kills} deaths={deaths} assists={assists} />
         </div>
-        <div className={`text-[10px] ${kdaHighlight(kda)}`}>{kda} KDA</div>
+        <div className={`text-[10px] ${kdaHighlight(kills, deaths, assists)}`}>{kda} KDA</div>
       </div>
       <ScoreCell score={score} badge={badge} />
       <StatBars damage={damage} taken={taken} heal={heal} max={max} className="w-32" />

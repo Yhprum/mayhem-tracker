@@ -5,7 +5,7 @@ import type { ChallengeProgress, ChallengesData, ChallengesResult } from "../lib
 import ChallengeToken from "../components/ChallengeToken";
 import ChampionIcon from "../components/ChampionIcon";
 import { AwardIcon, ChevronDownIcon } from "../components/icons";
-import { LOCALE } from "../lib/format";
+import { LOCALE, formatPercent } from "../lib/format";
 import {
   CHALLENGE_LEVEL_COLORS as LEVEL_COLORS,
   challengeLevelName as levelName,
@@ -24,7 +24,7 @@ function formatDay(day: string): string {
 
 function percentileLabel(challenge: ChallengeProgress): string | null {
   if (challenge.level === "NONE" || challenge.percentile >= 100) return null;
-  return `top ${challenge.percentile.toFixed(1)}%`;
+  return `top ${formatPercent(challenge.percentile / 100)}`;
 }
 
 // Points are on every tier and already shown as the challenge's own value, so
@@ -309,7 +309,7 @@ function PlayerBar({ data }: { data: ChallengesData }) {
       </div>
       {player.percentile < 100 && (
         <div className="text-[11px] text-lol-text border-l border-lol-border/60 pl-4">
-          top {player.percentile.toFixed(1)}% overall
+          top {formatPercent(player.percentile / 100)} overall
         </div>
       )}
       {player.title && (

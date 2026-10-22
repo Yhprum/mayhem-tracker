@@ -9,7 +9,7 @@ import ChampionIcon from "../components/ChampionIcon";
 import SummonerIcon from "../components/SummonerIcon";
 import WinRateBar from "../components/WinRateBar";
 import SortHeader from "../components/SortHeader";
-import { formatTimeAgo, kdaRatio, kdaColor } from "../lib/format";
+import { LOCALE, formatDecimal, formatTimeAgo, kdaRatio, kdaColor } from "../lib/format";
 import Kda from "../components/Kda";
 import SearchInput from "../components/SearchInput";
 
@@ -115,7 +115,7 @@ export default function Friends() {
                     </div>
                   </td>
                   <td className="px-3 py-2 text-sm text-lol-text-bright text-right tabular-nums">
-                    {t.games}
+                    {t.games.toLocaleString(LOCALE)}
                   </td>
                   <td className="px-3 py-2 w-32">
                     <WinRateBar wins={t.wins} total={t.games} />
@@ -125,9 +125,9 @@ export default function Friends() {
                       <span className={`text-sm ${kdaColor(ratio)}`}>{ratioStr}</span>
                       <span className="text-[10px] text-lol-text">
                         <Kda
-                          kills={avgKills.toFixed(1)}
-                          deaths={avgDeaths.toFixed(1)}
-                          assists={avgAssists.toFixed(1)}
+                          kills={formatDecimal(avgKills)}
+                          deaths={formatDecimal(avgDeaths)}
+                          assists={formatDecimal(avgAssists)}
                         />
                       </span>
                     </div>

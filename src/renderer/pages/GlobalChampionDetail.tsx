@@ -21,14 +21,10 @@ import QueueSelect from "../components/QueueSelect";
 import RarityFilter, { type Rarity } from "../components/RarityFilter";
 import SortHeader from "../components/SortHeader";
 import { useSort, type SortDir } from "../hooks/useSort";
-import { LOCALE, kdaRatio } from "../lib/format";
+import { LOCALE, formatDecimal, formatPercent, kdaRatio } from "../lib/format";
 import Kda from "../components/Kda";
 
 type SortKey = "picks" | "winRate" | "name";
-
-function percent(ratio: number): string {
-  return `${(ratio * 100).toFixed(1)}%`;
-}
 
 function MiniStat({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -61,7 +57,7 @@ function MultikillCounts({
     <div className="flex items-center gap-3">
       {counts.map(({ count, color }, i) => (
         <span key={i} className={count > 0 ? color : "text-lol-text/40"}>
-          {count}
+          {count.toLocaleString(LOCALE)}
         </span>
       ))}
     </div>
@@ -146,10 +142,10 @@ function ItemSection({
                   </div>
                 </td>
                 <td className="px-2 py-1.5 text-xs text-lol-text-bright text-right tabular-nums">
-                  {item.picks}
+                  {item.picks.toLocaleString(LOCALE)}
                 </td>
                 <td className="px-2 py-1.5 text-xs text-lol-text text-right tabular-nums">
-                  {games > 0 ? percent(item.picks / games) : "0.0%"}
+                  {formatPercent(games > 0 ? item.picks / games : 0)}
                 </td>
                 <td className="px-2 py-1.5 w-28">
                   <WinRateBar wins={item.wins} total={item.picks} />
@@ -215,10 +211,10 @@ function AugmentSection({ augments, games }: { augments: AugmentStats[]; games: 
                   <AugmentIcon augmentId={a.augment_id} size={24} showName />
                 </td>
                 <td className="px-2 py-1.5 text-xs text-lol-text-bright text-right tabular-nums">
-                  {a.picks}
+                  {a.picks.toLocaleString(LOCALE)}
                 </td>
                 <td className="px-2 py-1.5 text-xs text-lol-text text-right tabular-nums">
-                  {games > 0 ? percent(a.picks / games) : "0.0%"}
+                  {formatPercent(games > 0 ? a.picks / games : 0)}
                 </td>
                 <td className="px-2 py-1.5 w-28">
                   <WinRateBar wins={a.wins} total={a.picks} />
@@ -269,7 +265,7 @@ export default function GlobalChampionDetailPage() {
   const losses = data.games - data.wins;
   const winRate = data.games > 0 ? data.wins / data.games : 0;
   const pickRate = data.totalParticipantSlots > 0 ? data.games / data.totalParticipantSlots : 0;
-  const avg = (total: number) => (data.games > 0 ? (total / data.games).toFixed(1) : "0.0");
+  const avg = (total: number) => formatDecimal(data.games > 0 ? total / data.games : 0);
 
   return (
     <div className="max-w-6xl space-y-4">
@@ -283,7 +279,7 @@ export default function GlobalChampionDetailPage() {
               {getChampionName(champData, id)}
             </h1>
             <span className="text-sm text-lol-text">
-              {data.games} games played across all stored matches
+              {data.games.toLocaleString(LOCALE)} games played across all stored matches
             </span>
           </div>
         </div>
@@ -302,8 +298,8 @@ export default function GlobalChampionDetailPage() {
           <div className="grid grid-cols-4 gap-4">
             <StatCard
               label="Win Rate"
-              value={percent(winRate)}
-              subtext={`${data.wins}W ${losses}L`}
+              value={formatPercent(winRate)}
+              subtext={`${data.wins.toLocaleString(LOCALE)}W ${losses.toLocaleString(LOCALE)}L`}
             />
             <StatCard
               label="KDA"
@@ -317,24 +313,29 @@ export default function GlobalChampionDetailPage() {
               subtext={
                 <>
                   {kdaRatio(data.kills, data.deaths, data.assists)} ratio ·{" "}
-                  <Kda kills={data.kills} deaths={data.deaths} assists={data.assists} /> total
+                  <Kda
+                    kills={data.kills.toLocaleString(LOCALE)}
+                    deaths={data.deaths.toLocaleString(LOCALE)}
+                    assists={data.assists.toLocaleString(LOCALE)}
+                  />{" "}
+                  total
                 </>
               }
             />
             <StatCard
               label="Damage"
               value={data.avgDamage.toLocaleString(LOCALE)}
-              subtext={`${percent(data.damageShare)} of team damage`}
+              subtext={`${formatPercent(data.damageShare)} of team damage`}
             />
             <StatCard
               label="Pick Rate"
-              value={percent(pickRate)}
-              subtext={`${data.games} of ${data.totalParticipantSlots} picks`}
+              value={formatPercent(pickRate)}
+              subtext={`${data.games.toLocaleString(LOCALE)} of ${data.totalParticipantSlots.toLocaleString(LOCALE)} picks`}
             />
           </div>
 
           <div className="grid grid-cols-5 gap-2">
-            <MiniStat label="Kill Part.">{percent(data.killParticipation)}</MiniStat>
+            <MiniStat label="Kill Part.">{formatPercent(data.killParticipation)}</MiniStat>
             <MiniStat label="Avg Gold">{data.avgGold.toLocaleString(LOCALE)}</MiniStat>
             <MiniStat label="Avg Dmg Taken">{data.avgDamageTaken.toLocaleString(LOCALE)}</MiniStat>
             <MiniStat label="Avg Healing">{data.avgHeal.toLocaleString(LOCALE)}</MiniStat>

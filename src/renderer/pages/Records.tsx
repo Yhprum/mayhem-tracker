@@ -9,7 +9,7 @@ import QueueSelect, { queueLabel } from "../components/QueueSelect";
 import AccountSelect from "../components/AccountSelect";
 import { RecordCard, recordCards, recordDate, streakCard } from "../components/RecordCard";
 import { XIcon } from "../components/icons";
-import { formatDuration } from "../lib/format";
+import { LOCALE, formatDuration } from "../lib/format";
 import Kda from "../components/Kda";
 
 // ---- Match modal ----
@@ -118,7 +118,8 @@ export default function Records() {
       <h1 className="text-xl font-bold text-lol-text-bright">Records</h1>
       <div className="flex items-center gap-3">
         <span className="text-xs text-lol-text">
-          personal bests across {data.totalGames} {data.totalGames === 1 ? "game" : "games"}
+          personal bests across {data.totalGames.toLocaleString(LOCALE)}{" "}
+          {data.totalGames === 1 ? "game" : "games"}
         </span>
         <AccountSelect value={account} onChange={setAccount} />
         <QueueSelect value={queue} onChange={setQueue} />

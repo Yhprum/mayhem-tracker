@@ -2,7 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useIpc } from "../hooks/useIpc";
 import { useViewState } from "../hooks/useViewState";
 import type { TrendsData, TrendsDay } from "../lib/types";
-import { LOCALE, formatPatch } from "../lib/format";
+import {
+  LOCALE,
+  formatDecimal,
+  formatHour,
+  formatPatch,
+  formatPercent,
+  formatWeekday,
+} from "../lib/format";
 import QueueSelect from "../components/QueueSelect";
 import ActivityCalendar from "../components/ActivityCalendar";
 import { dayKey } from "../../shared/session";
@@ -14,6 +21,11 @@ import { dayKey } from "../../shared/session";
 function parseDay(day: string): Date {
   const [y, m, d] = day.split("-").map(Number);
   return new Date(y, m - 1, d);
+}
+
+// A bucket's games and how they went, for chart tooltips
+function recordDetail(games: number, wins: number): string {
+  return `${games.toLocaleString(LOCALE)} games · ${wins.toLocaleString(LOCALE)}W–${(games - wins).toLocaleString(LOCALE)}L`;
 }
 
 // ---- Bucketing ----
@@ -442,7 +454,7 @@ function PatchBars({ patches }: { patches: TrendsData["patches"] }) {
                     fontSize={10}
                     fill="var(--color-lol-text-bright)"
                   >
-                    {rate.toFixed(0)}%
+                    {formatPercent(rate / 100, 0)}
                   </text>
                   <text
                     x={cx}
@@ -460,7 +472,7 @@ function PatchBars({ patches }: { patches: TrendsData["patches"] }) {
                     fontSize={9}
                     fill="var(--color-lol-text)"
                   >
-                    {p.games} games
+                    {p.games.toLocaleString(LOCALE)} games
                   </text>
                 </g>
               );
@@ -473,13 +485,13 @@ function PatchBars({ patches }: { patches: TrendsData["patches"] }) {
               label={`Patch ${formatPatch(hovered.patch)}`}
               detail={
                 <>
-                  <div>{`${hovered.games} games · ${hovered.wins}W–${hovered.games - hovered.wins}L`}</div>
-                  {hovered.avg_score != null && <div>avg score {hovered.avg_score.toFixed(1)}</div>}
+                  <div>{recordDetail(hovered.games, hovered.wins)}</div>
+                  {hovered.avg_score != null && (
+                    <div>avg score {formatDecimal(hovered.avg_score)}</div>
+                  )}
                 </>
               }
-              value={
-                hovered.games > 0 ? `${((hovered.wins / hovered.games) * 100).toFixed(0)}%` : null
-              }
+              value={hovered.games > 0 ? formatPercent(hovered.wins / hovered.games, 0) : null}
             />
           )}
         </div>
@@ -498,8 +510,6 @@ function PatchBars({ patches }: { patches: TrendsData["patches"] }) {
 const MIN_PLOTTED_GAMES = 3;
 
 const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
-const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const WEEKDAY_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 function clockPoint(label: string, long: string, games: number, wins: number): SeriesPoint {
   return {
@@ -507,7 +517,7 @@ function clockPoint(label: string, long: string, games: number, wins: number): S
     long,
     games,
     value: games >= MIN_PLOTTED_GAMES ? (wins / games) * 100 : null,
-    detail: games > 0 ? `${games} games · ${wins}W–${games - wins}L` : "No games",
+    detail: games > 0 ? recordDetail(games, wins) : "No games",
   };
 }
 
@@ -515,8 +525,8 @@ function WeekdayChart({ weekdays }: { weekdays: TrendsData["weekdays"] }) {
   const byDay = new Map(weekdays.map((w) => [w.weekday, w]));
   const points = WEEKDAY_ORDER.map((dow) =>
     clockPoint(
-      WEEKDAY_LABELS[dow],
-      WEEKDAY_FULL[dow],
+      formatWeekday(dow, "short"),
+      formatWeekday(dow, "long"),
       byDay.get(dow)?.games ?? 0,
       byDay.get(dow)?.wins ?? 0,
     ),
@@ -528,7 +538,7 @@ function WeekdayChart({ weekdays }: { weekdays: TrendsData["weekdays"] }) {
       yMax={100}
       ticks={[0, 25, 50, 75, 100]}
       refValue={50}
-      format={(v) => `${Math.round(v)}%`}
+      format={(v) => formatPercent(v / 100, 0)}
     />
   );
 }
@@ -537,8 +547,8 @@ function HourChart({ hours }: { hours: TrendsData["hours"] }) {
   const byHour = new Map(hours.map((h) => [h.hour, h]));
   const points = Array.from({ length: 24 }, (_, hour) =>
     clockPoint(
-      `${hour}:00`,
-      `${String(hour).padStart(2, "0")}:00 – ${String((hour + 1) % 24).padStart(2, "0")}:00`,
+      formatHour(hour),
+      `${formatHour(hour)} – ${formatHour((hour + 1) % 24)}`,
       byHour.get(hour)?.games ?? 0,
       byHour.get(hour)?.wins ?? 0,
     ),
@@ -550,7 +560,7 @@ function HourChart({ hours }: { hours: TrendsData["hours"] }) {
       yMax={100}
       ticks={[0, 25, 50, 75, 100]}
       refValue={50}
-      format={(v) => `${Math.round(v)}%`}
+      format={(v) => formatPercent(v / 100, 0)}
     />
   );
 }
@@ -593,7 +603,7 @@ export default function Trends() {
         label: b.label,
         games: b.games,
         value: b.games > 0 ? (b.wins / b.games) * 100 : null,
-        detail: b.games > 0 ? `${b.games} games · ${b.wins}W–${b.games - b.wins}L` : "No games",
+        detail: b.games > 0 ? recordDetail(b.games, b.wins) : "No games",
       })),
     [buckets],
   );
@@ -604,7 +614,10 @@ export default function Trends() {
         label: b.label,
         games: b.games,
         value: b.scoredGames > 0 ? b.scoreSum / b.scoredGames : null,
-        detail: b.scoredGames > 0 ? `${b.scoredGames} scored games` : "No scored games",
+        detail:
+          b.scoredGames > 0
+            ? `${b.scoredGames.toLocaleString(LOCALE)} scored games`
+            : "No scored games",
       })),
     [buckets],
   );
@@ -659,7 +672,7 @@ export default function Trends() {
         <h1 className="text-xl font-bold text-lol-text-bright">Trends</h1>
         <div className="flex items-center gap-3">
           <span className="text-xs text-lol-text">
-            {totalGames} games over {data.daily.length} days
+            {totalGames.toLocaleString(LOCALE)} games over {data.daily.length} days
           </span>
           <QueueSelect value={queue} onChange={setQueue} />
         </div>
@@ -676,7 +689,7 @@ export default function Trends() {
           yMax={100}
           ticks={[0, 25, 50, 75, 100]}
           refValue={50}
-          format={(v) => `${Math.round(v)}%`}
+          format={(v) => formatPercent(v / 100, 0)}
         />
       </Card>
 
@@ -687,7 +700,7 @@ export default function Trends() {
             yMin={scoreDomain.min}
             yMax={scoreDomain.max}
             ticks={scoreDomain.ticks}
-            format={(v) => v.toFixed(1)}
+            format={(v) => formatDecimal(v)}
           />
         </Card>
       )}

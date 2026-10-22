@@ -42,7 +42,9 @@ import { ExportImageMessage, useImageExport } from "../components/ExportImage";
 import {
   LOCALE,
   formatDateTime,
+  formatDecimal,
   formatDuration,
+  formatPercent,
   formatPlaytime,
   formatTimeAgo,
   formatKDA,
@@ -72,7 +74,7 @@ function emptyStateMessage(
   if (backfill.running) {
     const p = backfill.progress;
     return p && p.total > 0
-      ? `Importing your match history — ${p.current} of ${p.total} games checked...`
+      ? `Importing your match history — ${p.current.toLocaleString(LOCALE)} of ${p.total.toLocaleString(LOCALE)} games checked...`
       : "Importing your match history...";
   }
   if (status !== "connected" && status !== "ingame") {
@@ -428,15 +430,15 @@ export default function MatchHistory() {
 
   const avgKills =
     dashboard && dashboard.totalGames > 0
-      ? (dashboard.totalKills / dashboard.totalGames).toFixed(1)
+      ? formatDecimal(dashboard.totalKills / dashboard.totalGames)
       : "0";
   const avgDeaths =
     dashboard && dashboard.totalGames > 0
-      ? (dashboard.totalDeaths / dashboard.totalGames).toFixed(1)
+      ? formatDecimal(dashboard.totalDeaths / dashboard.totalGames)
       : "0";
   const avgAssists =
     dashboard && dashboard.totalGames > 0
-      ? (dashboard.totalAssists / dashboard.totalGames).toFixed(1)
+      ? formatDecimal(dashboard.totalAssists / dashboard.totalGames)
       : "0";
   const kdaValue =
     dashboard && dashboard.totalDeaths > 0
@@ -502,7 +504,7 @@ export default function MatchHistory() {
             value={
               dashboard.avgScore != null ? (
                 <span className={scoreColor(dashboard.avgScore)}>
-                  {dashboard.avgScore.toFixed(1)}
+                  {formatDecimal(dashboard.avgScore)}
                   <span className="text-sm font-semibold text-lol-text/60"> / 10</span>
                 </span>
               ) : (
@@ -538,9 +540,9 @@ export default function MatchHistory() {
           >
             <div className="text-[11px] text-lol-text">
               <Kda
-                kills={dashboard.totalKills}
-                deaths={dashboard.totalDeaths}
-                assists={dashboard.totalAssists}
+                kills={dashboard.totalKills.toLocaleString(LOCALE)}
+                deaths={dashboard.totalDeaths.toLocaleString(LOCALE)}
+                assists={dashboard.totalAssists.toLocaleString(LOCALE)}
               />{" "}
               total
             </div>
@@ -550,7 +552,7 @@ export default function MatchHistory() {
             label="Multikills"
             accent="purple"
             icon={<ZapIcon className="w-3 h-3" />}
-            value={totalMultikills}
+            value={totalMultikills.toLocaleString(LOCALE)}
           >
             <div className="grid grid-cols-4 gap-1">
               {(
@@ -603,7 +605,9 @@ export default function MatchHistory() {
                         : "border-transparent hover:border-lol-border hover:bg-white/5"
                     }`}
                   >
-                    <div className={`text-base font-bold ${color}`}>{value}</div>
+                    <div className={`text-base font-bold ${color}`}>
+                      {value.toLocaleString(LOCALE)}
+                    </div>
                     <div className="text-[10px] text-lol-text">{label}</div>
                   </button>
                 );
@@ -849,7 +853,8 @@ function ProfileCard({
           {/* The totals below pool every tracked account, so say when the name
               above only accounts for part of them */}
           <div className="text-[11px] text-lol-text truncate">
-            {dashboard.totalGames} {dashboard.totalGames === 1 ? "game" : "games"}
+            {dashboard.totalGames.toLocaleString(LOCALE)}{" "}
+            {dashboard.totalGames === 1 ? "game" : "games"}
             {dashboard.totalDuration > 0 && ` · ${formatPlaytime(dashboard.totalDuration)} played`}
             {dashboard.accounts > 1 && ` · ${dashboard.accounts} accounts`}
           </div>
@@ -859,8 +864,8 @@ function ProfileCard({
       <div className="relative mt-auto">
         <div className="flex items-end justify-between gap-3 mb-1.5">
           <div className="text-2xl font-bold leading-none">
-            <span className="text-lol-win">{dashboard.wins}W</span>{" "}
-            <span className="text-lol-loss/70">{losses}L</span>
+            <span className="text-lol-win">{dashboard.wins.toLocaleString(LOCALE)}W</span>{" "}
+            <span className="text-lol-loss/70">{losses.toLocaleString(LOCALE)}L</span>
           </div>
           <div
             className="flex items-end gap-[3px]"
@@ -906,7 +911,7 @@ function BadgeCounts({
   scoredWins: number;
   scoredLosses: number;
 }) {
-  const rate = (n: number, of: number) => (of > 0 ? `${((n / of) * 100).toFixed(1)}%` : "—");
+  const rate = (n: number, of: number) => (of > 0 ? formatPercent(n / of) : "—");
 
   return (
     <div className="grid grid-cols-[auto_1fr_auto] items-center gap-x-2 gap-y-1">
@@ -1005,7 +1010,7 @@ function SessionHeader({ session }: { session: Session }) {
           </span>
           {session.avgScore != null && (
             <span className={`text-xs font-semibold ${scoreColor(session.avgScore)}`}>
-              {session.avgScore.toFixed(1)}
+              {formatDecimal(session.avgScore)}
               <span className="font-normal text-lol-text"> score</span>
             </span>
           )}
@@ -1106,7 +1111,9 @@ function GameRow({
           <div className="text-sm text-lol-text-bright">
             <Kda kills={match.kills} deaths={match.deaths} assists={match.assists} />
           </div>
-          <div className={`text-xs ${kdaHighlight(kda)}`}>{kda} KDA</div>
+          <div className={`text-xs ${kdaHighlight(match.kills, match.deaths, match.assists)}`}>
+            {kda} KDA
+          </div>
         </div>
 
         {/* Score — a remake is scored by nothing, so it shows none */}

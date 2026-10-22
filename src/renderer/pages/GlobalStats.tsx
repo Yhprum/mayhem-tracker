@@ -4,6 +4,7 @@ import { useQueryFilters } from "../hooks/useQueryFilters";
 import { useIpc } from "../hooks/useIpc";
 import { useViewState } from "../hooks/useViewState";
 import { readViewState, writeViewState } from "../lib/viewState";
+import { LOCALE, formatPercent } from "../lib/format";
 import {
   useChampionData,
   getChampionName,
@@ -198,8 +199,8 @@ export default function GlobalStats() {
         <h1 className="text-xl font-bold text-lol-text-bright">Total Stats</h1>
         <div className="flex items-center gap-3">
           <span className="text-xs text-lol-text">
-            {totalGames} games &middot; {data.champions.length} champions &middot;{" "}
-            {data.augments.length} augments &middot; {data.items.length} items
+            {totalGames.toLocaleString(LOCALE)} games &middot; {data.champions.length} champions
+            &middot; {data.augments.length} augments &middot; {data.items.length} items
           </span>
           <QueueSelect value={queue} onChange={setQueue} />
           <PatchSelect value={patch} onChange={setPatch} />
@@ -278,10 +279,9 @@ export default function GlobalStats() {
               </thead>
               <tbody>
                 {sortedChampions.map((c, i) => {
-                  const pickRate =
-                    data.totalParticipantSlots > 0
-                      ? ((c.games / data.totalParticipantSlots) * 100).toFixed(1)
-                      : "0.0";
+                  const pickRate = formatPercent(
+                    data.totalParticipantSlots > 0 ? c.games / data.totalParticipantSlots : 0,
+                  );
                   return (
                     <tr
                       key={c.champion_id}
@@ -300,10 +300,10 @@ export default function GlobalStats() {
                         </div>
                       </td>
                       <td className="px-3 py-2 text-sm text-lol-text-bright text-right tabular-nums">
-                        {c.games}
+                        {c.games.toLocaleString(LOCALE)}
                       </td>
                       <td className="px-3 py-2 text-sm text-lol-text text-right tabular-nums">
-                        {pickRate}%
+                        {pickRate}
                       </td>
                       <td className="px-3 py-2 w-32">
                         <WinRateBar wins={c.wins} total={c.games} />
@@ -347,10 +347,9 @@ export default function GlobalStats() {
               </thead>
               <tbody>
                 {sortedItems.map((item) => {
-                  const pickRate =
-                    data.totalParticipantSlots > 0
-                      ? ((item.picks / data.totalParticipantSlots) * 100).toFixed(1)
-                      : "0.0";
+                  const pickRate = formatPercent(
+                    data.totalParticipantSlots > 0 ? item.picks / data.totalParticipantSlots : 0,
+                  );
                   return (
                     <tr
                       key={item.item_id}
@@ -365,10 +364,10 @@ export default function GlobalStats() {
                         </div>
                       </td>
                       <td className="px-3 py-2 text-sm text-lol-text-bright text-right tabular-nums">
-                        {item.picks}
+                        {item.picks.toLocaleString(LOCALE)}
                       </td>
                       <td className="px-3 py-2 text-sm text-lol-text text-right tabular-nums">
-                        {pickRate}%
+                        {pickRate}
                       </td>
                       <td className="px-3 py-2 w-32">
                         <WinRateBar wins={item.wins} total={item.picks} />
@@ -421,10 +420,9 @@ export default function GlobalStats() {
               </thead>
               <tbody>
                 {sortedAugments.map((a) => {
-                  const pickRate =
-                    data.totalParticipantSlots > 0
-                      ? ((a.picks / data.totalParticipantSlots) * 100).toFixed(1)
-                      : "0.0";
+                  const pickRate = formatPercent(
+                    data.totalParticipantSlots > 0 ? a.picks / data.totalParticipantSlots : 0,
+                  );
                   return (
                     <tr
                       key={a.augment_id}
@@ -434,10 +432,10 @@ export default function GlobalStats() {
                         <AugmentIcon augmentId={a.augment_id} showName />
                       </td>
                       <td className="px-3 py-2 text-sm text-lol-text-bright text-right tabular-nums">
-                        {a.picks}
+                        {a.picks.toLocaleString(LOCALE)}
                       </td>
                       <td className="px-3 py-2 text-sm text-lol-text text-right tabular-nums">
-                        {pickRate}%
+                        {pickRate}
                       </td>
                       <td className="px-3 py-2 w-32">
                         <WinRateBar wins={a.wins} total={a.picks} />

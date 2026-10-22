@@ -2,7 +2,14 @@ import { useMemo, useState, type ReactNode } from "react";
 import type { ChampionData, MatchDetail, ParsedParticipant } from "../lib/types";
 import { parseParticipants, groupByTeam } from "../lib/participants";
 import { getChampionName } from "../hooks/useChampions";
-import { formatCompact, kdaHighlight, kdaRatio, scoreColor } from "../lib/format";
+import {
+  formatCompact,
+  formatDecimal,
+  formatPercent,
+  kdaHighlight,
+  kdaRatio,
+  scoreColor,
+} from "../lib/format";
 import {
   computeMatchScoreBreakdowns,
   type ScoreBreakdown,
@@ -122,7 +129,7 @@ function TeamScoreboard({
             <span
               className={totals.avgScore != null ? scoreColor(totals.avgScore) : "text-lol-text"}
             >
-              {totals.avgScore != null ? totals.avgScore.toFixed(1) : "-"}
+              {totals.avgScore != null ? formatDecimal(totals.avgScore) : "-"}
             </span>
           </TeamStat>
           <TeamStat label="KDA">
@@ -285,7 +292,7 @@ function PlayerRow({
         <div className="text-[11px] text-lol-text-bright">
           <Kda kills={p.kills} deaths={p.deaths} assists={p.assists} />
         </div>
-        <div className={`text-[10px] ${kdaHighlight(kda)}`}>{kda}</div>
+        <div className={`text-[10px] ${kdaHighlight(p.kills, p.deaths, p.assists)}`}>{kda}</div>
       </div>
 
       {/* Damage dealt */}
@@ -353,7 +360,7 @@ function ScoreCell({ score }: { score?: ScoreBreakdown }) {
       <div
         className={`text-[11px] font-semibold tabular-nums ${score ? scoreColor(score.score) : "text-lol-text"}`}
       >
-        {score ? score.score.toFixed(1) : "-"}
+        {score ? formatDecimal(score.score) : "-"}
       </div>
       {score?.badge && <ScoreBadge badge={score.badge} />}
       {score && anchor && <ScoreBreakdownTooltip breakdown={score} anchor={anchor} />}
@@ -373,8 +380,8 @@ const COMPONENT_LABELS: Record<ScoreComponentKey, string> = {
 // How the player's stat and its full-credit reference read in the tooltip:
 // kda/kp are graded against fixed caps, the rest against the lobby's best.
 function componentValue(c: ScoreComponent): string {
-  if (c.key === "kda") return `${c.value.toFixed(1)} (full at 8)`;
-  if (c.key === "kp") return `${Math.round(c.value * 100)}% (full at 90%)`;
+  if (c.key === "kda") return `${formatDecimal(c.value)} (full at 8)`;
+  if (c.key === "kp") return `${formatPercent(c.value, 0)} (full at ${formatPercent(0.9, 0)})`;
   return `${formatCompact(c.value)} / ${formatCompact(c.reference)}`;
 }
 
@@ -419,8 +426,8 @@ function ScoreBreakdownTooltip({
             <span className="ml-1.5 text-[10px] text-lol-text/70">{componentValue(c)}</span>
           </span>
           <span className="text-[11px] tabular-nums text-lol-text-bright">
-            {c.points.toFixed(1)}
-            <span className="text-[10px] text-lol-text/70"> / {c.weight.toFixed(1)}</span>
+            {formatDecimal(c.points)}
+            <span className="text-[10px] text-lol-text/70"> / {formatDecimal(c.weight)}</span>
           </span>
         </div>
       ))}
@@ -428,7 +435,7 @@ function ScoreBreakdownTooltip({
         <div className="grid grid-cols-[1fr_auto] gap-2 items-baseline leading-5">
           <span className="text-[11px] text-lol-text">{breakdown.multikill.label} bonus</span>
           <span className="text-[11px] tabular-nums text-lol-text-bright">
-            +{breakdown.multikill.points.toFixed(1)}
+            +{formatDecimal(breakdown.multikill.points)}
           </span>
         </div>
       )}
@@ -437,11 +444,11 @@ function ScoreBreakdownTooltip({
           <span className="text-[11px] text-lol-text">
             Carry bonus
             <span className="ml-1.5 text-[10px] text-lol-text/70">
-              {breakdown.carry.lead.toFixed(2)}× next best
+              {formatDecimal(breakdown.carry.lead, 2)}× next best
             </span>
           </span>
           <span className="text-[11px] tabular-nums text-lol-text-bright">
-            +{breakdown.carry.points.toFixed(1)}
+            +{formatDecimal(breakdown.carry.points)}
           </span>
         </div>
       )}
@@ -449,7 +456,7 @@ function ScoreBreakdownTooltip({
         <div className="grid grid-cols-[1fr_auto] gap-2 items-baseline leading-5">
           <span className="text-[11px] text-lol-text">Victory bonus</span>
           <span className="text-[11px] tabular-nums text-lol-text-bright">
-            +{breakdown.win.toFixed(1)}
+            +{formatDecimal(breakdown.win)}
           </span>
         </div>
       )}
@@ -457,11 +464,11 @@ function ScoreBreakdownTooltip({
         <span className="text-[11px] font-medium text-lol-text-bright">
           Total
           {clamped
-            ? ` ${breakdown.raw.toFixed(2)}, ${breakdown.raw > 10 ? "capped" : "floored"} at`
+            ? ` ${formatDecimal(breakdown.raw, 2)}, ${breakdown.raw > 10 ? "capped" : "floored"} at`
             : ""}
         </span>
         <span className={`text-xs font-semibold tabular-nums ${scoreColor(breakdown.score)}`}>
-          {breakdown.score.toFixed(1)}
+          {formatDecimal(breakdown.score)}
         </span>
       </div>
     </div>

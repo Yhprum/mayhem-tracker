@@ -1,4 +1,4 @@
-import { scoreColor } from "../lib/format";
+import { formatDecimal, scoreColor } from "../lib/format";
 
 type Badge = "MVP" | "ACE" | null;
 
@@ -29,7 +29,7 @@ export default function ScoreCell({ score, badge }: { score: number | null; badg
       {score != null && (
         <>
           <div className={`text-sm font-semibold tabular-nums ${scoreColor(score)}`}>
-            {score.toFixed(1)}
+            {formatDecimal(score)}
           </div>
           {badge ? (
             <ScoreBadge badge={badge} />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LOCALE } from "../lib/format";
+import { LOCALE, formatDecimal, formatPercent } from "../lib/format";
 import type { ReleaseNote, UpdateInfo } from "../lib/types";
 import { ChevronRightIcon, RefreshIcon } from "./icons";
 import Markdown from "./Markdown";
@@ -68,7 +68,7 @@ export default function UpdateDialog({
     // On success the app restarts itself, no further action needed
   };
 
-  const sizeMb = update.assetSize ? (update.assetSize / 1024 / 1024).toFixed(1) : null;
+  const sizeMb = update.assetSize ? formatDecimal(update.assetSize / 1024 / 1024) : null;
 
   return (
     <div
@@ -137,7 +137,8 @@ export default function UpdateDialog({
               />
             </div>
             <p className="mt-1.5 text-[11px] text-lol-text">
-              Downloading... {progress}%{sizeMb ? ` of ${sizeMb} MB` : ""}
+              Downloading... {formatPercent(progress / 100, 0)}
+              {sizeMb ? ` of ${sizeMb} MB` : ""}
             </p>
           </div>
         )}
