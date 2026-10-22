@@ -512,16 +512,12 @@ export interface ImportProgress {
   imported: number;
 }
 
-// Riot's match history service holds only this many matches per account, and
-// reports the end of that window as an empty page — exactly what a genuine end
-// of history looks like. Anything older is unreachable, by any route.
-export const SGP_HISTORY_CAP = 1000;
-
 // What stopped a backfill short of an account's full history, if anything.
 // The two are not the same kind of problem: "service" is Riot's window and is
-// permanent, so there is nothing to retry; "paging" is our own safety bound,
-// which means the run gave up early and should simply be repeated.
-export type BackfillLimit = "service" | "paging" | null;
+// permanent, so there is nothing to retry, and it carries when the oldest game
+// Riot still serves was played; "paging" is our own safety bound, which means
+// the run gave up early and should simply be repeated.
+export type BackfillLimit = { kind: "service"; historyStart: number } | { kind: "paging" } | null;
 
 export interface BackfillResult {
   added: number;

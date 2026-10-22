@@ -12,7 +12,7 @@ import * as db from "./db";
 import { sendToRenderer } from "./ipc";
 import { findClient, installDirCandidates } from "./lockfile";
 import { MAYHEM_QUEUE_IDS } from "../shared/queues";
-import { SGP_HISTORY_CAP } from "../shared/api";
+import { SEASONS, seasonBounds } from "../shared/seasons";
 import type { BackfillLimit, BackfillResult, LcuStatus } from "../shared/api";
 
 let credentials: Credentials | null = null;
@@ -190,16 +190,19 @@ const SGP_HOST_BY_REGION: Record<string, string> = {
 // is the biggest page it will actually serve — asking for 1000 still gets 200.
 const SGP_PAGE_SIZE = 200;
 
-// Whether an account has more history than Riot's window holds. Asking just
-// inside the window costs one request and, unlike the walk itself, gives an
-// unambiguous answer: anything at all coming back means the account fills the
-// window. An account whose real history ends within a few games of the cap is
-// indistinguishable from a capped one, which is a harmless way to be wrong —
-// the message only says older games may not be available.
-const SGP_CAP_PROBE_INDEX = SGP_HISTORY_CAP - 10;
+// Riot only serves an account's most recent games, about 1000 of any queue, and
+// its window ends in an empty page, just as a genuine end of history does. It
+// can also end hundreds of games short of 1000 while older games, still on
+// record, stay out of reach. So whether the window cost us anything depends on
+// how far back it reaches, not how many games it held. One that goes back past
+// Mayhem's first day holds every Mayhem game the account ever played; one that
+// stops after it may have cut some off. An account newer than Mayhem itself
+// looks the same as a cut-off one, which is a harmless way to be wrong, since
+// the message only names the date Riot's history for the account starts.
+const MAYHEM_LAUNCH = seasonBounds(SEASONS[0]).from;
 
 // Safety bound only. Paging normally ends when the service returns a short
-// page, and the window above puts that at five pages; this just stops a runaway
+// page, and Riot's window puts that at five pages; this just stops a runaway
 // loop, with enough headroom that a raised cap would still be walked in full.
 // Hitting it is reported rather than silently trimming someone's history.
 const SGP_MAX_PAGES = 25;
@@ -374,6 +377,12 @@ async function rehomeSgpHost(puuid: string, token: string, failed: string): Prom
 // probe below to tell which.
 type WalkStop = "exhausted" | "known" | "page-limit";
 
+// Ids arrive platform-prefixed, e.g. "NA1_5616465966"
+function matchIdNumber(id: unknown): number | null {
+  const gameId = Number(String(id).split("_").pop());
+  return Number.isFinite(gameId) ? gameId : null;
+}
+
 async function fetchAllMatchIds(
   host: string,
   puuid: string,
@@ -398,11 +407,10 @@ async function fetchAllMatchIds(
     const body = await response.json();
     if (!Array.isArray(body) || body.length === 0) return { ids, stoppedBy: "exhausted" };
 
-    // Ids arrive platform-prefixed, e.g. "NA1_5616465966"
     const pageIds: number[] = [];
     for (const id of body) {
-      const gameId = Number(String(id).split("_").pop());
-      if (Number.isFinite(gameId)) pageIds.push(gameId);
+      const gameId = matchIdNumber(id);
+      if (gameId != null) pageIds.push(gameId);
     }
     ids.push(...pageIds);
 
@@ -414,12 +422,15 @@ async function fetchAllMatchIds(
   return { ids, stoppedBy: "page-limit" };
 }
 
-async function sgpPageLength(
+// A walk's ids, and whether they are Mayhem games only or every game served
+type MatchIdWalk = { ids: number[]; stoppedBy: WalkStop; mayhemOnly: boolean };
+
+async function sgpPage(
   host: string,
   puuid: string,
   token: string,
   startIndex: number,
-): Promise<number | null> {
+): Promise<unknown[] | null> {
   try {
     const response = await fetch(sgpMatchIdsUrl(host, puuid, startIndex, SGP_PAGE_SIZE), {
       headers: { Authorization: `Bearer ${token}` },
@@ -427,29 +438,53 @@ async function sgpPageLength(
     });
     if (!response.ok) return null;
     const body = await response.json();
-    return Array.isArray(body) ? body.length : null;
+    return Array.isArray(body) ? body : null;
   } catch {
     return null;
   }
 }
 
-// Both probes are deliberately unfiltered: the window is applied to games of
-// every queue before any tag filter narrows the result, so a filtered walk's
-// own length says nothing about whether it was cut short.
-//
-// Rather than assume the wall is where it was last measured, this confirms it:
-// history right up to the cap and nothing at all past it is the shape only a
-// hard stop produces. Checking both sides matters if Riot ever moves the cap —
-// finding games beyond it means the account was not truncated at 1000, and
-// claiming otherwise would tell someone their history was lost when it wasn't.
-// Either probe failing answers no, since a cap that could not be confirmed is
-// not one worth reporting.
-async function isHistoryWindowFull(host: string, puuid: string, token: string): Promise<boolean> {
-  const insideWindow = await sgpPageLength(host, puuid, token, SGP_CAP_PROBE_INDEX);
-  if (!insideWindow) return false;
+// The oldest game Riot's window serves, in any queue. The window is applied
+// before any tag filter, so a walk filtered to Mayhem ends on its oldest Mayhem
+// game, not on the window's edge. The unfiltered list holds every game the
+// filtered one does, so its last entry is at that index or past it, and
+// reading from there usually takes one page.
+async function oldestServedGame(
+  host: string,
+  puuid: string,
+  token: string,
+  walked: MatchIdWalk,
+): Promise<number | null> {
+  if (!walked.mayhemOnly) return walked.ids.at(-1) ?? null;
 
-  const pastWindow = await sgpPageLength(host, puuid, token, SGP_HISTORY_CAP);
-  return pastWindow === 0;
+  let oldest: number | null = null;
+  let start = Math.max(0, walked.ids.length - 1);
+  for (let page = 0; page < SGP_MAX_PAGES; page++, start += SGP_PAGE_SIZE) {
+    const body = await sgpPage(host, puuid, token, start);
+    if (!body) return null;
+    if (body.length > 0) oldest = matchIdNumber(body[body.length - 1]);
+    if (body.length < SGP_PAGE_SIZE) return oldest;
+  }
+  return null;
+}
+
+// When Riot's history for this account starts, if that is after Mayhem began
+// and so may have cost us games. Anything that can't be read answers null,
+// since a cut-off that could not be confirmed is not one worth reporting.
+async function truncatedHistoryStart(
+  host: string,
+  puuid: string,
+  token: string,
+  walked: MatchIdWalk,
+): Promise<number | null> {
+  const gameId = await oldestServedGame(host, puuid, token, walked);
+  if (gameId == null) return null;
+  try {
+    const created = Number((await fetchGameDetails(gameId))?.gameCreation);
+    return Number.isFinite(created) && created >= MAYHEM_LAUNCH ? created : null;
+  } catch {
+    return null;
+  }
 }
 
 export function cancelBackfill(): void {
@@ -511,13 +546,14 @@ export async function backfillHistory(
     // came back with nothing looks identical whether the account has no Mayhem
     // games or the tag names changed under us. Only one of those is worth
     // being wrong about, so confirm it the slow way before believing it.
-    const walkShard = async (from: string) => {
-      const filtered = await walk(from, SGP_MAYHEM_TAGS);
-      return filtered.ids.length > 0 ? filtered : walk(from, SGP_ALL_TAGS);
+    const walkShard = async (from: string): Promise<MatchIdWalk> => {
+      const mayhem = await walk(from, SGP_MAYHEM_TAGS);
+      if (mayhem.ids.length > 0) return { ...mayhem, mayhemOnly: true };
+      return { ...(await walk(from, SGP_ALL_TAGS)), mayhemOnly: false };
     };
 
     let activeHost = host;
-    let walked: { ids: number[]; stoppedBy: WalkStop };
+    let walked: MatchIdWalk;
     try {
       walked = await walkShard(activeHost);
     } catch (err) {
@@ -548,22 +584,18 @@ export async function backfillHistory(
     // about Riot's window, and probing for it would be a wasted request.
     let limit: BackfillLimit = null;
     if (stoppedBy === "page-limit") {
-      limit = "paging";
-    } else if (
-      stoppedBy === "exhausted" &&
-      (await isHistoryWindowFull(activeHost, summoner.puuid, token))
-    ) {
-      limit = "service";
-    }
-
-    if (limit === "paging") {
+      limit = { kind: "paging" };
       console.warn(
         `Backfill stopped at the ${SGP_MAX_PAGES}-page limit (${ids.length} games); older games were not checked`,
       );
-    } else if (limit === "service") {
-      console.log(
-        `Riot's ${SGP_HISTORY_CAP}-match window is full for this account; nothing older than the ${ids.length} games found can be fetched`,
-      );
+    } else if (stoppedBy === "exhausted") {
+      const historyStart = await truncatedHistoryStart(activeHost, summoner.puuid, token, walked);
+      if (historyStart != null) {
+        limit = { kind: "service", historyStart };
+        console.log(
+          `Riot's match history for this account only reaches back to ${new Date(historyStart).toISOString()}; nothing older than the ${ids.length} games found can be fetched`,
+        );
+      }
     }
 
     const pending = ids.filter((id) => !known.has(id));
@@ -614,7 +646,7 @@ export async function backfillHistory(
     // Running into Riot's window still counts as walked: it is as deep as the
     // account will ever go, so there is nothing to come back for, and refusing
     // to mark it would re-walk the same window on every launch forever.
-    if (limit !== "paging" && !cancelled) {
+    if (limit?.kind !== "paging" && !cancelled) {
       db.setSetting(completedKey, "1");
     } else {
       // Neither outcome sets the completion flag, so without this the poll would

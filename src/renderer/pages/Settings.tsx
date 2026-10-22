@@ -3,7 +3,6 @@ import { useBackfill } from "../hooks/useBackfill";
 import { queueLabel } from "../components/QueueSelect";
 import { LOCALE } from "../lib/format";
 import { setRemembering } from "../lib/viewState";
-import { SGP_HISTORY_CAP } from "../lib/types";
 import type { BackupInfo, ImportProgress } from "../lib/types";
 import {
   DEFAULT_SESSION_GROUPING,
@@ -37,6 +36,14 @@ function formatTaken(timestamp: number): string {
     hour: "2-digit",
     minute: "2-digit",
   })}`;
+}
+
+function formatHistoryStart(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString(LOCALE, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function Switch({
@@ -272,9 +279,9 @@ export default function Settings() {
         setBackfillStatus(
           result.cancelled
             ? `Stopped after adding ${result.added} game(s). Run it again to finish.`
-            : result.limit === "service"
-              ? `${summary}. Riot only serves your most recent ${SGP_HISTORY_CAP} games of any queue, so nothing older can be imported — but every new game from here on is kept.`
-              : result.limit === "paging"
+            : result.limit?.kind === "service"
+              ? `${summary}. Riot's match history for this account only goes back to ${formatHistoryStart(result.limit.historyStart)}, so older games can't be imported, but every new game from here on is kept.`
+              : result.limit?.kind === "paging"
                 ? `${summary}. Stopped at the ${result.scanned}-game paging limit, so anything older was not checked.`
                 : summary,
         );
