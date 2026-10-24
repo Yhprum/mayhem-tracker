@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useIpc } from "../hooks/useIpc";
 import { useViewState } from "../hooks/useViewState";
 import type { TrendsData, TrendsDay } from "../lib/types";
@@ -394,6 +394,13 @@ function patchBarColor(rate: number): string {
 function PatchBars({ patches }: { patches: TrendsData["patches"] }) {
   const { ref, width } = useContainerWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
+  // Which sides have bars scrolled out of view, for the edge fades
+  const [clipped, setClipped] = useState({ left: false, right: false });
+  // The chart opens scrolled to the newest patch and stays there through
+  // resizes and refetches until the user scrolls back. A different set of
+  // patches (a queue switch, a new patch) returns it to the newest.
+  const pinned = useRef(true);
+  const patchKey = patches.map((p) => p.patch).join();
   const barPitch = 56;
   const chartWidth = Math.max(width, patches.length * barPitch + 16);
   const top = 18;
@@ -401,6 +408,29 @@ function PatchBars({ patches }: { patches: TrendsData["patches"] }) {
   const height = top + plotHeight + 34;
   const y = (rate: number) => top + plotHeight - (rate / 100) * plotHeight;
   const barX = (i: number) => i * barPitch + barPitch / 2 + 8;
+
+  const updateClipped = (el: HTMLDivElement) => {
+    const left = el.scrollLeft >= 1;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+    setClipped((c) => (c.left === left && c.right === right ? c : { left, right }));
+  };
+
+  useLayoutEffect(() => {
+    pinned.current = true;
+  }, [patchKey]);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (pinned.current) el.scrollLeft = el.scrollWidth;
+    updateClipped(el);
+  }, [ref, width, chartWidth, patchKey]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    pinned.current = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1;
+    updateClipped(el);
+  };
 
   const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -411,91 +441,106 @@ function PatchBars({ patches }: { patches: TrendsData["patches"] }) {
   const hovered = hover != null ? patches[hover] : null;
 
   return (
-    <div ref={ref} className="overflow-x-auto">
-      {width > 0 && (
-        // The tooltip anchors inside the scrollable content, so it tracks its
-        // bar when the chart is wider than the card and scrolled
-        <div className="relative" style={{ width: chartWidth }}>
-          <svg
-            width={chartWidth}
-            height={height}
-            className="block"
-            onMouseMove={handleMove}
-            onMouseLeave={() => setHover(null)}
-          >
-            <line
-              x1={0}
-              x2={chartWidth}
-              y1={y(50)}
-              y2={y(50)}
-              stroke="var(--color-lol-text)"
-              strokeOpacity={0.3}
-              strokeDasharray="4 4"
-            />
-            {patches.map((p, i) => {
-              const rate = p.games > 0 ? (p.wins / p.games) * 100 : 0;
-              const cx = barX(i);
-              const barHeight = Math.max(top + plotHeight - y(rate), 2);
-              return (
-                <g key={p.patch}>
-                  <rect
-                    x={cx - 15}
-                    y={top + plotHeight - barHeight}
-                    width={30}
-                    height={barHeight}
-                    rx={3}
-                    fill={patchBarColor(rate)}
-                    fillOpacity={hover === i ? 1 : 0.8}
-                  />
-                  <text
-                    x={cx}
-                    y={top + plotHeight - barHeight - 5}
-                    textAnchor="middle"
-                    fontSize={10}
-                    fill="var(--color-lol-text-bright)"
-                  >
-                    {formatPercent(rate / 100, 0)}
-                  </text>
-                  <text
-                    x={cx}
-                    y={top + plotHeight + 14}
-                    textAnchor="middle"
-                    fontSize={10}
-                    fill="var(--color-lol-text-bright)"
-                  >
-                    {formatPatch(p.patch)}
-                  </text>
-                  <text
-                    x={cx}
-                    y={top + plotHeight + 27}
-                    textAnchor="middle"
-                    fontSize={9}
-                    fill="var(--color-lol-text)"
-                  >
-                    {p.games.toLocaleString(LOCALE)} games
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
-          {hovered && hover != null && (
-            <HoverTooltip
-              x={barX(hover)}
+    // The fades sit outside the scroller so they stay put at its edges
+    <div className="relative">
+      <div ref={ref} className="overflow-x-auto" onScroll={handleScroll}>
+        {width > 0 && (
+          // The tooltip anchors inside the scrollable content, so it tracks its
+          // bar when the chart is wider than the card and scrolled
+          <div className="relative" style={{ width: chartWidth }}>
+            <svg
               width={chartWidth}
-              label={`Patch ${formatPatch(hovered.patch)}`}
-              detail={
-                <>
-                  <div>{recordDetail(hovered.games, hovered.wins)}</div>
-                  {hovered.avg_score != null && (
-                    <div>avg score {formatDecimal(hovered.avg_score)}</div>
-                  )}
-                </>
-              }
-              value={hovered.games > 0 ? formatPercent(hovered.wins / hovered.games, 0) : null}
-            />
-          )}
-        </div>
-      )}
+              height={height}
+              className="block"
+              onMouseMove={handleMove}
+              onMouseLeave={() => setHover(null)}
+            >
+              <line
+                x1={0}
+                x2={chartWidth}
+                y1={y(50)}
+                y2={y(50)}
+                stroke="var(--color-lol-text)"
+                strokeOpacity={0.3}
+                strokeDasharray="4 4"
+              />
+              {patches.map((p, i) => {
+                const rate = p.games > 0 ? (p.wins / p.games) * 100 : 0;
+                const cx = barX(i);
+                const barHeight = Math.max(top + plotHeight - y(rate), 2);
+                return (
+                  <g key={p.patch}>
+                    <rect
+                      x={cx - 15}
+                      y={top + plotHeight - barHeight}
+                      width={30}
+                      height={barHeight}
+                      rx={3}
+                      fill={patchBarColor(rate)}
+                      fillOpacity={hover === i ? 1 : 0.8}
+                    />
+                    <text
+                      x={cx}
+                      y={top + plotHeight - barHeight - 5}
+                      textAnchor="middle"
+                      fontSize={10}
+                      fill="var(--color-lol-text-bright)"
+                    >
+                      {formatPercent(rate / 100, 0)}
+                    </text>
+                    <text
+                      x={cx}
+                      y={top + plotHeight + 14}
+                      textAnchor="middle"
+                      fontSize={10}
+                      fill="var(--color-lol-text-bright)"
+                    >
+                      {formatPatch(p.patch)}
+                    </text>
+                    <text
+                      x={cx}
+                      y={top + plotHeight + 27}
+                      textAnchor="middle"
+                      fontSize={9}
+                      fill="var(--color-lol-text)"
+                    >
+                      {p.games.toLocaleString(LOCALE)} games
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+            {hovered && hover != null && (
+              <HoverTooltip
+                x={barX(hover)}
+                width={chartWidth}
+                label={`Patch ${formatPatch(hovered.patch)}`}
+                detail={
+                  <>
+                    <div>{recordDetail(hovered.games, hovered.wins)}</div>
+                    {hovered.avg_score != null && (
+                      <div>avg score {formatDecimal(hovered.avg_score)}</div>
+                    )}
+                  </>
+                }
+                value={hovered.games > 0 ? formatPercent(hovered.wins / hovered.games, 0) : null}
+              />
+            )}
+          </div>
+        )}
+      </div>
+      <div
+        className={`absolute top-0 left-0 w-10 pointer-events-none bg-gradient-to-r from-lol-card to-transparent transition-opacity ${
+          clipped.left ? "opacity-100" : "opacity-0"
+        }`}
+        style={{ height }}
+      />
+      <div
+        className={`absolute top-0 right-0 w-10 pointer-events-none bg-gradient-to-l from-lol-card to-transparent transition-opacity ${
+          clipped.right ? "opacity-100" : "opacity-0"
+        }`}
+        style={{ height }}
+      />
     </div>
   );
 }
