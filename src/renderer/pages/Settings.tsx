@@ -393,7 +393,7 @@ export default function Settings() {
               <p className="text-sm text-lol-text-bright">Group match history by</p>
               <p className="text-xs text-lol-text mt-0.5">
                 Break the match list into sessions, each under a heading with its own record and
-                averages. Days start at 5am; weeks run Monday to Sunday.
+                averages. Days start at 5am.
               </p>
             </div>
             <select

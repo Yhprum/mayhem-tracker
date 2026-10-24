@@ -4,6 +4,7 @@ import { useViewState } from "../hooks/useViewState";
 import type { TrendsData, TrendsDay } from "../lib/types";
 import {
   LOCALE,
+  WEEK_START,
   formatDecimal,
   formatHour,
   formatPatch,
@@ -12,7 +13,7 @@ import {
 } from "../lib/format";
 import QueueSelect from "../components/QueueSelect";
 import ActivityCalendar from "../components/ActivityCalendar";
-import { dayKey } from "../../shared/session";
+import { dayKey, daysIntoWeek } from "../../shared/session";
 
 // ---- Time helpers ----
 
@@ -72,9 +73,9 @@ function buildBuckets(daily: TrendsDay[], granularity: Granularity): Bucket[] {
       cursor.setMonth(cursor.getMonth() + 1);
     }
   } else {
-    // Weeks keyed by their Monday
+    // Weeks keyed by the day that opens them
     const cursor = new Date(first);
-    cursor.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
+    cursor.setDate(cursor.getDate() - daysIntoWeek(cursor.getDay(), WEEK_START));
     while (cursor <= last) {
       buckets.set(dayKey(cursor), {
         label: weekLabel(cursor),
@@ -93,7 +94,7 @@ function buildBuckets(daily: TrendsDay[], granularity: Granularity): Bucket[] {
       key = row.day.slice(0, 7);
     } else {
       const d = parseDay(row.day);
-      d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+      d.setDate(d.getDate() - daysIntoWeek(d.getDay(), WEEK_START));
       key = dayKey(d);
     }
     const b = buckets.get(key);
@@ -371,7 +372,9 @@ function ActivityHeatmap({ daily }: { daily: TrendsDay[] }) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const first = new Date(today);
-  first.setDate(first.getDate() - first.getDay() - (HEATMAP_WEEKS - 1) * 7);
+  first.setDate(
+    first.getDate() - daysIntoWeek(first.getDay(), WEEK_START) - (HEATMAP_WEEKS - 1) * 7,
+  );
 
   return (
     <ActivityCalendar
@@ -554,7 +557,8 @@ function PatchBars({ patches }: { patches: TrendsData["patches"] }) {
 
 const MIN_PLOTTED_GAMES = 3;
 
-const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+// getDay() numbers in the order the regional week runs
+const WEEKDAY_ORDER = Array.from({ length: 7 }, (_, i) => (WEEK_START + i) % 7);
 
 function clockPoint(label: string, long: string, games: number, wins: number): SeriesPoint {
   return {

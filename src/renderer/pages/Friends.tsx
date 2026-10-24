@@ -10,7 +10,9 @@ import SummonerIcon from "../components/SummonerIcon";
 import WinRateBar from "../components/WinRateBar";
 import SortHeader from "../components/SortHeader";
 import { LOCALE, formatDecimal, formatTimeAgo, kdaRatio, kdaColor } from "../lib/format";
+import { matchesSearch } from "../lib/search";
 import Kda from "../components/Kda";
+import RiotId from "../components/RiotId";
 import SearchInput from "../components/SearchInput";
 import FilterMenu from "../components/FilterMenu";
 import MinGamesFilter from "../components/MinGamesFilter";
@@ -44,9 +46,7 @@ export default function Friends() {
   const sorted = useMemo(() => {
     if (!data) return [];
     let filtered = data.filter(
-      (t) =>
-        (minGames === undefined || t.games >= minGames) &&
-        t.name.toLowerCase().includes(search.toLowerCase()),
+      (t) => (minGames === undefined || t.games >= minGames) && matchesSearch(t.name, search),
     );
 
     filtered.sort((a, b) => {
@@ -146,7 +146,9 @@ export default function Friends() {
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
                       <SummonerIcon iconId={t.profileIcon} size={28} lazy />
-                      <span className="text-sm text-lol-text-bright">{t.name}</span>
+                      <span className="text-sm text-lol-text-bright">
+                        <RiotId id={t.name} />
+                      </span>
                     </div>
                   </td>
                   <td className="px-3 py-2 text-sm text-lol-text-bright text-right tabular-nums">

@@ -23,6 +23,7 @@ import SummonerSpellIcon from "./SummonerSpellIcon";
 import MultikillBadge from "./MultikillBadge";
 import { ScoreBadge } from "./ScoreCell";
 import Kda from "./Kda";
+import RiotId from "./RiotId";
 
 const GRID_COLS = "grid-cols-[52px_minmax(80px,1fr)_52px_76px_110px_110px_56px_56px_176px_100px]";
 // An eleventh column is only affordable where the rows are laid out wider than
@@ -277,7 +278,7 @@ function PlayerRow({
         <div
           className={`text-xs truncate ${p.isSelf ? "text-lol-gold font-semibold" : "text-lol-text-bright"}`}
         >
-          {p.summonerName}
+          <RiotId id={p.summonerName} />
         </div>
         <div className="text-[10px] text-lol-text truncate">
           {getChampionName(champData, p.championId)}

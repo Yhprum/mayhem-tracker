@@ -31,6 +31,7 @@ import {
   kdaColor,
   scoreColor,
 } from "../lib/format";
+import { matchesSearch } from "../lib/search";
 import Kda from "../components/Kda";
 import SearchInput from "../components/SearchInput";
 
@@ -247,8 +248,7 @@ export default function Champions() {
     if (!data) return [];
     let filtered = data.filter((c) => {
       if (minGames !== undefined && c.games < minGames) return false;
-      const name = getChampionName(champData, c.champion_id).toLowerCase();
-      return name.includes(search.toLowerCase());
+      return matchesSearch(getChampionName(champData, c.champion_id), search);
     });
 
     filtered.sort((a, b) => {

@@ -72,13 +72,22 @@ function CardHeading({ card, puuids }: { card: GameCardData; puuids: string[] | 
   const self = participants?.find(
     (p) => p.puuid != null && (p.puuid === game.puuid || puuids?.includes(p.puuid)),
   );
-  const name = self?.gameName ? `${self.gameName}${self.tagLine ? ` #${self.tagLine}` : ""}` : null;
 
   return (
     <div className="flex items-center gap-2.5 px-1">
       <SummonerIcon iconId={card.profileIcon} size={28} />
       <div className="flex flex-1 items-baseline gap-2 text-xs text-lol-text">
-        {name && <span className="text-sm font-semibold text-lol-gold-light">{name}</span>}
+        {self?.gameName && (
+          <span className="text-sm font-semibold text-lol-gold-light">
+            <bdi>{self.gameName}</bdi>
+            {self.tagLine && (
+              <>
+                {" "}
+                #<bdi>{self.tagLine}</bdi>
+              </>
+            )}
+          </span>
+        )}
         <span>{formatDateTime(game.game_creation)}</span>
         {card.mapName && (
           <>

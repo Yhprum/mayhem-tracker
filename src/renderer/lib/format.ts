@@ -1,7 +1,13 @@
+import { firstDayOfWeek } from "../../shared/session";
+
 // Windows' regional format, passed in by the main process (src/main/locale.ts).
 // Every date and number the UI prints names it, since the page's own default
 // is en-US in the packaged app whatever Windows is set to.
 export const LOCALE = window.api.locale;
+
+// The weekday weeks open on in the regional format, 0 = Sunday. The main
+// process works it out from the same locale when it totals a week's games.
+export const WEEK_START = firstDayOfWeek(LOCALE);
 
 // Built once per precision: these run for every cell of every table
 const NUMBER_FORMATS = new Map<string, Intl.NumberFormat>();

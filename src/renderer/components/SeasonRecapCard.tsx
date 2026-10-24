@@ -336,10 +336,10 @@ function Header({
             ARAM Mayhem · {title}
           </div>
           <div className="mt-1.5 truncate text-4xl font-bold text-lol-text-bright">
-            {player.gameName ?? "Summoner"}
+            <bdi>{player.gameName ?? "Summoner"}</bdi>
             {player.tagLine && (
               <span className="ml-1 text-2xl font-semibold text-lol-text/60">
-                #{player.tagLine}
+                #<bdi>{player.tagLine}</bdi>
               </span>
             )}
           </div>
@@ -615,8 +615,13 @@ function FriendRow({ friend, hideName }: { friend: TeammateStats; hideName: bool
           </div>
         ) : (
           <div className="truncate text-sm text-lol-text-bright">
-            {name}
-            {tag && <span className="text-lol-text/60"> #{tag}</span>}
+            <bdi>{name}</bdi>
+            {tag && (
+              <span className="text-lol-text/60">
+                {" "}
+                #<bdi>{tag}</bdi>
+              </span>
+            )}
           </div>
         )}
         <div className="text-[11px] text-lol-text">

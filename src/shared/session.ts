@@ -23,11 +23,28 @@ export function sessionDay(ms: number): number {
   return d.getTime();
 }
 
-// Local midnight of the Monday that starts the session week, taking the same
-// view of when a day begins as sessionDay.
-export function sessionWeek(ms: number): number {
+// The weekday weeks open on in `locale`, numbered the way getDay() numbers them
+// (0 = Sunday): Sunday in en-US and pt-BR, Monday across most of Europe,
+// Saturday in fa-IR. Monday when the runtime can't say.
+export function firstDayOfWeek(locale: string | undefined): number {
+  try {
+    const resolved = new Intl.DateTimeFormat(locale).resolvedOptions().locale;
+    return new Intl.Locale(resolved).getWeekInfo().firstDay % 7;
+  } catch {
+    return 1;
+  }
+}
+
+// How far into its week a weekday falls, for weeks opening on `weekStart`
+export function daysIntoWeek(weekday: number, weekStart: number): number {
+  return (weekday - weekStart + 7) % 7;
+}
+
+// Local midnight of the day that opens the session week, taking the same view
+// of when a day begins as sessionDay.
+export function sessionWeek(ms: number, weekStart: number): number {
   const d = new Date(sessionDay(ms));
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  d.setDate(d.getDate() - daysIntoWeek(d.getDay(), weekStart));
   return d.getTime();
 }
 
@@ -55,10 +72,11 @@ export function dayKey(when: number | Date): string {
 export function sessionKey(
   game: { game_creation: number; game_version?: string | null },
   grouping: SessionGrouping,
+  weekStart: number,
 ): string {
   switch (grouping) {
     case "week":
-      return dayKey(sessionWeek(game.game_creation));
+      return dayKey(sessionWeek(game.game_creation, weekStart));
     case "patch":
       return game.game_version || "";
     default:

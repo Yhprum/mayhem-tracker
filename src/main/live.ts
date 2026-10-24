@@ -1,7 +1,7 @@
 import https from "https";
 import type { BrowserWindow } from "electron";
 import * as db from "./db";
-import { getChampionData, loadSummonerSpellData } from "./dragon";
+import { getChampionData, loadSummonerSpellData, loadSummonerSpellKeys } from "./dragon";
 import { sendToRenderer } from "./ipc";
 import { getLiveGameRef, lcuJson, onLcuStatusChange } from "./lcu";
 import { mapNameForSkin } from "../shared/maps";
@@ -89,11 +89,22 @@ function resolveChampionId(rawName: unknown, displayName: unknown): number {
   return lookup.get(raw.toLowerCase()) ?? lookup.get(String(displayName ?? "").toLowerCase()) ?? 0;
 }
 
-// Spells arrive as display names only, so they have to be matched back to ids
-// before the renderer can draw the same icons it draws everywhere else.
+// Spells arrive without ids, so they have to be matched back to them before
+// the renderer can draw the same icons it draws everywhere else. The raw name
+// ("GeneratedTip_SummonerSpell_SummonerFlash_DisplayName") reads the same in
+// every client language. The display name is translated, so it only stands in
+// for a raw name that is missing or unknown, and only matches in English.
+let spellIdsByKey: Map<string, number> | null = null;
 let spellIdsByName: Map<string, number> | null = null;
 
 function loadSpellIds(): void {
+  loadSummonerSpellKeys()
+    .then((keys) => {
+      spellIdsByKey = keys;
+    })
+    .catch(() => {
+      // The display names below still cover an English client
+    });
   loadSummonerSpellData()
     .then((spells) => {
       const byName = new Map<string, number>();
@@ -107,8 +118,13 @@ function loadSpellIds(): void {
     });
 }
 
-function resolveSpellId(displayName: unknown): number | null {
-  const name = String(displayName ?? "").toLowerCase();
+function resolveSpellId(spell: any): number | null {
+  const key = String(spell?.rawDisplayName ?? "").match(
+    /^GeneratedTip_SummonerSpell_(.+)_DisplayName$/i,
+  )?.[1];
+  const byKey = key ? spellIdsByKey?.get(key.toLowerCase()) : undefined;
+  if (byKey) return byKey;
+  const name = String(spell?.displayName ?? "").toLowerCase();
   if (!name || !spellIdsByName) return null;
   return spellIdsByName.get(name) ?? null;
 }
@@ -201,15 +217,23 @@ function lookupRoster(roster: Map<string, LcuRosterEntry>, player: any): LcuRost
 // riot ids, and the feed names players either way depending on the event.
 const MULTIKILL_NAMES = ["", "", "Double Kill", "Triple Kill", "Quadra Kill", "PENTAKILL"];
 
+// A name set apart from the sentence around it with Unicode isolates, the
+// plain-text form of <bdi>: a name in a right-to-left script then can't pull
+// the "(+2)" or the words beside it over to its own side.
+function isolate(name: string): string {
+  return `⁨${name}⁩`;
+}
+
 function eventActor(name: unknown, byName: Map<string, LivePlayer>): string {
   const raw = String(name ?? "");
   const player = byName.get(raw.toLowerCase());
-  if (player) return player.championName || player.name;
+  if (player) return isolate(player.championName || player.name);
   // Structures arrive as their object ids, e.g. "Turret_T1_C_05_A"
   if (/^Turret_/i.test(raw)) return "a turret";
   if (/^Barracks_/i.test(raw)) return "an inhibitor";
   if (/^Minion_/i.test(raw)) return "a minion";
-  return raw.split("#")[0] || "someone";
+  const gameName = raw.split("#")[0];
+  return gameName ? isolate(gameName) : "someone";
 }
 
 function describeEvent(event: any, byName: Map<string, LivePlayer>): LiveEvent | null {
@@ -394,10 +418,8 @@ async function buildSnapshot(): Promise<LiveGameSnapshot> {
       items,
       isDead: player.isDead === true,
       respawnTimer: Math.ceil(Number(player.respawnTimer) || 0),
-      spell1Id:
-        entry?.spell1Id ?? resolveSpellId(player.summonerSpells?.summonerSpellOne?.displayName),
-      spell2Id:
-        entry?.spell2Id ?? resolveSpellId(player.summonerSpells?.summonerSpellTwo?.displayName),
+      spell1Id: entry?.spell1Id ?? resolveSpellId(player.summonerSpells?.summonerSpellOne),
+      spell2Id: entry?.spell2Id ?? resolveSpellId(player.summonerSpells?.summonerSpellTwo),
       championRecord: null,
       overallRecord: null,
       gamesWithUs: 0,

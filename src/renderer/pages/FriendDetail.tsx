@@ -26,6 +26,7 @@ import {
   scoreColor,
 } from "../lib/format";
 import Kda from "../components/Kda";
+import RiotId from "../components/RiotId";
 
 export default function FriendDetail() {
   const { key = "" } = useParams();
@@ -108,7 +109,9 @@ export default function FriendDetail() {
           <div className="flex items-center gap-3">
             <SummonerIcon iconId={player.profileIcon} size={56} />
             <div className="min-w-0">
-              <h1 className="text-xl font-bold text-lol-text-bright truncate">{player.name}</h1>
+              <h1 className="text-xl font-bold text-lol-text-bright truncate">
+                <RiotId id={player.name} />
+              </h1>
               <span className="text-sm text-lol-text">
                 {player.games.toLocaleString(LOCALE)} games together · last played{" "}
                 {formatTimeAgo(player.lastPlayed)}
@@ -275,7 +278,7 @@ function PlayerBlock({
       <ChampionIcon championId={championId} size={32} />
       <div className="min-w-0 w-24">
         <div className="text-[10px] text-lol-text uppercase tracking-wider truncate" title={label}>
-          {label}
+          <RiotId id={label} />
         </div>
         <div className="text-xs text-lol-text-bright truncate">
           {getChampionName(champData, championId)}

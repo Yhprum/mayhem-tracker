@@ -45,6 +45,7 @@ import { seasonName } from "../components/SeasonSelect";
 import { ExportImageMessage, useImageExport } from "../components/ExportImage";
 import {
   LOCALE,
+  WEEK_START,
   formatDateTime,
   formatDecimal,
   formatDuration,
@@ -68,6 +69,7 @@ import {
   type SessionGrouping,
 } from "../../shared/session";
 import Kda from "../components/Kda";
+import RiotId from "../components/RiotId";
 
 // An empty list means something different depending on whether we're still
 // waiting on the client, mid-import, or genuinely out of games.
@@ -134,7 +136,7 @@ function groupIntoSessions(matches: MatchListItem[], grouping: SessionGrouping):
   const scores = new Map<string, { sum: number; games: number }>();
 
   for (const m of matches) {
-    const key = sessionKey(m, grouping);
+    const key = sessionKey(m, grouping, WEEK_START);
     let session = sessions.get(key);
     if (!session) {
       session = {
@@ -178,7 +180,7 @@ function sessionLabel(match: MatchListItem, grouping: SessionGrouping): string {
   if (grouping === "patch") {
     return match.game_version ? `Patch ${formatPatch(match.game_version)}` : "Unknown patch";
   }
-  if (grouping === "week") return weekLabel(sessionWeek(match.game_creation));
+  if (grouping === "week") return weekLabel(sessionWeek(match.game_creation, WEEK_START));
   return dayLabel(sessionDay(match.game_creation));
 }
 
@@ -197,10 +199,10 @@ function dayLabel(day: number): string {
   });
 }
 
-// Weeks run Monday to Sunday, and are named by the Monday that opens them.
+// Weeks open on the regional first day of the week and are named by that day.
 function weekLabel(week: number): string {
   const d = new Date(week);
-  const thisWeek = new Date(sessionWeek(Date.now()));
+  const thisWeek = new Date(sessionWeek(Date.now(), WEEK_START));
   const lastWeek = new Date(thisWeek);
   lastWeek.setDate(thisWeek.getDate() - 7);
   if (d.toDateString() === thisWeek.toDateString()) return "This week";
@@ -925,7 +927,7 @@ function ProfileCard({
         />
         <div className="min-w-0 flex-1">
           <div className="text-sm font-bold text-lol-text-bright truncate">
-            {profile?.name ?? "Summoner"}
+            {profile?.name ? <RiotId id={profile.name} /> : "Summoner"}
           </div>
           {/* The totals below pool every tracked account, so say when the name
               above only accounts for part of them */}

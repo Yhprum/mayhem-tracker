@@ -10,6 +10,7 @@ import {
 } from "../hooks/useChampions";
 import type { AugmentStatsDetailedResult } from "../lib/types";
 import { LOCALE, formatPercent } from "../lib/format";
+import { matchesSearch } from "../lib/search";
 import AugmentIcon from "../components/AugmentIcon";
 import ChampionIcon from "../components/ChampionIcon";
 import WinRateBar from "../components/WinRateBar";
@@ -88,8 +89,7 @@ export default function Augments() {
     if (!data) return [];
     let filtered = data.augments.filter((a) => {
       const aug = augmentData[a.augment_id];
-      const name = getAugmentName(augmentData, a.augment_id).toLowerCase();
-      if (!name.includes(search.toLowerCase())) return false;
+      if (!matchesSearch(getAugmentName(augmentData, a.augment_id), search)) return false;
       if (rarityFilter !== "all" && aug?.rarity !== rarityFilter) return false;
       if (minPicks !== undefined && a.picks < minPicks) return false;
       return true;

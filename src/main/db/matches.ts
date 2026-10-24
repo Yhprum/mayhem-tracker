@@ -1,9 +1,11 @@
 import {
   DAY_START_HOUR,
   type SessionGrouping,
+  firstDayOfWeek,
   parseSessionGrouping,
   SESSION_GROUPING_SETTING,
 } from "../../shared/session";
+import { systemLocale } from "../locale";
 import type {
   MatchSession,
   MatchListItem,
@@ -129,15 +131,23 @@ function matchListWhere(filters?: MatchListFilters): { whereSql: string; params:
 
 // What a session is grouped by, in the same terms sessionKey uses in the
 // renderer so a group there lines up with a row here. Day and week both start
-// at the hour a day of play does, and 'weekday 0' then '-6 days' walks back to
-// that week's Monday.
+// at the hour a day of play does. A week opens on the regional first day, the
+// same one the renderer gets from the same locale: 'weekday N' moves on to the
+// day that closes the week, and '-6 days' walks back to the one that opens it.
 const LOCAL_SESSION_DATE = `g.game_creation / 1000, 'unixepoch', 'localtime', '-${DAY_START_HOUR} hours'`;
 
-const SESSION_KEY_SQL: Record<Exclude<SessionGrouping, "none">, string> = {
-  day: `date(${LOCAL_SESSION_DATE})`,
-  week: `date(${LOCAL_SESSION_DATE}, 'weekday 0', '-6 days')`,
-  patch: "COALESCE(g.game_version, '')",
-};
+function sessionKeySql(grouping: Exclude<SessionGrouping, "none">): string {
+  switch (grouping) {
+    case "day":
+      return `date(${LOCAL_SESSION_DATE})`;
+    case "week": {
+      const closingDay = (firstDayOfWeek(systemLocale()) + 6) % 7;
+      return `date(${LOCAL_SESSION_DATE}, 'weekday ${closingDay}', '-6 days')`;
+    }
+    case "patch":
+      return "COALESCE(g.game_version, '')";
+  }
+}
 
 /**
  * One row per session of play, over every game the current filters match.
@@ -158,7 +168,7 @@ export function getMatchSessions(filters?: MatchListFilters): MatchSession[] {
 
   return db
     .prepare(`
-      SELECT ${SESSION_KEY_SQL[grouping]} AS key,
+      SELECT ${sessionKeySql(grouping)} AS key,
              COUNT(*) AS games,
              SUM(CASE WHEN g.is_remake = 0 AND ps.win = 1 THEN 1 ELSE 0 END) AS wins,
              SUM(CASE WHEN g.is_remake = 0 AND ps.win = 0 THEN 1 ELSE 0 END) AS losses,

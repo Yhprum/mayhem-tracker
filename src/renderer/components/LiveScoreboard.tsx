@@ -6,6 +6,7 @@ import ChampionIcon from "./ChampionIcon";
 import ItemIcon from "./ItemIcon";
 import SummonerSpellIcon from "./SummonerSpellIcon";
 import Kda from "./Kda";
+import RiotId from "./RiotId";
 
 const GRID_COLS = "grid-cols-[44px_minmax(90px,1fr)_34px_72px_44px_minmax(176px,auto)_108px]";
 
@@ -124,10 +125,10 @@ function LivePlayerRow({ player, champData }: { player: LivePlayer; champData: C
               className="hover:text-lol-gold transition-colors"
               title={`${player.gamesWithUs} games on your team`}
             >
-              {player.name}
+              <RiotId id={player.name} />
             </Link>
           ) : (
-            player.name
+            <RiotId id={player.name} />
           )}
         </div>
         <div className="text-[10px] text-lol-text truncate">{championName}</div>

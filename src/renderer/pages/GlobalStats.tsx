@@ -5,6 +5,7 @@ import { useIpc } from "../hooks/useIpc";
 import { useViewState } from "../hooks/useViewState";
 import { readViewState, writeViewState } from "../lib/viewState";
 import { LOCALE, formatPercent } from "../lib/format";
+import { matchesSearch } from "../lib/search";
 import {
   useChampionData,
   getChampionName,
@@ -102,8 +103,7 @@ export default function GlobalStats() {
   const sortedChampions = useMemo(() => {
     if (!data) return [];
     let filtered = data.champions.filter((c) => {
-      const name = getChampionName(champData, c.champion_id).toLowerCase();
-      return name.includes(champSearch.toLowerCase());
+      return matchesSearch(getChampionName(champData, c.champion_id), champSearch);
     });
 
     filtered.sort((a, b) => {
@@ -132,8 +132,7 @@ export default function GlobalStats() {
   const sortedAugments = useMemo(() => {
     if (!data) return [];
     let filtered = data.augments.filter((a) => {
-      const name = getAugmentName(augmentData, a.augment_id).toLowerCase();
-      if (!name.includes(augSearch.toLowerCase())) return false;
+      if (!matchesSearch(getAugmentName(augmentData, a.augment_id), augSearch)) return false;
       if (rarityFilter !== "all" && augmentData[a.augment_id]?.rarity !== rarityFilter)
         return false;
       return true;
@@ -166,9 +165,7 @@ export default function GlobalStats() {
 
   const sortedItems = useMemo(() => {
     if (!data) return [];
-    const filtered = data.items.filter((it) =>
-      getItemName(it.item_id).toLowerCase().includes(itemSearch.toLowerCase()),
-    );
+    const filtered = data.items.filter((it) => matchesSearch(getItemName(it.item_id), itemSearch));
 
     filtered.sort((a, b) => {
       if (itemSortKey === "name") {

@@ -276,6 +276,33 @@ export function loadSummonerSpellData(): Promise<Record<number, SummonerSpellInf
   return spellPromise;
 }
 
+let spellKeyPromise: Promise<Map<string, number>> | null = null;
+
+// Summoner spell ids by the internal name the in-game API reports a spell
+// under, lowercased ("summonerflash" is 4). Only Data Dragon carries those
+// names, and they read the same whatever language the client runs in.
+export function loadSummonerSpellKeys(): Promise<Map<string, number>> {
+  if (!spellKeyPromise) {
+    spellKeyPromise = (async () => {
+      const versions = await fetchJson("https://ddragon.leagueoflegends.com/api/versions.json");
+      const data = await fetchJson(
+        `https://ddragon.leagueoflegends.com/cdn/${versions[0]}/data/en_US/summoner.json`,
+      );
+      const keys = new Map<string, number>();
+      for (const spell of Object.values(data?.data ?? {}) as any[]) {
+        const id = Number(spell?.key);
+        if (spell?.id && id) keys.set(String(spell.id).toLowerCase(), id);
+      }
+      return keys;
+    })();
+    // Drop failed loads so a later request can retry
+    spellKeyPromise.catch(() => {
+      spellKeyPromise = null;
+    });
+  }
+  return spellKeyPromise;
+}
+
 export async function waitForChampionData() {
   if (championReady) await championReady;
 }
