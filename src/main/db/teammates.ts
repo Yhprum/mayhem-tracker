@@ -1,4 +1,10 @@
-import type { TeammateStats, TeammateDetail, MatchListItem, TeammateMatch } from "../../shared/api";
+import {
+  MIN_SHARED_GAMES,
+  type TeammateStats,
+  type TeammateDetail,
+  type MatchListItem,
+  type TeammateMatch,
+} from "../../shared/api";
 import { computeMatchScores } from "../../shared/opScore";
 import { getChampionClasses } from "../dragon";
 import { db } from "./connection";
@@ -7,10 +13,6 @@ import { MATCH_ROW_SQL } from "./matches";
 import type { CareerFilter } from "./records";
 import { groupByGame, SCORE_ROW_COLUMNS, type ScoreRow, scoreInputsFromRows } from "./scoring";
 import { displayName, getAllPuuids } from "./summoner";
-
-// Someone we queued with once is a stranger, not a friend — the list only
-// counts players we've shared at least this many games with.
-export const MIN_SHARED_GAMES = 2;
 
 // The id the Friends list keys a teammate on — puuid when we know it, so name
 // changes don't split a player in two.
@@ -91,8 +93,12 @@ function teammateRows(puuids: string[], filter: CareerFilter = {}): TeammateRow[
 }
 
 // Narrowed by the same filter as careerRows, so a season recap's friends come
-// from the games the rest of the recap counts
-export function getTeammateStats(filter?: CareerFilter): TeammateStats[] {
+// from the games the rest of the recap counts. Players we've shared fewer than
+// `minGames` games with are left out.
+export function getTeammateStats(
+  filter?: CareerFilter,
+  minGames = MIN_SHARED_GAMES,
+): TeammateStats[] {
   const puuids = getAllPuuids();
   if (puuids.length === 0) return [];
 
@@ -157,7 +163,7 @@ export function getTeammateStats(filter?: CareerFilter): TeammateStats[] {
   }
 
   return Array.from(playerMap.entries())
-    .filter(([, p]) => p.games >= MIN_SHARED_GAMES)
+    .filter(([, p]) => p.games >= minGames)
     .map(([key, p]) => ({
       key,
       name: p.name,

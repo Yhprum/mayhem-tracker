@@ -119,6 +119,8 @@ export interface MatchFilters {
   patch?: string;
   queue?: number;
   account?: string;
+  // A Mayhem set, by its id in shared/seasons
+  season?: string;
   sort?: MatchSort;
   sortDir?: MatchSortDir;
   multikills?: MultikillType[];
@@ -156,6 +158,8 @@ export interface MatchFilterOptions {
   patches: string[];
   champions: number[];
   queues: number[];
+  // Ids of the sets with games, newest first
+  seasons: string[];
   accounts: TrackedAccount[];
   hasFavorites: boolean;
 }
@@ -308,6 +312,11 @@ export interface SummonerSpellData {
     iconPath: string;
   };
 }
+
+// Someone we queued with once is a stranger, not a friend: the Friends list
+// opens on players we've shared at least this many games with, and only they
+// get a link from the live game.
+export const MIN_SHARED_GAMES = 2;
 
 export interface TeammateStats {
   // Stable id for routing — the teammate's puuid, or their name when unknown
@@ -967,16 +976,25 @@ export interface ElectronAPI {
   ) => Promise<{ matches: MatchListItem[]; total: number }>;
   getMatchSessions: (filters?: MatchFilters) => Promise<MatchSession[]>;
   getMatchFilterOptions: (
-    filters?: Pick<MatchFilters, "championId" | "patch" | "queue" | "account">,
+    filters?: Pick<MatchFilters, "championId" | "patch" | "queue" | "account" | "season">,
   ) => Promise<MatchFilterOptions>;
   getStoredQueues: () => Promise<number[]>;
   getMatchDetail: (gameId: number) => Promise<MatchDetail | null>;
   toggleFavorite: (gameId: number) => Promise<boolean>;
-  getChampionStats: (patch?: string, queue?: number) => Promise<ChampionStats[]>;
-  getAugmentStats: (championId?: number, patch?: string, queue?: number) => Promise<AugmentStats[]>;
-  getAugmentStatsDetailed: (patch?: string, queue?: number) => Promise<AugmentStatsDetailedResult>;
+  getChampionStats: (patch?: string, queue?: number, season?: string) => Promise<ChampionStats[]>;
+  getAugmentStats: (
+    championId?: number,
+    patch?: string,
+    queue?: number,
+    season?: string,
+  ) => Promise<AugmentStats[]>;
+  getAugmentStatsDetailed: (
+    patch?: string,
+    queue?: number,
+    season?: string,
+  ) => Promise<AugmentStatsDetailedResult>;
   getDashboard: (
-    filters?: Pick<MatchFilters, "championId" | "patch" | "queue" | "account">,
+    filters?: Pick<MatchFilters, "championId" | "patch" | "queue" | "account" | "season">,
   ) => Promise<DashboardData>;
   getChampionMatchHistory: (
     championId: number,
@@ -984,13 +1002,16 @@ export interface ElectronAPI {
     offset: number,
     patch?: string,
     queue?: number,
+    season?: string,
   ) => Promise<{ matches: MatchListItem[]; total: number }>;
   getChampionItemStats: (
     championId: number,
     patch?: string,
     queue?: number,
+    season?: string,
   ) => Promise<ItemStats[]>;
-  getTeammateStats: () => Promise<TeammateStats[]>;
+  // Everyone we've shared a game with, the Friends page's own minimum aside
+  getTeammateStats: (season?: string) => Promise<TeammateStats[]>;
   getTeammateDetail: (key: string) => Promise<TeammateDetail | null>;
   getGlobalStats: (patch?: string, queue?: number) => Promise<GlobalStats>;
   getTrends: (queue?: number) => Promise<TrendsData>;

@@ -1,3 +1,4 @@
+import { findSeason, seasonBounds } from "../../shared/seasons";
 import { db } from "./connection";
 import { getSetting } from "./settings";
 
@@ -39,6 +40,27 @@ export function applyQueueFilter(where: string[], params: any[], queue?: number,
   if (hidden.length > 0) {
     where.push(`${alias}.queue_id NOT IN (${hidden.map(() => "?").join(", ")})`);
     params.push(...hidden);
+  }
+}
+
+// The game_creation window of a Mayhem set, named by its id in shared/seasons.
+// Empty for no set, or for one this build doesn't know, which filters nothing.
+export function seasonWindow(season?: string): { from?: number; to?: number | null } {
+  const found = season ? findSeason(season) : null;
+  return found ? seasonBounds(found) : {};
+}
+
+// Appends a set's window to a query's WHERE list, the way applyQueueFilter
+// appends a queue
+export function applySeasonFilter(where: string[], params: any[], season?: string, alias = "g") {
+  const { from, to } = seasonWindow(season);
+  if (from != null) {
+    where.push(`${alias}.game_creation >= ?`);
+    params.push(from);
+  }
+  if (to != null) {
+    where.push(`${alias}.game_creation < ?`);
+    params.push(to);
   }
 }
 

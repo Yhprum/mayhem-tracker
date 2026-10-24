@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { useMatches } from "../hooks/useMatches";
 import { useChampionData, getChampionName } from "../hooks/useChampions";
 import { useIpc } from "../hooks/useIpc";
@@ -11,6 +12,7 @@ import type {
   MatchDetail,
   DashboardData,
   MatchFilterOptions,
+  MatchHistoryLink,
   MatchSession,
   MatchSort,
   MatchSortDir,
@@ -38,6 +40,8 @@ import {
   SwordsIcon,
   ZapIcon,
 } from "../components/icons";
+import FilterMenu, { FilterField } from "../components/FilterMenu";
+import { seasonName } from "../components/SeasonSelect";
 import { ExportImageMessage, useImageExport } from "../components/ExportImage";
 import {
   LOCALE,
@@ -82,6 +86,14 @@ function emptyStateMessage(
   }
   return "No ARAM Mayhem games found yet. New games are recorded as you play.";
 }
+
+// The multikill filters, toggled from the stat card or the filter menu
+const MULTIKILL_KINDS: { kind: MultikillType; label: string; name: string; color: string }[] = [
+  { kind: "doubles", label: "D", name: "double", color: "text-sky-400" },
+  { kind: "triples", label: "T", name: "triple", color: "text-amber-400" },
+  { kind: "quadras", label: "Q", name: "quadra", color: "text-purple-400" },
+  { kind: "pentas", label: "P", name: "penta", color: "text-red-400" },
+];
 
 // The unselected state is the default sort (date), so it isn't listed here
 const SORT_OPTIONS: { value: MatchSort; label: string }[] = [
@@ -202,34 +214,75 @@ function weekLabel(week: number): string {
 }
 
 export default function MatchHistory() {
+  // Arriving from another page's link opens the list on that link's filters
+  // alone, so it shows exactly the games the link promised. The sort is left
+  // as it was.
+  const link = (useLocation().state ?? null) as MatchHistoryLink | null;
+  const restore = link === null;
   const [championFilter, setChampionFilter] = useViewState<number | undefined>(
     "matches.champion",
-    undefined,
+    link?.championId,
+    restore,
+  );
+  const [seasonFilter, setSeasonFilter] = useViewState<string | undefined>(
+    "matches.season",
+    link?.season,
+    restore,
   );
   const [patchFilter, setPatchFilter] = useViewState<string | undefined>(
     "matches.patch",
-    undefined,
+    link?.patch,
+    restore,
   );
   const [queueFilter, setQueueFilter] = useViewState<number | undefined>(
     "matches.queue",
-    undefined,
+    link?.queue,
+    restore,
   );
   const [accountFilter, setAccountFilter] = useViewState<string | undefined>(
     "matches.account",
     undefined,
+    restore,
   );
   const [multikillFilter, setMultikillFilter] = useViewState<MultikillType[]>(
     "matches.multikills",
     [],
+    restore,
   );
   const [sort, setSort] = useViewState<MatchSort | undefined>("matches.sort", undefined);
   const [sortDir, setSortDir] = useViewState<MatchSortDir>("matches.sortDir", "desc");
-  const [favoritesOnly, setFavoritesOnly] = useViewState("matches.favorites", false);
+  const [favoritesOnly, setFavoritesOnly] = useViewState("matches.favorites", false, restore);
+  // Every multikill kind picked together counts as the one filter
+  const activeFilters =
+    [championFilter, seasonFilter, patchFilter, queueFilter, accountFilter].filter(
+      (v) => v !== undefined,
+    ).length +
+    (multikillFilter.length > 0 ? 1 : 0) +
+    (favoritesOnly ? 1 : 0);
+  // Back to every game, leaving the sort as it is
+  const clearFilters = useCallback(() => {
+    setChampionFilter(undefined);
+    setSeasonFilter(undefined);
+    setPatchFilter(undefined);
+    setQueueFilter(undefined);
+    setAccountFilter(undefined);
+    setMultikillFilter([]);
+    setFavoritesOnly(false);
+  }, [
+    setChampionFilter,
+    setSeasonFilter,
+    setPatchFilter,
+    setQueueFilter,
+    setAccountFilter,
+    setMultikillFilter,
+    setFavoritesOnly,
+  ]);
   const { matches, loading, hasMore, loadMore, reload } = useMatches({
     championId: championFilter,
     patch: patchFilter,
     queue: queueFilter,
     account: accountFilter,
+    season: seasonFilter,
     sort,
     sortDir,
     multikills: multikillFilter,
@@ -259,8 +312,9 @@ export default function MatchHistory() {
         patch: patchFilter,
         queue: queueFilter,
         account: accountFilter,
+        season: seasonFilter,
       }),
-    [championFilter, patchFilter, queueFilter, accountFilter],
+    [championFilter, patchFilter, queueFilter, accountFilter, seasonFilter],
   );
   // The list arrives a page at a time, so the rows on screen describe the page
   // rather than the day. These cover every game the filters match.
@@ -271,10 +325,19 @@ export default function MatchHistory() {
         patch: patchFilter,
         queue: queueFilter,
         account: accountFilter,
+        season: seasonFilter,
         multikills: multikillFilter,
         favorites: favoritesOnly,
       }),
-    [championFilter, patchFilter, queueFilter, accountFilter, multikillFilter, favoritesOnly],
+    [
+      championFilter,
+      patchFilter,
+      queueFilter,
+      accountFilter,
+      seasonFilter,
+      multikillFilter,
+      favoritesOnly,
+    ],
   );
 
   // Null until the first answer. The effects below drop selections the data no
@@ -333,9 +396,10 @@ export default function MatchHistory() {
           patch: patchFilter,
           queue: queueFilter,
           account: accountFilter,
+          season: seasonFilter,
         })
         .then(setLoadedOptions),
-    [championFilter, patchFilter, queueFilter, accountFilter],
+    [championFilter, patchFilter, queueFilter, accountFilter, seasonFilter],
   );
 
   useEffect(() => {
@@ -355,6 +419,9 @@ export default function MatchHistory() {
     if (championFilter !== undefined && !loadedOptions.champions.includes(championFilter)) {
       setChampionFilter(undefined);
     }
+    if (seasonFilter !== undefined && !loadedOptions.seasons.includes(seasonFilter)) {
+      setSeasonFilter(undefined);
+    }
     if (patchFilter !== undefined && !loadedOptions.patches.includes(patchFilter)) {
       setPatchFilter(undefined);
     }
@@ -372,10 +439,12 @@ export default function MatchHistory() {
   }, [
     loadedOptions,
     championFilter,
+    seasonFilter,
     patchFilter,
     queueFilter,
     accountFilter,
     setChampionFilter,
+    setSeasonFilter,
     setPatchFilter,
     setQueueFilter,
     setAccountFilter,
@@ -555,48 +624,11 @@ export default function MatchHistory() {
             value={totalMultikills.toLocaleString(LOCALE)}
           >
             <div className="grid grid-cols-4 gap-1">
-              {(
-                [
-                  {
-                    kind: "doubles",
-                    label: "D",
-                    name: "double",
-                    value: dashboard.multikills.doubles,
-                    color: "text-sky-400",
-                  },
-                  {
-                    kind: "triples",
-                    label: "T",
-                    name: "triple",
-                    value: dashboard.multikills.triples,
-                    color: "text-amber-400",
-                  },
-                  {
-                    kind: "quadras",
-                    label: "Q",
-                    name: "quadra",
-                    value: dashboard.multikills.quadras,
-                    color: "text-purple-400",
-                  },
-                  {
-                    kind: "pentas",
-                    label: "P",
-                    name: "penta",
-                    value: dashboard.multikills.pentas,
-                    color: "text-red-400",
-                  },
-                ] as {
-                  kind: MultikillType;
-                  label: string;
-                  name: string;
-                  value: number;
-                  color: string;
-                }[]
-              ).map(({ kind, label, name, value, color }) => {
+              {MULTIKILL_KINDS.map(({ kind, label, name, color }) => {
                 const active = multikillFilter.includes(kind);
                 return (
                   <button
-                    key={label}
+                    key={kind}
                     onClick={() => toggleMultikill(kind)}
                     title={`Only show games with a ${name} kill`}
                     className={`text-center rounded-md border px-1 py-0.5 transition-colors ${
@@ -606,7 +638,7 @@ export default function MatchHistory() {
                     }`}
                   >
                     <div className={`text-base font-bold ${color}`}>
-                      {value.toLocaleString(LOCALE)}
+                      {dashboard.multikills[kind].toLocaleString(LOCALE)}
                     </div>
                     <div className="text-[10px] text-lol-text">{label}</div>
                   </button>
@@ -620,79 +652,122 @@ export default function MatchHistory() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-lol-text-bright">Match History</h1>
         <div className="flex items-center gap-2">
-          {filterOptions.hasFavorites && (
-            <button
-              onClick={() => setFavoritesOnly((v) => !v)}
-              title={favoritesOnly ? "Showing favorites only" : "Only show favorites"}
-              className={`flex items-center rounded-lg border px-2 py-1.5 transition-colors ${
-                favoritesOnly
-                  ? "border-lol-gold/60 bg-lol-gold/10 text-amber-400"
-                  : "border-lol-border bg-lol-card text-lol-text hover:border-lol-gold/60 hover:text-lol-text-bright"
-              }`}
-            >
-              {/* h-5 matches the selects' line-height so the boxes end up the same height */}
-              <span className="flex h-5 items-center">
+          <FilterMenu active={activeFilters} onReset={clearFilters}>
+            {/* A single-account database doesn't need an account dropdown */}
+            {(filterOptions.accounts.length > 1 || accountFilter !== undefined) && (
+              <FilterField label="Account">
+                <select
+                  value={accountFilter ?? ""}
+                  onChange={(e) =>
+                    setAccountFilter(e.target.value === "" ? undefined : e.target.value)
+                  }
+                  className="select w-full"
+                >
+                  <option value="">All Accounts</option>
+                  {filterOptions.accounts.map((a) => (
+                    <option key={a.puuid} value={a.puuid}>
+                      {a.name ?? "Unknown account"}
+                    </option>
+                  ))}
+                </select>
+              </FilterField>
+            )}
+            <FilterField label="Champion">
+              <select
+                value={championFilter ?? ""}
+                onChange={(e) =>
+                  setChampionFilter(e.target.value === "" ? undefined : Number(e.target.value))
+                }
+                className="select w-full"
+              >
+                <option value="">All Champions</option>
+                {championOptions.map(({ id, name }) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </FilterField>
+            <FilterField label="Set">
+              <select
+                value={seasonFilter ?? ""}
+                onChange={(e) =>
+                  setSeasonFilter(e.target.value === "" ? undefined : e.target.value)
+                }
+                className="select w-full"
+              >
+                <option value="">All Sets</option>
+                {filterOptions.seasons.map((s) => (
+                  <option key={s} value={s}>
+                    {seasonName(s)}
+                  </option>
+                ))}
+              </select>
+            </FilterField>
+            <FilterField label="Patch">
+              <select
+                value={patchFilter ?? ""}
+                onChange={(e) => setPatchFilter(e.target.value === "" ? undefined : e.target.value)}
+                className="select w-full"
+              >
+                <option value="">All Patches</option>
+                {filterOptions.patches.map((p) => (
+                  <option key={p} value={p}>
+                    Patch {formatPatch(p)}
+                  </option>
+                ))}
+              </select>
+            </FilterField>
+            {(filterOptions.queues.length > 1 || queueFilter !== undefined) && (
+              <FilterField label="Queue">
+                <select
+                  value={queueFilter ?? ""}
+                  onChange={(e) =>
+                    setQueueFilter(e.target.value === "" ? undefined : Number(e.target.value))
+                  }
+                  className="select w-full"
+                >
+                  <option value="">All Queues</option>
+                  {filterOptions.queues.map((q) => (
+                    <option key={q} value={q}>
+                      {queueLabel(q)}
+                    </option>
+                  ))}
+                </select>
+              </FilterField>
+            )}
+            <FilterField label="Multikills">
+              <div className="grid grid-cols-4 gap-1">
+                {MULTIKILL_KINDS.map(({ kind, name, color }) => (
+                  <button
+                    key={kind}
+                    onClick={() => toggleMultikill(kind)}
+                    title={`Only show games with a ${name} kill`}
+                    className={`rounded-md border py-1 text-xs capitalize transition-colors ${color} ${
+                      multikillFilter.includes(kind)
+                        ? "border-lol-gold/60 bg-lol-gold/10"
+                        : "border-lol-border hover:border-lol-gold/60"
+                    }`}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            </FilterField>
+            {filterOptions.hasFavorites && (
+              <button
+                onClick={() => setFavoritesOnly((v) => !v)}
+                className={`flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-xs transition-colors ${
+                  favoritesOnly
+                    ? "border-lol-gold/60 bg-lol-gold/10 text-amber-400"
+                    : "border-lol-border text-lol-text hover:border-lol-gold/60 hover:text-lol-text-bright"
+                }`}
+              >
                 <StarIcon className="h-3.5 w-3.5" fill={favoritesOnly ? "currentColor" : "none"} />
-              </span>
-            </button>
-          )}
-          {/* A single-account database doesn't need an account dropdown */}
-          {(filterOptions.accounts.length > 1 || accountFilter !== undefined) && (
-            <select
-              value={accountFilter ?? ""}
-              onChange={(e) => setAccountFilter(e.target.value === "" ? undefined : e.target.value)}
-              className="select"
-            >
-              <option value="">All Accounts</option>
-              {filterOptions.accounts.map((a) => (
-                <option key={a.puuid} value={a.puuid}>
-                  {a.name ?? "Unknown account"}
-                </option>
-              ))}
-            </select>
-          )}
-          <select
-            value={championFilter ?? ""}
-            onChange={(e) =>
-              setChampionFilter(e.target.value === "" ? undefined : Number(e.target.value))
-            }
-            className="select"
-          >
-            <option value="">All Champions</option>
-            {championOptions.map(({ id, name }) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={patchFilter ?? ""}
-            onChange={(e) => setPatchFilter(e.target.value === "" ? undefined : e.target.value)}
-            className="select"
-          >
-            <option value="">All Patches</option>
-            {filterOptions.patches.map((p) => (
-              <option key={p} value={p}>
-                Patch {formatPatch(p)}
-              </option>
-            ))}
-          </select>
-          {(filterOptions.queues.length > 1 || queueFilter !== undefined) && (
-            <select
-              value={queueFilter ?? ""}
-              onChange={(e) =>
-                setQueueFilter(e.target.value === "" ? undefined : Number(e.target.value))
-              }
-              className="select"
-            >
-              <option value="">All Queues</option>
-              {filterOptions.queues.map((q) => (
-                <option key={q} value={q}>
-                  {queueLabel(q)}
-                </option>
-              ))}
-            </select>
-          )}
+                Favorites only
+              </button>
+            )}
+          </FilterMenu>
           <div className="flex items-center gap-1">
             <select
               value={sort ?? ""}
@@ -735,14 +810,16 @@ export default function MatchHistory() {
 
       {matches.length === 0 && !loading && (
         <div className="bg-lol-card rounded-xl border border-lol-border/60 p-8 text-center text-lol-text">
-          {championFilter !== undefined ||
-          patchFilter !== undefined ||
-          queueFilter !== undefined ||
-          accountFilter !== undefined ||
-          multikillFilter.length > 0 ||
-          favoritesOnly
-            ? "No games match the current filters."
-            : emptyStateMessage(lcuStatus, backfill)}
+          {activeFilters > 0 ? (
+            <>
+              No games match the current filters.{" "}
+              <button onClick={clearFilters} className="text-lol-gold hover:underline">
+                Clear filters
+              </button>
+            </>
+          ) : (
+            emptyStateMessage(lcuStatus, backfill)
+          )}
         </div>
       )}
 

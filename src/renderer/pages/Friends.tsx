@@ -4,7 +4,7 @@ import { useIpc } from "../hooks/useIpc";
 import { useViewState } from "../hooks/useViewState";
 import { useSort } from "../hooks/useSort";
 import { useChampionData, getChampionName } from "../hooks/useChampions";
-import type { TeammateStats } from "../lib/types";
+import { MIN_SHARED_GAMES, type TeammateStats } from "../lib/types";
 import ChampionIcon from "../components/ChampionIcon";
 import SummonerIcon from "../components/SummonerIcon";
 import WinRateBar from "../components/WinRateBar";
@@ -12,14 +12,27 @@ import SortHeader from "../components/SortHeader";
 import { LOCALE, formatDecimal, formatTimeAgo, kdaRatio, kdaColor } from "../lib/format";
 import Kda from "../components/Kda";
 import SearchInput from "../components/SearchInput";
+import FilterMenu from "../components/FilterMenu";
+import MinGamesFilter from "../components/MinGamesFilter";
+import SeasonSelect from "../components/SeasonSelect";
 
 type SortKey = "games" | "winRate" | "kda" | "lastPlayed";
 
 export default function Friends() {
   const navigate = useNavigate();
   const champData = useChampionData();
-  const { data, refetch } = useIpc<TeammateStats[]>(() => window.api.getTeammateStats());
+  const [season, setSeason] = useViewState<string | undefined>("friends.season", undefined);
+  // The list holds everyone we've played with; this decides who counts as a
+  // friend, and it starts and resets at MIN_SHARED_GAMES rather than off.
+  const { data, refetch } = useIpc<TeammateStats[]>(
+    () => window.api.getTeammateStats(season),
+    [season],
+  );
   const [search, setSearch] = useViewState("friends.search", "");
+  const [minGames, setMinGames] = useViewState<number | undefined>(
+    "friends.minGames",
+    MIN_SHARED_GAMES,
+  );
   const sort = useSort<SortKey>("friends", "games");
   const { sortKey, sortDir } = sort;
 
@@ -30,7 +43,11 @@ export default function Friends() {
 
   const sorted = useMemo(() => {
     if (!data) return [];
-    let filtered = data.filter((t) => t.name.toLowerCase().includes(search.toLowerCase()));
+    let filtered = data.filter(
+      (t) =>
+        (minGames === undefined || t.games >= minGames) &&
+        t.name.toLowerCase().includes(search.toLowerCase()),
+    );
 
     filtered.sort((a, b) => {
       let av: number, bv: number;
@@ -55,7 +72,7 @@ export default function Friends() {
     });
 
     return filtered;
-  }, [data, search, sortKey, sortDir]);
+  }, [data, search, minGames, sortKey, sortDir]);
 
   if (!data) {
     return <div className="text-lol-text text-center mt-20">Loading...</div>;
@@ -66,9 +83,27 @@ export default function Friends() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold text-lol-text-bright">Friends</h1>
-          <span className="text-sm text-lol-text">{sorted.length} players · 2+ games together</span>
+          <span className="text-sm text-lol-text">
+            {sorted.length.toLocaleString(LOCALE)} players · {minGames ?? 1}+ games together
+          </span>
         </div>
-        <SearchInput value={search} onChange={setSearch} placeholder="Search player..." />
+        <div className="flex items-center gap-2">
+          <FilterMenu
+            active={(season !== undefined ? 1 : 0) + (minGames !== MIN_SHARED_GAMES ? 1 : 0)}
+            onReset={() => {
+              setSeason(undefined);
+              setMinGames(MIN_SHARED_GAMES);
+            }}
+          >
+            <SeasonSelect value={season} onChange={setSeason} label="Set" />
+            <MinGamesFilter
+              value={minGames}
+              onChange={setMinGames}
+              max={Math.max(...data.map((t) => t.games))}
+            />
+          </FilterMenu>
+          <SearchInput value={search} onChange={setSearch} placeholder="Search player..." />
+        </div>
       </div>
 
       <div className="bg-lol-card rounded-xl border border-lol-border/60 overflow-hidden">
@@ -110,7 +145,7 @@ export default function Friends() {
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <SummonerIcon iconId={t.profileIcon} size={28} />
+                      <SummonerIcon iconId={t.profileIcon} size={28} lazy />
                       <span className="text-sm text-lol-text-bright">{t.name}</span>
                     </div>
                   </td>

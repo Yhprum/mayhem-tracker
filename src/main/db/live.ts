@@ -1,9 +1,8 @@
 import { mapNameForSkin } from "../../shared/maps";
-import type { PlayerRecord } from "../../shared/api";
+import { MIN_SHARED_GAMES, type PlayerRecord } from "../../shared/api";
 import { db } from "./connection";
 import { applyQueueFilter } from "./filters";
 import { getAllPuuids, displayName } from "./summoner";
-import { MIN_SHARED_GAMES } from "./teammates";
 
 // Which ARAM map a game was rolled onto, learned from the running game and
 // remembered so the recap can still name it once the match is over.

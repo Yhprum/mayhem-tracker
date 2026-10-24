@@ -9,7 +9,7 @@ import type {
   TrendsData,
 } from "../../shared/api";
 import { db } from "./connection";
-import { applyQueueFilter } from "./filters";
+import { applyQueueFilter, applySeasonFilter } from "./filters";
 
 // Poro-Snax (base and upgraded) is handed out for free, so it skews item stats
 const EXCLUDED_ITEM_IDS = [2052, 220013];
@@ -19,7 +19,11 @@ export const EXCLUDED_ITEMS_SQL = EXCLUDED_ITEM_IDS.join(", ");
 // item0..item6 on both player_stats and match_participants; slot 6 is the trinket
 export const ITEM_SLOTS = [0, 1, 2, 3, 4, 5, 6];
 
-export function getChampionStatsAll(patch?: string, queue?: number): ChampionStats[] {
+export function getChampionStatsAll(
+  patch?: string,
+  queue?: number,
+  season?: string,
+): ChampionStats[] {
   const where = ["g.is_remake = 0"];
   const params: any[] = [];
   if (patch) {
@@ -27,6 +31,7 @@ export function getChampionStatsAll(patch?: string, queue?: number): ChampionSta
     params.push(patch);
   }
   applyQueueFilter(where, params, queue);
+  applySeasonFilter(where, params, season);
   return db
     .prepare(`
     SELECT
@@ -61,6 +66,7 @@ export function getAugmentStatsAll(
   championId?: number,
   patch?: string,
   queue?: number,
+  season?: string,
 ): AugmentStats[] {
   const where = ["g.is_remake = 0"];
   const params: any[] = [];
@@ -73,6 +79,7 @@ export function getAugmentStatsAll(
     params.push(patch);
   }
   applyQueueFilter(where, params, queue);
+  applySeasonFilter(where, params, season);
   return db
     .prepare(`
     SELECT ga.augment_id, COUNT(*) as picks, SUM(ps.win) as wins
@@ -91,6 +98,7 @@ export function getDashboardData(filters?: {
   patch?: string;
   queue?: number;
   account?: string;
+  season?: string;
 }): DashboardData {
   const where: string[] = ["g.is_remake = 0"];
   const params: any[] = [];
@@ -107,6 +115,7 @@ export function getDashboardData(filters?: {
     params.push(filters.patch);
   }
   applyQueueFilter(where, params, filters?.queue);
+  applySeasonFilter(where, params, filters?.season);
   const whereSql = `WHERE ${where.join(" AND ")}`;
 
   const totals = db
@@ -172,6 +181,7 @@ export function getDashboardData(filters?: {
 export function getAugmentStatsWithChampions(
   patch?: string,
   queue?: number,
+  season?: string,
 ): AugmentStatsDetailedResult {
   const where = ["g.is_remake = 0"];
   const params: any[] = [];
@@ -180,6 +190,7 @@ export function getAugmentStatsWithChampions(
     params.push(patch);
   }
   applyQueueFilter(where, params, queue);
+  applySeasonFilter(where, params, season);
   const augments = db
     .prepare(`
     SELECT ga.augment_id, COUNT(*) as picks, SUM(ps.win) as wins
@@ -238,6 +249,7 @@ export function getChampionItemStats(
   championId: number,
   patch?: string,
   queue?: number,
+  season?: string,
 ): ItemStats[] {
   const extraWhere: string[] = [];
   const extraParams: any[] = [];
@@ -246,6 +258,7 @@ export function getChampionItemStats(
     extraParams.push(patch);
   }
   applyQueueFilter(extraWhere, extraParams, queue);
+  applySeasonFilter(extraWhere, extraParams, season);
   const extraSql = extraWhere.length > 0 ? ` AND ${extraWhere.join(" AND ")}` : "";
   const params = ITEM_SLOTS.flatMap(() => [championId, ...extraParams]);
   return db

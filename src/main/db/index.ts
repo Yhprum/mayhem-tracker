@@ -1,6 +1,6 @@
 export { getDbPath, closeDatabase, getDatabase } from "./connection";
 export { getSetting, setSetting } from "./settings";
-export { getStoredQueues } from "./filters";
+export { getStoredQueues, seasonWindow } from "./filters";
 export { upsertSummoner, getProfile, getAllPuuids } from "./summoner";
 export { checkScoreBackfill } from "./scoring";
 export { initDatabase } from "./schema";

@@ -1,16 +1,27 @@
 import { useState, useMemo, useEffect, Fragment } from "react";
+import { useNavigate } from "react-router-dom";
 import { useIpc } from "../hooks/useIpc";
 import { useViewState } from "../hooks/useViewState";
 import { useSort } from "../hooks/useSort";
 import { useChampionData, getChampionName, useAugmentData } from "../hooks/useChampions";
-import type { ChampionStats, AugmentStats, ItemStats, MatchListItem } from "../lib/types";
+import type {
+  ChampionStats,
+  AugmentStats,
+  ItemStats,
+  MatchListItem,
+  MatchHistoryLink,
+} from "../lib/types";
 import ChampionIcon from "../components/ChampionIcon";
 import AugmentIcon from "../components/AugmentIcon";
 import ItemIcon from "../components/ItemIcon";
 import WinRateBar from "../components/WinRateBar";
 import PatchSelect from "../components/PatchSelect";
 import QueueSelect from "../components/QueueSelect";
-import SortHeader from "../components/SortHeader";
+import SortHeader, { CycleSortHeader } from "../components/SortHeader";
+import FilterMenu from "../components/FilterMenu";
+import MinGamesFilter from "../components/MinGamesFilter";
+import SeasonSelect from "../components/SeasonSelect";
+import { ChevronRightIcon } from "../components/icons";
 import {
   LOCALE,
   formatDecimal,
@@ -32,9 +43,30 @@ type SortKey =
   | "kda"
   | "avg_score"
   | "badges"
+  | "mvps"
+  | "aces"
   | "avg_damage"
   | "avg_gold"
-  | "multikills";
+  | "multikills"
+  | "double_kills"
+  | "triple_kills"
+  | "quadra_kills"
+  | "penta_kills";
+
+// The badge and multikill columns sort by their total first, then by each part
+// on its own
+const BADGE_STEPS: { field: SortKey; label: string }[] = [
+  { field: "badges", label: "MVP / ACE" },
+  { field: "mvps", label: "MVP" },
+  { field: "aces", label: "ACE" },
+];
+const MULTIKILL_STEPS: { field: SortKey; label: string }[] = [
+  { field: "multikills", label: "Multikills" },
+  { field: "double_kills", label: "Doubles" },
+  { field: "triple_kills", label: "Triples" },
+  { field: "quadra_kills", label: "Quadras" },
+  { field: "penta_kills", label: "Pentas" },
+];
 
 // Table columns, for the expanded row's colSpan
 const COLUMN_COUNT = 13;
@@ -43,23 +75,26 @@ function ChampionExpanded({
   championId,
   patch,
   queue,
+  season,
 }: {
   championId: number;
   patch?: string;
   queue?: number;
+  season?: string;
 }) {
+  const navigate = useNavigate();
   const augData = useAugmentData();
   const [augStats, setAugStats] = useState<AugmentStats[] | null>(null);
   const [itemStats, setItemStats] = useState<ItemStats[] | null>(null);
   const [matches, setMatches] = useState<MatchListItem[] | null>(null);
 
   useEffect(() => {
-    window.api.getAugmentStats(championId, patch, queue).then(setAugStats);
-    window.api.getChampionItemStats(championId, patch, queue).then(setItemStats);
+    window.api.getAugmentStats(championId, patch, queue, season).then(setAugStats);
+    window.api.getChampionItemStats(championId, patch, queue, season).then(setItemStats);
     window.api
-      .getChampionMatchHistory(championId, 5, 0, patch, queue)
+      .getChampionMatchHistory(championId, 5, 0, patch, queue, season)
       .then((r) => setMatches(r.matches));
-  }, [championId, patch, queue]);
+  }, [championId, patch, queue, season]);
 
   if (!augStats || !itemStats || !matches) {
     return (
@@ -165,6 +200,19 @@ function ChampionExpanded({
               <span className="text-xs text-lol-text">No games</span>
             )}
           </div>
+          {matches.length > 0 && (
+            <button
+              onClick={() =>
+                navigate("/", {
+                  state: { championId, patch, queue, season } satisfies MatchHistoryLink,
+                })
+              }
+              className="mt-2 flex items-center gap-0.5 text-xs text-lol-text hover:text-lol-gold transition-colors"
+            >
+              View all in Match History
+              <ChevronRightIcon className="h-3 w-3" />
+            </button>
+          )}
         </div>
       </div>
     </td>
@@ -175,11 +223,13 @@ export default function Champions() {
   const champData = useChampionData();
   const [patch, setPatch] = useViewState<string | undefined>("champions.patch", undefined);
   const [queue, setQueue] = useViewState<number | undefined>("champions.queue", undefined);
+  const [season, setSeason] = useViewState<string | undefined>("champions.season", undefined);
   const { data, refetch } = useIpc<ChampionStats[]>(
-    () => window.api.getChampionStats(patch, queue),
-    [patch, queue],
+    () => window.api.getChampionStats(patch, queue, season),
+    [patch, queue, season],
   );
   const [search, setSearch] = useViewState("champions.search", "");
+  const [minGames, setMinGames] = useViewState<number | undefined>("champions.minGames", undefined);
   const sort = useSort<SortKey>("champions", "games");
   const { sortKey, sortDir } = sort;
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -196,6 +246,7 @@ export default function Champions() {
   const sorted = useMemo(() => {
     if (!data) return [];
     let filtered = data.filter((c) => {
+      if (minGames !== undefined && c.games < minGames) return false;
       const name = getChampionName(champData, c.champion_id).toLowerCase();
       return name.includes(search.toLowerCase());
     });
@@ -226,7 +277,7 @@ export default function Champions() {
     });
 
     return filtered;
-  }, [data, search, sortKey, sortDir, champData]);
+  }, [data, search, minGames, sortKey, sortDir, champData]);
 
   if (!data) {
     return <div className="text-lol-text text-center mt-20">Loading...</div>;
@@ -237,8 +288,24 @@ export default function Champions() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-lol-text-bright">Champions</h1>
         <div className="flex items-center gap-2">
-          <QueueSelect value={queue} onChange={setQueue} />
-          <PatchSelect value={patch} onChange={setPatch} />
+          <FilterMenu
+            active={[season, patch, queue, minGames].filter((v) => v !== undefined).length}
+            onReset={() => {
+              setSeason(undefined);
+              setPatch(undefined);
+              setQueue(undefined);
+              setMinGames(undefined);
+            }}
+          >
+            <SeasonSelect value={season} onChange={setSeason} label="Set" />
+            <PatchSelect value={patch} onChange={setPatch} label="Patch" />
+            <QueueSelect value={queue} onChange={setQueue} label="Queue" />
+            <MinGamesFilter
+              value={minGames}
+              onChange={setMinGames}
+              max={Math.max(...data.map((c) => c.games))}
+            />
+          </FilterMenu>
           <SearchInput value={search} onChange={setSearch} placeholder="Search champion..." />
         </div>
       </div>
@@ -274,7 +341,7 @@ export default function Champions() {
                 field="avg_score"
                 className="w-14"
               />
-              <SortHeader {...sort} compact label="MVP / ACE" field="badges" className="w-22" />
+              <CycleSortHeader {...sort} compact steps={BADGE_STEPS} className="w-22" />
               <SortHeader
                 {...sort}
                 compact
@@ -291,13 +358,7 @@ export default function Champions() {
                 field="avg_gold"
                 className="w-16"
               />
-              <SortHeader
-                {...sort}
-                compact
-                label="Multikills"
-                field="multikills"
-                className="w-36"
-              />
+              <CycleSortHeader {...sort} compact steps={MULTIKILL_STEPS} className="w-36" />
             </tr>
           </thead>
           <tbody>
@@ -389,7 +450,12 @@ export default function Champions() {
                 </tr>
                 {expandedId === c.champion_id && (
                   <tr className="border-t border-lol-border/30 bg-lol-dark/30">
-                    <ChampionExpanded championId={c.champion_id} patch={patch} queue={queue} />
+                    <ChampionExpanded
+                      championId={c.champion_id}
+                      patch={patch}
+                      queue={queue}
+                      season={season}
+                    />
                   </tr>
                 )}
               </Fragment>

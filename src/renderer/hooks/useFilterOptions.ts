@@ -6,6 +6,7 @@ export const EMPTY_FILTER_OPTIONS: MatchFilterOptions = {
   patches: [],
   champions: [],
   queues: [],
+  seasons: [],
   accounts: [],
   hasFavorites: false,
 };

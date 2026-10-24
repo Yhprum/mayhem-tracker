@@ -15,7 +15,8 @@ import type {
   GameAugment,
 } from "../../shared/api";
 import { db } from "./connection";
-import { hideRemakes, applyQueueFilter } from "./filters";
+import { SEASONS } from "../../shared/seasons";
+import { hideRemakes, applyQueueFilter, applySeasonFilter } from "./filters";
 import { getSetting } from "./settings";
 import { displayName, identityFromGame } from "./summoner";
 
@@ -81,6 +82,7 @@ interface MatchListFilters {
   patch?: string;
   queue?: number;
   account?: string;
+  season?: string;
   sort?: string;
   sortDir?: string;
   multikills?: string[];
@@ -113,6 +115,7 @@ function matchListWhere(filters?: MatchListFilters): { whereSql: string; params:
     params.push(filters.patch);
   }
   applyQueueFilter(where, params, filters?.queue);
+  applySeasonFilter(where, params, filters?.season);
   if (filters?.multikills && filters.multikills.length > 0) {
     const cols = filters.multikills
       .map((k) => MULTIKILL_COLUMNS[k])
@@ -207,6 +210,7 @@ export function getMatchFilterOptions(filters?: {
   patch?: string;
   queue?: number;
   account?: string;
+  season?: string;
 }): MatchFilterOptions {
   // Each list is narrowed by the OTHER filters so a dropdown never hides its own selection
   const applyAccountFilter = (where: string[], params: any[]) => {
@@ -223,6 +227,7 @@ export function getMatchFilterOptions(filters?: {
     patchParams.push(filters.championId);
   }
   applyQueueFilter(patchWhere, patchParams, filters?.queue);
+  applySeasonFilter(patchWhere, patchParams, filters?.season);
   applyAccountFilter(patchWhere, patchParams);
   const patchRows = db
     .prepare(`
@@ -247,6 +252,7 @@ export function getMatchFilterOptions(filters?: {
     champParams.push(filters.patch);
   }
   applyQueueFilter(champWhere, champParams, filters?.queue);
+  applySeasonFilter(champWhere, champParams, filters?.season);
   applyAccountFilter(champWhere, champParams);
   const champRows = db
     .prepare(`
@@ -269,6 +275,7 @@ export function getMatchFilterOptions(filters?: {
     queueParams.push(filters.patch);
   }
   applyQueueFilter(queueWhere, queueParams, undefined);
+  applySeasonFilter(queueWhere, queueParams, filters?.season);
   applyAccountFilter(queueWhere, queueParams);
   const queueRows = db
     .prepare(`
@@ -279,6 +286,39 @@ export function getMatchFilterOptions(filters?: {
     ORDER BY g.queue_id
   `)
     .all(...queueParams) as { queue_id: number }[];
+
+  // Sets with a game under the other filters, newest first like the patches.
+  // One still to come has none yet.
+  const seasonWhere = ["1 = 1"];
+  const seasonParams: any[] = [];
+  if (filters?.championId != null) {
+    seasonWhere.push("ps.champion_id = ?");
+    seasonParams.push(filters.championId);
+  }
+  if (filters?.patch) {
+    seasonWhere.push("g.game_version = ?");
+    seasonParams.push(filters.patch);
+  }
+  applyQueueFilter(seasonWhere, seasonParams, filters?.queue);
+  applyAccountFilter(seasonWhere, seasonParams);
+  const seasons = SEASONS.filter((season) => {
+    const where = [...seasonWhere];
+    const params = [...seasonParams];
+    applySeasonFilter(where, params, season.id);
+    const row = db
+      .prepare(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM games g
+        JOIN player_stats ps ON g.game_id = ps.game_id
+        WHERE ${where.join(" AND ")}
+      ) as found
+    `)
+      .get(...params) as { found: number };
+    return row.found === 1;
+  })
+    .map((season) => season.id)
+    .reverse();
 
   // Like the favorites toggle below, this list ignores the other filters: the
   // set of tracked accounts is stable, and the dropdown shouldn't reshuffle as
@@ -336,6 +376,7 @@ export function getMatchFilterOptions(filters?: {
     patches,
     champions: champRows.map((r) => r.champion_id),
     queues: queueRows.map((r) => r.queue_id),
+    seasons,
     accounts,
     hasFavorites: !!favoriteRow.has,
   };
@@ -432,6 +473,7 @@ export function getChampionMatchHistory(
   offset: number,
   patch?: string,
   queue?: number,
+  season?: string,
 ): { matches: MatchListItem[]; total: number } {
   const where = ["ps.champion_id = ?"];
   const params: any[] = [championId];
@@ -440,6 +482,7 @@ export function getChampionMatchHistory(
     params.push(patch);
   }
   applyQueueFilter(where, params, queue);
+  applySeasonFilter(where, params, season);
   const whereSql = `WHERE ${where.join(" AND ")}`;
   const total = db
     .prepare(`

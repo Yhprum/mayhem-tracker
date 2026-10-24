@@ -54,20 +54,22 @@ export function registerIpcHandlers() {
 
   handle("toggleFavorite", (_event, gameId) => db.toggleFavorite(gameId));
 
-  handle("getChampionStats", (_event, patch, queue) => db.getChampionStatsAll(patch, queue));
-
-  handle("getAugmentStats", (_event, championId, patch, queue) =>
-    db.getAugmentStatsAll(championId, patch, queue),
+  handle("getChampionStats", (_event, patch, queue, season) =>
+    db.getChampionStatsAll(patch, queue, season),
   );
 
-  handle("getAugmentStatsDetailed", (_event, patch, queue) =>
-    db.getAugmentStatsWithChampions(patch, queue),
+  handle("getAugmentStats", (_event, championId, patch, queue, season) =>
+    db.getAugmentStatsAll(championId, patch, queue, season),
+  );
+
+  handle("getAugmentStatsDetailed", (_event, patch, queue, season) =>
+    db.getAugmentStatsWithChampions(patch, queue, season),
   );
 
   handle("getDashboard", (_event, filters) => db.getDashboardData(filters));
 
-  handle("getChampionMatchHistory", (_event, championId, limit, offset, patch, queue) =>
-    db.getChampionMatchHistory(championId, limit, offset, patch, queue),
+  handle("getChampionMatchHistory", (_event, championId, limit, offset, patch, queue, season) =>
+    db.getChampionMatchHistory(championId, limit, offset, patch, queue, season),
   );
 
   handle("refreshGames", async (event) => {
@@ -136,11 +138,12 @@ export function registerIpcHandlers() {
     }
   });
 
-  handle("getChampionItemStats", (_event, championId, patch, queue) =>
-    db.getChampionItemStats(championId, patch, queue),
+  handle("getChampionItemStats", (_event, championId, patch, queue, season) =>
+    db.getChampionItemStats(championId, patch, queue, season),
   );
 
-  handle("getTeammateStats", () => db.getTeammateStats());
+  // Everyone we've played with: the Friends page sets its own minimum
+  handle("getTeammateStats", (_event, season) => db.getTeammateStats(db.seasonWindow(season), 1));
 
   handle("getTeammateDetail", async (_event, key) => {
     // Teammate scores are computed on the fly and need champion classes

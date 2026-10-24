@@ -17,6 +17,9 @@ import PatchSelect from "../components/PatchSelect";
 import QueueSelect from "../components/QueueSelect";
 import SortHeader from "../components/SortHeader";
 import SearchInput from "../components/SearchInput";
+import FilterMenu from "../components/FilterMenu";
+import MinGamesFilter from "../components/MinGamesFilter";
+import SeasonSelect from "../components/SeasonSelect";
 
 type SortKey = "picks" | "winRate" | "name";
 type RarityFilter = "all" | "kSilver" | "kGold" | "kPrismatic";
@@ -53,11 +56,13 @@ export default function Augments() {
   const augmentData = useAugmentData();
   const [patch, setPatch] = useViewState<string | undefined>("augments.patch", undefined);
   const [queue, setQueue] = useViewState<number | undefined>("augments.queue", undefined);
+  const [season, setSeason] = useViewState<string | undefined>("augments.season", undefined);
   const { data, refetch } = useIpc<AugmentStatsDetailedResult>(
-    () => window.api.getAugmentStatsDetailed(patch, queue),
-    [patch, queue],
+    () => window.api.getAugmentStatsDetailed(patch, queue, season),
+    [patch, queue, season],
   );
   const [search, setSearch] = useViewState("augments.search", "");
+  const [minPicks, setMinPicks] = useViewState<number | undefined>("augments.minPicks", undefined);
   const sort = useSort<SortKey>("augments", "picks");
   const { sortKey, sortDir } = sort;
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -86,6 +91,7 @@ export default function Augments() {
       const name = getAugmentName(augmentData, a.augment_id).toLowerCase();
       if (!name.includes(search.toLowerCase())) return false;
       if (rarityFilter !== "all" && aug?.rarity !== rarityFilter) return false;
+      if (minPicks !== undefined && a.picks < minPicks) return false;
       return true;
     });
 
@@ -107,7 +113,7 @@ export default function Augments() {
     });
 
     return filtered;
-  }, [data, search, sortKey, sortDir, augmentData, rarityFilter]);
+  }, [data, search, sortKey, sortDir, augmentData, rarityFilter, minPicks]);
 
   if (!data) {
     return <div className="text-lol-text text-center mt-20">Loading...</div>;
@@ -133,9 +139,26 @@ export default function Augments() {
           </button>
         ))}
         <span className="text-xs text-lol-text self-center ml-2">{sorted.length} augments</span>
-        <div className="ml-auto flex items-center gap-2">
-          <QueueSelect value={queue} onChange={setQueue} />
-          <PatchSelect value={patch} onChange={setPatch} />
+        <div className="ml-auto">
+          <FilterMenu
+            active={[season, patch, queue, minPicks].filter((v) => v !== undefined).length}
+            onReset={() => {
+              setSeason(undefined);
+              setPatch(undefined);
+              setQueue(undefined);
+              setMinPicks(undefined);
+            }}
+          >
+            <SeasonSelect value={season} onChange={setSeason} label="Set" />
+            <PatchSelect value={patch} onChange={setPatch} label="Patch" />
+            <QueueSelect value={queue} onChange={setQueue} label="Queue" />
+            <MinGamesFilter
+              value={minPicks}
+              onChange={setMinPicks}
+              max={Math.max(...data.augments.map((a) => a.picks))}
+              label="Min picks"
+            />
+          </FilterMenu>
         </div>
         <SearchInput value={search} onChange={setSearch} placeholder="Search augment..." />
       </div>

@@ -1,13 +1,17 @@
 import { useEffect } from "react";
 import { useFilterOptions } from "../hooks/useFilterOptions";
 import { formatPatch } from "../lib/format";
+import { FilterField } from "./FilterMenu";
 
 export default function PatchSelect({
   value,
   onChange,
+  label,
 }: {
   value: string | undefined;
   onChange: (patch: string | undefined) => void;
+  // Set inside a filter menu, where the select fills a labelled field
+  label?: string;
 }) {
   const { patches } = useFilterOptions();
 
@@ -18,11 +22,11 @@ export default function PatchSelect({
     }
   }, [patches, value, onChange]);
 
-  return (
+  const select = (
     <select
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value === "" ? undefined : e.target.value)}
-      className="select"
+      className={label ? "select w-full" : "select"}
     >
       <option value="">All Patches</option>
       {patches.map((p) => (
@@ -32,4 +36,5 @@ export default function PatchSelect({
       ))}
     </select>
   );
+  return label ? <FilterField label={label}>{select}</FilterField> : select;
 }
