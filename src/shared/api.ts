@@ -333,21 +333,50 @@ export interface TeammateStats {
   lastPlayed: number;
 }
 
-// A shared game, seen from both sides: our stats on the row itself, theirs
-// under `friend`.
-export interface TeammateMatch extends MatchListItem {
-  friend: {
-    champion_id: number;
-    win: number;
-    kills: number;
-    deaths: number;
-    assists: number;
-    total_damage_dealt: number;
-    total_damage_taken: number;
-    total_heal: number;
-    score: number | null;
-    score_badge: "MVP" | "ACE" | null;
-  };
+export interface ComboFriend {
+  // Same id the friends list keys a player on
+  key: string;
+  name: string;
+  puuid: string | null;
+  profileIcon: number | null;
+}
+
+// A combination of friends, one row for every distinct set a game was played
+// with: the duo {X, Y}, the trio {X, Y, Z}, and so on. `friends` is in the set's
+// own sort order, `key` is their ids joined, and a game counts once no matter
+// how many friends were in it — their KDA below is the group's combined line.
+export interface FriendCombo {
+  key: string;
+  friends: ComboFriend[];
+  games: number;
+  wins: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  lastPlayed: number;
+}
+
+// One friend's own line in one of the detail page's games. Only our row is
+// stored scored, so theirs is computed the way the scoreboard computes it.
+export interface FriendGameMember {
+  // The member's id, so the row can pair each line with its player
+  key: string;
+  champion_id: number;
+  win: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  total_damage_dealt: number;
+  total_damage_taken: number;
+  total_heal: number;
+  score: number | null;
+  score_badge: "MVP" | "ACE" | null;
+}
+
+// A game a detail page shows: our row as the match list shows it, plus every
+// member's line in that game, in the page's member order.
+export interface FriendGame extends MatchListItem {
+  members: FriendGameMember[];
 }
 
 export interface TeammateChampionStats {
@@ -359,15 +388,26 @@ export interface TeammateChampionStats {
   assists: number;
 }
 
-// The list view only needs a teammate's most-played champions; their profile
-// breaks every champion down.
-export interface TeammateProfile extends Omit<TeammateStats, "champions"> {
+// One friend on a detail page, totalled over the games the page is about: the
+// header, the member panel and the tiles all read this.
+export interface FriendMemberStats extends ComboFriend {
+  games: number;
+  wins: number;
+  kills: number;
+  deaths: number;
+  assists: number;
   champions: TeammateChampionStats[];
+  lastPlayed: number;
 }
 
-export interface TeammateDetail {
-  player: TeammateProfile;
-  matches: TeammateMatch[];
+// One player's or one group's page, the same shape either way: `group` is the
+// set the page is about with its totals, `members` breaks it down per friend,
+// and `matches` are the games behind both. A single friend is a set of one, so
+// one page covers the duo view through to a full team.
+export interface FriendDetail {
+  group: FriendCombo;
+  members: FriendMemberStats[];
+  matches: FriendGame[];
 }
 
 // One row per calendar day with at least one game, local time. The Trends page
@@ -1010,9 +1050,21 @@ export interface ElectronAPI {
     queue?: number,
     season?: string,
   ) => Promise<ItemStats[]>;
-  // Everyone we've shared a game with, the Friends page's own minimum aside
-  getTeammateStats: (season?: string) => Promise<TeammateStats[]>;
-  getTeammateDetail: (key: string) => Promise<TeammateDetail | null>;
+  // Everyone we've shared a game with, the Friends page's own minimum aside.
+  // `partySize` keeps just the games with that many players including us, for
+  // the duo/trio/full-team win rates: 2 is a duo, 5 is a full team.
+  getTeammateStats: (season?: string, partySize?: number) => Promise<TeammateStats[]>;
+  // The same request, one row per distinct set of friends a game was played
+  // with, rather than one row per friend
+  getFriendCombos: (season?: string, partySize?: number) => Promise<FriendCombo[]>;
+  // One player's or one group's page: `key` is a friend id, or the ids of a
+  // group joined the way a FriendCombo keys them. `season` and `partySize`
+  // narrow the games the way the list it was opened from was narrowed
+  getFriendDetail: (
+    key: string,
+    season?: string,
+    partySize?: number,
+  ) => Promise<FriendDetail | null>;
   getGlobalStats: (patch?: string, queue?: number) => Promise<GlobalStats>;
   getTrends: (queue?: number) => Promise<TrendsData>;
   getRecords: (queue?: number, account?: string) => Promise<RecordsData>;
@@ -1124,7 +1176,8 @@ export const INVOKE_CHANNELS = {
   getChampionMatchHistory: "db:champion-match-history",
   getChampionItemStats: "db:champion-item-stats",
   getTeammateStats: "db:teammate-stats",
-  getTeammateDetail: "db:teammate-detail",
+  getFriendCombos: "db:friend-combos",
+  getFriendDetail: "db:friend-detail",
   getGlobalStats: "db:global-stats",
   getTrends: "db:trends",
   getRecords: "db:records",

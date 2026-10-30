@@ -7,9 +7,9 @@ export type SortDir = "asc" | "desc";
 // same ordering. Picking a new column starts it at the end worth looking at: a
 // name reads alphabetically, every other column is a quantity whose largest
 // values are the interesting ones.
-export function useSort<K extends string>(key: string, initial: K) {
+export function useSort<K extends string>(key: string, initial: K, initialDir: SortDir = "desc") {
   const [sortKey, setSortKey] = useViewState<K>(`${key}.sortKey`, initial);
-  const [sortDir, setSortDir] = useViewState<SortDir>(`${key}.sortDir`, "desc");
+  const [sortDir, setSortDir] = useViewState<SortDir>(`${key}.sortDir`, initialDir);
 
   const onSort = useCallback(
     (next: K) => {
