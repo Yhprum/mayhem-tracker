@@ -143,12 +143,20 @@ export function registerIpcHandlers() {
   );
 
   // Everyone we've played with: the Friends page sets its own minimum
-  handle("getTeammateStats", (_event, season) => db.getTeammateStats(db.seasonWindow(season), 1));
+  handle("getTeammateStats", (_event, season, partySize) =>
+    db.getTeammateStats(db.seasonWindow(season), 1, partySize),
+  );
 
-  handle("getTeammateDetail", async (_event, key) => {
-    // Teammate scores are computed on the fly and need champion classes
+  // One row per party of friends, the Friends page setting its own minimum
+  handle("getFriendCombos", (_event, season, partySize) =>
+    db.getFriendCombos(db.seasonWindow(season), 1, partySize),
+  );
+
+  // One player's or one group's page, for the row the Friends page opened
+  handle("getFriendDetail", async (_event, key, season, partySize) => {
+    // Member scores are computed on the fly and need champion classes
     await dragon.waitForChampionData();
-    return db.getTeammateDetail(key);
+    return db.getFriendDetail(key, db.seasonWindow(season), partySize);
   });
 
   handle("getGlobalStats", (_event, patch, queue) => db.getGlobalStats(patch, queue));
