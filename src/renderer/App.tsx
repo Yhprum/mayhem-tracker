@@ -6,6 +6,7 @@ import Champions from "./pages/Champions";
 import Augments from "./pages/Augments";
 import Friends from "./pages/Friends";
 import FriendDetail from "./pages/FriendDetail";
+import GroupDetail from "./pages/GroupDetail";
 import Trends from "./pages/Trends";
 import Records from "./pages/Records";
 import SeasonRecap from "./pages/SeasonRecap";
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/augments" element={<Augments />} />
           <Route path="/friends" element={<Friends />} />
           <Route path="/friends/:key" element={<FriendDetail />} />
+          <Route path="/friends/groups/:key" element={<GroupDetail />} />
           <Route path="/trends" element={<Trends />} />
           <Route path="/records" element={<Records />} />
           <Route path="/season" element={<SeasonRecap />} />

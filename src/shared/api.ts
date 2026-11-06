@@ -333,21 +333,58 @@ export interface TeammateStats {
   lastPlayed: number;
 }
 
+// Match data doesn't say who queued together, so a group is read off the team:
+// the players on it we've shared at least this many games with, across every
+// game we have. Being matched with a stranger twice is common enough over a long
+// history that a lower minimum lists strangers as groups.
+export const MIN_GROUP_MEMBER_GAMES = 3;
+
+// The people we played a set of games with, as one unit. A game counts for
+// exactly one group, so a trio's games are not also its pairs' games.
+export interface TeammateGroup {
+  // Stable id: the members' keys
+  key: string;
+  // Everyone in the group but us, most-played first
+  members: Pick<TeammateStats, "key" | "name" | "profileIcon">[];
+  games: number;
+  wins: number;
+  // Everyone's lines added up, ours included
+  kills: number;
+  deaths: number;
+  assists: number;
+  lastPlayed: number;
+}
+
+// One teammate's line in one game. Ours sits on MatchListItem under the same
+// names.
+export interface TeammateLine {
+  champion_id: number;
+  win: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  total_damage_dealt: number;
+  total_damage_taken: number;
+  total_heal: number;
+  score: number | null;
+  score_badge: "MVP" | "ACE" | null;
+}
+
 // A shared game, seen from both sides: our stats on the row itself, theirs
 // under `friend`.
 export interface TeammateMatch extends MatchListItem {
-  friend: {
-    champion_id: number;
-    win: number;
-    kills: number;
-    deaths: number;
-    assists: number;
-    total_damage_dealt: number;
-    total_damage_taken: number;
-    total_heal: number;
-    score: number | null;
-    score_badge: "MVP" | "ACE" | null;
-  };
+  friend: TeammateLine;
+}
+
+// A group's game: our stats on the row itself, and a line for each member in
+// the same order as the group's `members`.
+export interface TeammateGroupMatch extends MatchListItem {
+  members: TeammateLine[];
+}
+
+export interface TeammateGroupDetail {
+  group: TeammateGroup;
+  matches: TeammateGroupMatch[];
 }
 
 export interface TeammateChampionStats {
@@ -1012,6 +1049,8 @@ export interface ElectronAPI {
   ) => Promise<ItemStats[]>;
   // Everyone we've shared a game with, the Friends page's own minimum aside
   getTeammateStats: (season?: string) => Promise<TeammateStats[]>;
+  getTeammateGroups: (season?: string) => Promise<TeammateGroup[]>;
+  getTeammateGroupDetail: (key: string) => Promise<TeammateGroupDetail | null>;
   getTeammateDetail: (key: string) => Promise<TeammateDetail | null>;
   getGlobalStats: (patch?: string, queue?: number) => Promise<GlobalStats>;
   getTrends: (queue?: number) => Promise<TrendsData>;
@@ -1124,6 +1163,8 @@ export const INVOKE_CHANNELS = {
   getChampionMatchHistory: "db:champion-match-history",
   getChampionItemStats: "db:champion-item-stats",
   getTeammateStats: "db:teammate-stats",
+  getTeammateGroups: "db:teammate-groups",
+  getTeammateGroupDetail: "db:teammate-group-detail",
   getTeammateDetail: "db:teammate-detail",
   getGlobalStats: "db:global-stats",
   getTrends: "db:trends",

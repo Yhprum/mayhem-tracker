@@ -29,7 +29,12 @@ export {
   markIgnoredGame,
   insertGameFull,
 } from "./ingest";
-export { getTeammateStats, getTeammateDetail } from "./teammates";
+export {
+  getTeammateStats,
+  getTeammateGroups,
+  getTeammateGroupDetail,
+  getTeammateDetail,
+} from "./teammates";
 export { getRecords } from "./records";
 export { getGameRecap } from "./recap";
 export { getSeasonRecap, getSeasons } from "./season";

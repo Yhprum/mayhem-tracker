@@ -14,6 +14,12 @@ export interface MatchHistoryLink {
   season?: string;
 }
 
+// The view another page returns to the Friends list on, carried in the
+// navigation's state
+export interface FriendsLink {
+  view: "players" | "groups";
+}
+
 declare global {
   interface Window {
     api: ElectronAPI;

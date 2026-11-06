@@ -1,5 +1,9 @@
 import {
+  MIN_GROUP_MEMBER_GAMES,
   MIN_SHARED_GAMES,
+  type TeammateGroup,
+  type TeammateGroupDetail,
+  type TeammateLine,
   type TeammateStats,
   type TeammateDetail,
   type MatchListItem,
@@ -28,6 +32,7 @@ interface TeammateRow {
   game_id: number;
   game_creation: number;
   participant_id: number;
+  team_id: number;
   puuid: string | null;
   game_name: string | null;
   tag_line: string | null;
@@ -81,8 +86,8 @@ function teammateRows(puuids: string[], filter: CareerFilter = {}): TeammateRow[
         SELECT DISTINCT game_id, team_id FROM match_participants
         WHERE puuid IN (${teamOwners.map(() => "?").join(", ")})
       )
-      SELECT o.game_id, g.game_creation, o.participant_id, o.puuid, o.game_name, o.tag_line,
-             o.profile_icon, o.champion_id, o.win, o.kills, o.deaths, o.assists
+      SELECT o.game_id, g.game_creation, o.participant_id, o.team_id, o.puuid, o.game_name,
+             o.tag_line, o.profile_icon, o.champion_id, o.win, o.kills, o.deaths, o.assists
       FROM our_teams t
       JOIN match_participants o ON o.game_id = t.game_id AND o.team_id = t.team_id
       JOIN games g ON g.game_id = o.game_id
@@ -185,6 +190,179 @@ export function getTeammateStats(
     .sort((a, b) => b.games - a.games);
 }
 
+type GroupCandidate = TeammateGroup["members"][number] & { games: number };
+
+// One game as a group played it: the friends on our side, most-played first.
+// `key` is the group the game belongs to.
+interface GroupSide {
+  key: string;
+  roster: { player: GroupCandidate; row: TeammateRow }[];
+}
+
+// The people we play with, a game at a time: whoever on our team counts as a
+// friend makes up that game's group, so a trio's game goes to the trio and not
+// to the pairs inside it. A game with no friends on the team has no group.
+//
+// Who counts is settled over every game we have, so `filter` only picks which
+// games are returned, and a game keeps its group under any filter.
+function groupSides(puuids: string[], filter?: CareerFilter): GroupSide[] {
+  // Rows are newest-first, so the first hit carries the current name and icon.
+  const players = new Map<string, GroupCandidate>();
+  for (const row of teammateRows(puuids)) {
+    const name = teammateName(row.game_name, row.tag_line, row.participant_id);
+    const key = teammateKey(row.puuid, name);
+    const player = players.get(key);
+    if (player) {
+      player.games++;
+      player.profileIcon ??= row.profile_icon;
+    } else {
+      players.set(key, { key, name, profileIcon: row.profile_icon, games: 1 });
+    }
+  }
+
+  // Keyed by side rather than game: two of our accounts can meet on opposite
+  // teams, and those are two rosters.
+  const sides = new Map<string, GroupSide["roster"]>();
+  for (const row of teammateRows(puuids, filter)) {
+    const name = teammateName(row.game_name, row.tag_line, row.participant_id);
+    const player = players.get(teammateKey(row.puuid, name));
+    if (!player || player.games < MIN_GROUP_MEMBER_GAMES) continue;
+
+    const id = `${row.game_id}:${row.team_id}`;
+    const roster = sides.get(id);
+    if (roster) roster.push({ player, row });
+    else sides.set(id, [{ player, row }]);
+  }
+
+  return Array.from(sides.values(), (roster) => {
+    // The key breaks ties so a roster reads the same from every game
+    roster.sort(
+      (a, b) => b.player.games - a.player.games || a.player.key.localeCompare(b.player.key),
+    );
+    return { key: roster.map(({ player }) => player.key).join(","), roster };
+  });
+}
+
+function tallyGroups(sides: GroupSide[]): TeammateGroup[] {
+  const ourLines = db.prepare("SELECT game_id, kills, deaths, assists FROM player_stats").all() as {
+    game_id: number;
+    kills: number;
+    deaths: number;
+    assists: number;
+  }[];
+  const ours = new Map(ourLines.map((line) => [line.game_id, line]));
+
+  const groups = new Map<string, TeammateGroup>();
+  for (const { key, roster } of sides) {
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        members: roster.map(({ player }) => ({
+          key: player.key,
+          name: player.name,
+          profileIcon: player.profileIcon,
+        })),
+        games: 0,
+        wins: 0,
+        kills: 0,
+        deaths: 0,
+        assists: 0,
+        lastPlayed: 0,
+      });
+    }
+    const group = groups.get(key)!;
+    const { row } = roster[0];
+    group.games++;
+    if (row.win) group.wins++;
+    for (const line of [ours.get(row.game_id), ...roster.map((member) => member.row)]) {
+      group.kills += line?.kills ?? 0;
+      group.deaths += line?.deaths ?? 0;
+      group.assists += line?.assists ?? 0;
+    }
+    group.lastPlayed = Math.max(group.lastPlayed, row.game_creation);
+  }
+  return Array.from(groups.values());
+}
+
+export function getTeammateGroups(filter?: CareerFilter): TeammateGroup[] {
+  const puuids = getAllPuuids();
+  if (puuids.length === 0) return [];
+  return tallyGroups(groupSides(puuids, filter)).sort((a, b) => b.games - a.games);
+}
+
+// Our own row for each of these games, the same columns the match list shows,
+// plus all ten players of each, which a teammate's score is computed from.
+function sharedGameRows(gameIds: number[]) {
+  const idList = gameIds.map(() => "?").join(", ");
+
+  const ourMatches = db
+    .prepare(`
+      SELECT ${MATCH_ROW_SQL}
+      FROM games g
+      JOIN player_stats ps ON g.game_id = ps.game_id
+      WHERE g.game_id IN (${idList})
+      ORDER BY g.game_creation DESC
+    `)
+    .all(...gameIds) as MatchListItem[];
+
+  const scoreRows = groupByGame(
+    db
+      .prepare(
+        `SELECT game_id, ${SCORE_ROW_COLUMNS} FROM match_participants WHERE game_id IN (${idList})`,
+      )
+      .all(...gameIds) as (ScoreRow & { game_id: number })[],
+  );
+
+  return { ourMatches, scoreRows };
+}
+
+// These teammates' lines in one game. A teammate's score has to be computed
+// rather than looked up, since player_stats only ever scores our own row.
+function teammateLines(gameRows: ScoreRow[], teammates: TeammateRow[]): TeammateLine[] {
+  const scores = computeMatchScores(scoreInputsFromRows(gameRows), getChampionClasses());
+
+  return teammates.map((row) => {
+    const stats = gameRows.find((p) => p.participant_id === row.participant_id);
+    const score = scores.get(row.participant_id);
+    return {
+      champion_id: row.champion_id,
+      win: row.win,
+      kills: row.kills,
+      deaths: row.deaths,
+      assists: row.assists,
+      total_damage_dealt: stats?.total_damage_dealt ?? 0,
+      total_damage_taken: stats?.total_damage_taken ?? 0,
+      total_heal: stats?.total_heal ?? 0,
+      score: score?.score ?? null,
+      score_badge: score?.badge ?? null,
+    };
+  });
+}
+
+// Every game one group played, with each member's line in it
+export function getTeammateGroupDetail(key: string): TeammateGroupDetail | null {
+  const puuids = getAllPuuids();
+  if (puuids.length === 0) return null;
+
+  const sides = groupSides(puuids).filter((side) => side.key === key);
+  const [group] = tallyGroups(sides);
+  if (!group) return null;
+
+  const byGame = new Map(sides.map((side) => [side.roster[0].row.game_id, side]));
+  const { ourMatches, scoreRows } = sharedGameRows(Array.from(byGame.keys()));
+
+  return {
+    group,
+    matches: ourMatches.map((row) => ({
+      ...row,
+      members: teammateLines(
+        scoreRows.get(row.game_id) ?? [],
+        byGame.get(row.game_id)!.roster.map((member) => member.row),
+      ),
+    })),
+  };
+}
+
 // Every game we played alongside one teammate, from both sides: our stored
 // stats for the row plus the teammate's own line in that game.
 export function getTeammateDetail(key: string): TeammateDetail | null {
@@ -208,29 +386,7 @@ export function getTeammateDetail(key: string): TeammateDetail | null {
   if (theirs.length === 0) return null;
 
   const byGame = new Map(theirs.map((row) => [row.game_id, row]));
-  const gameIds = Array.from(byGame.keys());
-  const idList = gameIds.map(() => "?").join(", ");
-
-  // Our own row for each shared game — the same columns the match list shows.
-  const ourMatches = db
-    .prepare(`
-      SELECT ${MATCH_ROW_SQL}
-      FROM games g
-      JOIN player_stats ps ON g.game_id = ps.game_id
-      WHERE g.game_id IN (${idList})
-      ORDER BY g.game_creation DESC
-    `)
-    .all(...gameIds) as MatchListItem[];
-
-  // The teammate's score has to be computed rather than looked up — player_stats
-  // only ever scores our own row — so each shared game needs all ten players.
-  const scoreRows = groupByGame(
-    db
-      .prepare(
-        `SELECT game_id, ${SCORE_ROW_COLUMNS} FROM match_participants WHERE game_id IN (${idList})`,
-      )
-      .all(...gameIds) as (ScoreRow & { game_id: number })[],
-  );
+  const { ourMatches, scoreRows } = sharedGameRows(Array.from(byGame.keys()));
 
   interface ChampionTotals {
     games: number;
@@ -279,27 +435,8 @@ export function getTeammateDetail(key: string): TeammateDetail | null {
     champ.deaths += friend.deaths;
     champ.assists += friend.assists;
 
-    const gameRows = scoreRows.get(row.game_id) ?? [];
-    const friendScore = computeMatchScores(scoreInputsFromRows(gameRows), getChampionClasses()).get(
-      friend.participant_id,
-    );
-    const friendStats = gameRows.find((p) => p.participant_id === friend.participant_id);
-
-    matches.push({
-      ...row,
-      friend: {
-        champion_id: friend.champion_id,
-        win: friend.win,
-        kills: friend.kills,
-        deaths: friend.deaths,
-        assists: friend.assists,
-        total_damage_dealt: friendStats?.total_damage_dealt ?? 0,
-        total_damage_taken: friendStats?.total_damage_taken ?? 0,
-        total_heal: friendStats?.total_heal ?? 0,
-        score: friendScore?.score ?? null,
-        score_badge: friendScore?.badge ?? null,
-      },
-    });
+    const [line] = teammateLines(scoreRows.get(row.game_id) ?? [], [friend]);
+    matches.push({ ...row, friend: line });
   }
 
   if (player.games === 0) return null;

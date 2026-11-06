@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useEffect } from "react";
+import { useParams } from "react-router-dom";
+import { useExpandedMatch } from "../hooks/useExpandedMatch";
 import { useIpc } from "../hooks/useIpc";
 import { useChampionData, getChampionName } from "../hooks/useChampions";
 import type {
@@ -7,18 +8,17 @@ import type {
   TeammateChampionStats,
   TeammateDetail,
   TeammateMatch,
-  MatchDetail,
 } from "../lib/types";
+import BackToFriends from "../components/BackToFriends";
 import ChampionIcon from "../components/ChampionIcon";
 import SummonerIcon from "../components/SummonerIcon";
-import MatchScoreboard from "../components/MatchScoreboard";
 import ScoreCell from "../components/ScoreCell";
+import SharedGameRow from "../components/SharedGameRow";
 import StatBars from "../components/StatBars";
 import WinRateBar from "../components/WinRateBar";
 import {
   LOCALE,
   formatDecimal,
-  formatDuration,
   formatTimeAgo,
   kdaRatio,
   kdaColor,
@@ -35,37 +35,12 @@ export default function FriendDetail() {
     () => window.api.getTeammateDetail(key),
     [key],
   );
-  const [puuids, setPuuids] = useState<string[] | null>(null);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [detail, setDetail] = useState<MatchDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-
-  useEffect(() => {
-    window.api.getAllSummonerPuuids().then(setPuuids);
-  }, []);
+  const expansion = useExpandedMatch();
 
   useEffect(() => {
     const unsub = window.api.onGamesUpdated(() => refetch());
     return unsub;
   }, [refetch]);
-
-  const toggleExpand = useCallback(
-    async (gameId: number) => {
-      if (expandedId === gameId) {
-        setExpandedId(null);
-        setDetail(null);
-        return;
-      }
-      setExpandedId(gameId);
-      setDetailLoading(true);
-      try {
-        setDetail(await window.api.getMatchDetail(gameId));
-      } finally {
-        setDetailLoading(false);
-      }
-    },
-    [expandedId],
-  );
 
   // Only before the first answer: a refetch after a new game keeps showing the
   // page it is about to update. null is an answer too ("no games together"), so
@@ -77,7 +52,7 @@ export default function FriendDetail() {
   if (!data) {
     return (
       <div className="max-w-6xl space-y-4">
-        <BackLink />
+        <BackToFriends />
         <div className="bg-lol-card rounded-xl border border-lol-border/60 p-8 text-center text-lol-text">
           No games found with this player.
         </div>
@@ -102,7 +77,7 @@ export default function FriendDetail() {
 
   return (
     <div className="max-w-6xl space-y-4">
-      <BackLink />
+      <BackToFriends />
 
       <div className="grid grid-cols-[1fr_22rem] gap-4 items-stretch">
         <div className="flex flex-col gap-3">
@@ -185,17 +160,9 @@ export default function FriendDetail() {
 
       <div className="space-y-1">
         {matches.map((m) => (
-          <SharedGameRow
-            key={m.game_id}
-            match={m}
-            champData={champData}
-            friendName={player.name}
-            expanded={expandedId === m.game_id}
-            detail={expandedId === m.game_id ? detail : null}
-            detailLoading={expandedId === m.game_id && detailLoading}
-            puuids={puuids}
-            onToggle={() => toggleExpand(m.game_id)}
-          />
+          <SharedGameRow key={m.game_id} match={m} champData={champData} expansion={expansion}>
+            <GameBlocks match={m} champData={champData} friendName={player.name} />
+          </SharedGameRow>
         ))}
       </div>
     </div>
@@ -230,17 +197,6 @@ function ChampionRow({
         <WinRateBar wins={champ.wins} total={champ.games} />
       </div>
     </div>
-  );
-}
-
-function BackLink() {
-  return (
-    <Link
-      to="/friends"
-      className="inline-flex items-center gap-1.5 text-xs text-lol-text hover:text-lol-text-bright transition-colors"
-    >
-      <span aria-hidden>←</span> Friends
-    </Link>
   );
 }
 
@@ -296,28 +252,15 @@ function PlayerBlock({
   );
 }
 
-function SharedGameRow({
+function GameBlocks({
   match,
   champData,
   friendName,
-  expanded,
-  detail,
-  detailLoading,
-  puuids,
-  onToggle,
 }: {
   match: TeammateMatch;
   champData: ChampionData;
   friendName: string;
-  expanded: boolean;
-  detail: MatchDetail | null;
-  detailLoading: boolean;
-  puuids: string[] | null;
-  onToggle: () => void;
 }) {
-  const isWin = !!match.win;
-  const accent = isWin ? "bg-lol-win" : "bg-lol-loss";
-  const tint = isWin ? "from-lol-win/12 to-lol-win/[0.04]" : "from-lol-loss/12 to-lol-loss/[0.04]";
   // Both bars scale off the same game bests, so the two sides are comparable
   const max = {
     dmg: match.game_max_dmg,
@@ -326,69 +269,40 @@ function SharedGameRow({
   };
 
   return (
-    <div>
-      <button
-        onClick={onToggle}
-        className={`relative overflow-hidden w-full flex items-center gap-4 pl-4 pr-3 py-2.5 border border-lol-border/60 bg-lol-card hover:bg-lol-card-hover transition-colors text-left ${
-          expanded ? "rounded-t-lg" : "rounded-lg"
-        }`}
-      >
-        <span className={`absolute left-0 inset-y-0 w-[3px] ${accent}`} />
-        <span className={`absolute inset-0 pointer-events-none bg-gradient-to-r ${tint}`} />
-        <div
-          className={`text-xs font-bold shrink-0 w-8 ${isWin ? "text-lol-win" : "text-lol-loss"}`}
-        >
-          {isWin ? "WIN" : "LOSS"}
-        </div>
+    <>
+      <PlayerBlock
+        label="You"
+        championId={match.champion_id}
+        champData={champData}
+        kills={match.kills}
+        deaths={match.deaths}
+        assists={match.assists}
+        score={match.score}
+        badge={match.score_badge}
+        damage={match.total_damage_dealt}
+        taken={match.total_damage_taken}
+        heal={match.total_heal}
+        max={max}
+      />
 
-        <PlayerBlock
-          label="You"
-          championId={match.champion_id}
-          champData={champData}
-          kills={match.kills}
-          deaths={match.deaths}
-          assists={match.assists}
-          score={match.score}
-          badge={match.score_badge}
-          damage={match.total_damage_dealt}
-          taken={match.total_damage_taken}
-          heal={match.total_heal}
-          max={max}
-        />
+      <span className="w-px self-stretch bg-lol-border/60 shrink-0" />
 
-        <span className="w-px self-stretch bg-lol-border/60 shrink-0" />
+      <PlayerBlock
+        label={friendName}
+        championId={match.friend.champion_id}
+        champData={champData}
+        kills={match.friend.kills}
+        deaths={match.friend.deaths}
+        assists={match.friend.assists}
+        score={match.friend.score}
+        badge={match.friend.score_badge}
+        damage={match.friend.total_damage_dealt}
+        taken={match.friend.total_damage_taken}
+        heal={match.friend.total_heal}
+        max={max}
+      />
 
-        <PlayerBlock
-          label={friendName}
-          championId={match.friend.champion_id}
-          champData={champData}
-          kills={match.friend.kills}
-          deaths={match.friend.deaths}
-          assists={match.friend.assists}
-          score={match.friend.score}
-          badge={match.friend.score_badge}
-          damage={match.friend.total_damage_dealt}
-          taken={match.friend.total_damage_taken}
-          heal={match.friend.total_heal}
-          max={max}
-        />
-
-        <div className="flex-1" />
-        <div className="text-xs text-lol-text text-right shrink-0">
-          <div className="tabular-nums">{formatDuration(match.game_duration)}</div>
-          <div>{formatTimeAgo(match.game_creation)}</div>
-        </div>
-      </button>
-
-      {expanded && (
-        <div className="mb-1 bg-lol-card rounded-b-lg border border-t-0 border-lol-border/60 p-3">
-          {detailLoading ? (
-            <div className="text-sm text-lol-text text-center py-4">Loading...</div>
-          ) : detail ? (
-            <MatchScoreboard detail={detail} champData={champData} puuids={puuids} />
-          ) : null}
-        </div>
-      )}
-    </div>
+      <div className="flex-1" />
+    </>
   );
 }
