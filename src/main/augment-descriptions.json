@@ -1,5 +1,5 @@
 {
-  "patch": "16.22",
+  "patch": "16.23",
   "descriptions": {
     "1001": "Gain stacks when taking or dealing damage. For every 7 stacks, gain <scaleAF>Adaptive Force</scaleAF>, <scaleArmor>Armor</scaleArmor>, <scaleMR>Magic Resist</scaleMR>, <attention>Size</attention>, and <status>Tenacity</status>.",
     "1002": "Gain <scaleBonus>100 Item Haste</scaleBonus> (equivalent to 50% Item CDR).<br><br><rules>Item Haste reduces the cooldown %i:cooldown% of all Item Abilities.</rules>",
@@ -45,7 +45,7 @@
     "1057": "You gain the Mountain Soul, gaining a <shield>Shield</shield> after being out of combat for a short time.",
     "1058": "%i:OnHit% <OnHit>On-Hit</OnHit> reduce the cooldown of your abilities by 1.25 seconds %i:scaleCooldown%.",
     "1060": "Gain the Ocean Soul, granting high <healing>Health</healing> and <scaleMana>Mana</scaleMana> regen after damaging enemies.",
-    "1061": "<keywordMajor>Autocast</keywordMajor> throw a boomerang at a nearby enemy every 7s.",
+    "1061": "<keywordMajor>Autocast</keywordMajor> throw a boomerang at a nearby enemy every 7 seconds.",
     "1062": "Gain 3 random <attention>Dragon Souls</attention>.",
     "1063": "After using a Dash, Blink, or Teleport Ability you gain <scaleArmor>12 Armor</scaleArmor> and <scaleMR>Magic Resist</scaleMR> up to 5 stacks.",
     "1064": "Gain hugely increased <healing>Health Regen</healing>, further increased at low <scaleHealth>Health</scaleHealth>.",
@@ -307,6 +307,10 @@
     "3172": "<evolve>Empower</evolve> <font color='#F0C200'>E</font>!<br><br><evolve>Empowered</evolve> <font color='#F0C200'>E</font> gains <scaleAbilityHaste>20 Ability Haste</scaleAbilityHaste>, 10% increased <silver>damage</silver>, and 10% increased <healing>healing</healing> and <shield>shielding</shield>.",
     "3173": "<evolve>Empower</evolve> <font color='#F0C200'>R</font>!<br><br><evolve>Empowered</evolve> <font color='#F0C200'>R</font> gains <scaleAbilityHaste>20 Ability Haste</scaleAbilityHaste>, 10% increased <silver>damage</silver>, and 10% increased <healing>healing</healing> and <shield>shielding</shield>.",
     "3176": "<evolve>Empower</evolve> <font color='#F0C200'>Ability</font>!<br><br><evolve>Empowered</evolve> <font color='#F0C200'>Ability</font> gains <scaleAbilityHaste>20 Ability Haste</scaleAbilityHaste>, 10% increased <silver>damage</silver>, and 10% increased <healing>healing</healing> and <shield>shielding</shield>.",
+    "3262": "Every few seconds, <keywordMajor>Autocast</keywordMajor> a burst of slime from your body, dealing <magicDamage>magic damage</magicDamage> to nearby enemies. <br><br>If you hit a champion, secrete a blob that <healing>heals</healing> you when walked over.",
+    "3263": "Gain bonus <scaleArmor>%i:scaleArmor% Armor</scaleArmor>, <scaleMR> %i:scaleMR% Magic Resist</scaleMR>, and <scaleTenacity>%i:scaleTenacity%Tenacity</scaleTenacity>. This bonus increases when you're below <scaleHealth>40% maximum Health</scaleHealth>.",
+    "3264": "Gain %i:scaleMR% <scaleMR>20 Magic Resist</scaleMR>, then increase your bonus <scaleMR>Magic Resist</scaleMR> by 25%.",
+    "3265": "Gain %i:scaleArmor% <scaleArmor>20 Armor</scaleArmor>, then increase your bonus <scaleArmor>Armor</scaleArmor> by 25%.",
     "12317": "Transmute all of your augments into <keywordMajor>random Prismatic%i:Augment% Augments</keywordMajor>."
   }
 }
