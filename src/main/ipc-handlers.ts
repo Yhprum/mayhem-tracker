@@ -26,6 +26,7 @@ const RENDERER_SETTINGS = new Set([
   "hide_remakes",
   "auto_backup",
   "remember_filters",
+  "hidden_nav_links",
   SESSION_GROUPING_SETTING,
 ]);
 

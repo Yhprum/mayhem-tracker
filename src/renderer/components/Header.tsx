@@ -14,38 +14,17 @@ import type { LcuStatus, SeasonSummary, UpdateInfo } from "../lib/types";
 import UpdateDialog from "./UpdateDialog";
 import {
   MayhemIcon,
-  SwordsIcon,
-  TrophyIcon,
-  CrosshairIcon,
-  UsersIcon,
-  GlobeIcon,
-  TrendingUpIcon,
-  MedalIcon,
   SettingsIcon,
-  RadioIcon,
-  AwardIcon,
-  CalendarIcon,
   DownloadIcon,
   MinusIcon,
   MaximizeIcon,
   RestoreIcon,
   XIcon,
 } from "./icons";
+import { NAV_LINKS } from "../lib/navLinks";
+import { useHiddenNavLinks } from "../hooks/useHiddenNavLinks";
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
-
-const links: { to: string; label: string; icon: IconComponent }[] = [
-  { to: "/", label: "Match History", icon: SwordsIcon },
-  { to: "/live", label: "Live Game", icon: RadioIcon },
-  { to: "/champions", label: "Champions", icon: TrophyIcon },
-  { to: "/augments", label: "Augments", icon: CrosshairIcon },
-  { to: "/friends", label: "Friends", icon: UsersIcon },
-  { to: "/trends", label: "Trends", icon: TrendingUpIcon },
-  { to: "/records", label: "Records", icon: MedalIcon },
-  { to: "/season", label: "Season Recap", icon: CalendarIcon },
-  { to: "/challenges", label: "Challenges", icon: AwardIcon },
-  { to: "/global", label: "Total Stats", icon: GlobeIcon },
-];
 
 // The app is often left open for days, so a launch-only check would never
 // surface a release cut in the meantime.
@@ -208,6 +187,7 @@ function WindowControls() {
 export default function Header() {
   const status = useLcuStatus();
   const recapBadge = useRecapBadge();
+  const hiddenLinks = useHiddenNavLinks();
   const { navRef, measureRef, compact } = useCompactNav();
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
@@ -234,7 +214,8 @@ export default function Header() {
     return () => clearInterval(timer);
   }, []);
 
-  const entries: NavEntry[] = links.map((link) =>
+  const shownLinks = NAV_LINKS.filter((link) => !hiddenLinks.has(link.to));
+  const entries: NavEntry[] = shownLinks.map((link) =>
     link.to === "/season" && recapBadge.season
       ? {
           ...link,

@@ -3,6 +3,8 @@ import { useBackfill } from "../hooks/useBackfill";
 import { queueLabel } from "../components/QueueSelect";
 import { LOCALE, formatDecimal } from "../lib/format";
 import { setRemembering } from "../lib/viewState";
+import { NAV_LINKS, HOME_PATH, toggleNavLink } from "../lib/navLinks";
+import { useHiddenNavLinks } from "../hooks/useHiddenNavLinks";
 import type { BackupInfo, ImportProgress } from "../lib/types";
 import {
   DEFAULT_SESSION_GROUPING,
@@ -81,6 +83,7 @@ function Switch({
 export default function Settings() {
   // Shared so a backfill started automatically on first connect shows here too
   const { running: backfilling, progress } = useBackfill();
+  const hiddenNavLinks = useHiddenNavLinks();
   const [autoStart, setAutoStart] = useState(false);
   // Only the packaged program has a path worth registering, so the switch says
   // so instead of pretending in a dev build
@@ -456,8 +459,29 @@ export default function Settings() {
             </div>
           </div>
 
+          {/* Customization */}
+          <div className="order-2 bg-lol-card rounded-xl border border-lol-border/60 p-5">
+            <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Customization</h2>
+            <p className="text-sm text-lol-text-bright">Header links</p>
+            <div className="mt-3 space-y-3">
+              {NAV_LINKS.map(({ to, label, icon: Icon }) => (
+                <div key={to} className="flex items-center justify-between gap-8">
+                  <div className="flex items-center gap-2 text-sm text-lol-text">
+                    <Icon className="w-4 h-4 shrink-0" />
+                    {label}
+                  </div>
+                  <Switch
+                    checked={!hiddenNavLinks.has(to)}
+                    disabled={to === HOME_PATH}
+                    onChange={() => toggleNavLink(to)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Troubleshooting */}
-          <div className="order-4 bg-lol-card rounded-xl border border-lol-border/60 p-5">
+          <div className="order-5 bg-lol-card rounded-xl border border-lol-border/60 p-5">
             <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Troubleshooting</h2>
             <div className="flex items-center justify-between gap-8">
               <div>
@@ -478,7 +502,7 @@ export default function Settings() {
           </div>
 
           {/* About */}
-          <div className="order-5 bg-lol-card rounded-xl border border-lol-border/60 p-5">
+          <div className="order-6 bg-lol-card rounded-xl border border-lol-border/60 p-5">
             <h2 className="text-sm font-semibold text-lol-text-bright mb-4">About</h2>
             <div className="flex items-center justify-between gap-8">
               <p className="text-sm text-lol-text-bright">Mayhem Tracker v{version}</p>
@@ -503,7 +527,7 @@ export default function Settings() {
 
         <div className="contents 2xl:flex 2xl:flex-col 2xl:gap-6">
           {/* Data Management */}
-          <div className="order-2 bg-lol-card rounded-xl border border-lol-border/60 p-5">
+          <div className="order-3 bg-lol-card rounded-xl border border-lol-border/60 p-5">
             <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Data Management</h2>
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-8">
@@ -585,7 +609,7 @@ export default function Settings() {
           </div>
 
           {/* Backups */}
-          <div className="order-3 bg-lol-card rounded-xl border border-lol-border/60 p-5">
+          <div className="order-4 bg-lol-card rounded-xl border border-lol-border/60 p-5">
             <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Backups</h2>
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-8">
