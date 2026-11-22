@@ -566,6 +566,18 @@ export function isBackfillRunning(): boolean {
   return backfillRunning;
 }
 
+// The account signed in to the client right now, or null when there is no
+// client to ask
+export async function getSignedInPuuid(): Promise<string | null> {
+  if (!isClientConnected()) return null;
+  try {
+    const summoner = await fetchCurrentSummoner();
+    return summoner?.puuid ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export type BackfillOptions = {
   // Walk every page Riot will serve instead of stopping at the first one we
   // already know in full. The early exit only ever proves that the games in

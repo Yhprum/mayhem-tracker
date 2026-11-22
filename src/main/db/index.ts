@@ -49,3 +49,4 @@ export { setGameMap, getGameMapName, getGameProfileIcon, getPlayerHistories } fr
 export type { PlayerRef, PlayerHistory } from "./live";
 export { writeExportTo, importSummoners, importGames } from "./transfer";
 export { repairPuuids } from "./repair";
+export { getStoredAccounts, previewAccountRemoval, removeAccount } from "./accounts";

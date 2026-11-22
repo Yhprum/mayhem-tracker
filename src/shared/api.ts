@@ -608,6 +608,23 @@ export interface UpdateInfo {
   error?: string;
 }
 
+// An account as the Settings page offers it for removal: anything the client
+// reported, repair discovered, or a stored game is filed under
+export interface StoredAccount {
+  puuid: string;
+  name: string | null;
+  profileIcon: number | null;
+  // Games filed under this account
+  games: number;
+}
+
+// What removing an account does to the games filed under it: the ones no other
+// stored account played in are deleted, the rest move to that account
+export interface AccountRemovalPlan {
+  deleted: number;
+  reassigned: number;
+}
+
 export interface BackupInfo {
   file: string;
   created: number;
@@ -1120,6 +1137,11 @@ export interface ElectronAPI {
   }>;
   importData: () => Promise<{ success: boolean; imported?: number; error?: string }>;
   onImportProgress: (callback: (progress: ImportProgress) => void) => () => void;
+  getStoredAccounts: () => Promise<StoredAccount[]>;
+  previewAccountRemoval: (puuid: string) => Promise<AccountRemovalPlan>;
+  removeAccount: (
+    puuid: string,
+  ) => Promise<{ success: boolean; result?: AccountRemovalPlan; error?: string }>;
   repairPuuids: () => Promise<{
     repairedGames: number;
     discoveredAccounts: number;
@@ -1210,6 +1232,9 @@ export const INVOKE_CHANNELS = {
   copyCardImage: "export:copy-card-image",
   exportData: "data:export",
   importData: "data:import",
+  getStoredAccounts: "data:stored-accounts",
+  previewAccountRemoval: "data:preview-account-removal",
+  removeAccount: "data:remove-account",
   repairPuuids: "data:repair-puuids",
   listBackups: "backup:list",
   createBackup: "backup:create",

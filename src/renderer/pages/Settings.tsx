@@ -12,7 +12,7 @@ import {
   type NavLayout,
 } from "../lib/navigation";
 import { useSettingStore } from "../hooks/useSettingStore";
-import type { BackupInfo, ImportProgress } from "../lib/types";
+import type { AccountRemovalPlan, BackupInfo, ImportProgress, StoredAccount } from "../lib/types";
 import {
   DEFAULT_SESSION_GROUPING,
   SESSION_GROUPING_SETTING,
@@ -35,6 +35,7 @@ const BACKUP_REASONS: Record<string, string> = {
   manual: "Manual",
   "pre-import": "Before import",
   "pre-repair": "Before repair",
+  "pre-remove": "Before account removal",
   "pre-restore": "Before restore",
 };
 
@@ -120,6 +121,14 @@ export default function Settings() {
   const [backupBusy, setBackupBusy] = useState(false);
   // Restoring replaces the whole database, so the row asks a second time
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<StoredAccount[]>([]);
+  const [removeTarget, setRemoveTarget] = useState("");
+  // Tagged with the account it was computed for, so a preview never shows
+  // against a different pick while the next one is on its way
+  const [preview, setPreview] = useState<(AccountRemovalPlan & { puuid: string }) | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeStatus, setRemoveStatus] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -177,6 +186,31 @@ export default function Settings() {
   }, []);
 
   useEffect(refreshBackups, [refreshBackups]);
+
+  // Kept current like the queue list, so an account that syncs while the page
+  // is open can be picked without a reload
+  useEffect(() => {
+    const fetchAccounts = () => window.api.getStoredAccounts().then(setAccounts);
+    fetchAccounts();
+    return window.api.onGamesUpdated(fetchAccounts);
+  }, []);
+
+  // Recomputed whenever the library changes, not only when the pick does: a
+  // game synced in the meantime changes what the removal would do
+  // A pick whose account has since gone counts as no pick at all
+  const removePick = accounts.find((a) => a.puuid === removeTarget) ?? null;
+  const removalPlan = removePick && preview?.puuid === removePick.puuid ? preview : null;
+
+  useEffect(() => {
+    if (!removeTarget || !accounts.some((a) => a.puuid === removeTarget)) return;
+    let cancelled = false;
+    window.api.previewAccountRemoval(removeTarget).then((plan) => {
+      if (!cancelled) setPreview({ ...plan, puuid: removeTarget });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [removeTarget, accounts]);
 
   // Every switch on this page flips one boolean setting and writes it back, so
   // they share one handler. `also` is for the two that have somewhere else to
@@ -330,6 +364,36 @@ export default function Settings() {
       setBackfillStatus(`Error: ${err.message}`);
     }
   }, []);
+
+  const handleRemoveAccount = useCallback(async () => {
+    const account = removePick;
+    if (!account) return;
+    setConfirmRemove(false);
+    setRemoving(true);
+    setRemoveStatus(null);
+    try {
+      const outcome = await window.api.removeAccount(account.puuid);
+      if (outcome.success && outcome.result) {
+        const { deleted, reassigned } = outcome.result;
+        setRemoveStatus(
+          `Removed ${account.name ?? "the account"}: deleted ${deleted.toLocaleString(LOCALE)} game(s)` +
+            (reassigned > 0
+              ? `, moved ${reassigned.toLocaleString(LOCALE)} shared game(s) to your other accounts`
+              : "") +
+            ". A backup was taken first.",
+        );
+        setRemoveTarget("");
+      } else {
+        setRemoveStatus(`Error: ${outcome.error ?? "removal failed"}`);
+      }
+      // The removal takes a snapshot on its way in
+      refreshBackups();
+    } catch (err: any) {
+      setRemoveStatus(`Error: ${err.message}`);
+    } finally {
+      setRemoving(false);
+    }
+  }, [removePick, refreshBackups]);
 
   const handleRepair = useCallback(async () => {
     setRepairStatus(null);
@@ -695,6 +759,77 @@ export default function Settings() {
                 </button>
               </div>
               {repairStatus && <p className="text-xs text-lol-text">{repairStatus}</p>}
+
+              {accounts.length > 0 && (
+                <>
+                  <div className="border-t border-lol-border" />
+
+                  <div>
+                    <p className="text-sm text-lol-text-bright">Remove an account</p>
+                    <p className="text-xs text-lol-text mt-0.5">
+                      Stop tracking an account, like a friend who played on this computer, and
+                      delete its games. Games it played together with one of your other accounts are
+                      kept and moved to that account. A backup is taken first, so this can be undone
+                      by restoring it.
+                    </p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <select
+                        className="select min-w-0 flex-1"
+                        value={removePick ? removeTarget : ""}
+                        disabled={removing}
+                        onChange={(e) => {
+                          setRemoveTarget(e.target.value);
+                          setConfirmRemove(false);
+                          setRemoveStatus(null);
+                        }}
+                      >
+                        <option value="">Choose an account...</option>
+                        {accounts.map((a) => (
+                          <option key={a.puuid} value={a.puuid}>
+                            {a.name ?? "Unknown account"} ({a.games.toLocaleString(LOCALE)} games)
+                          </option>
+                        ))}
+                      </select>
+                      {confirmRemove ? (
+                        <>
+                          <button
+                            onClick={handleRemoveAccount}
+                            disabled={removing}
+                            className="px-4 py-1.5 rounded text-sm shrink-0 bg-red-500/20 text-red-300 hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => setConfirmRemove(false)}
+                            className="px-4 py-1.5 rounded text-sm shrink-0 bg-lol-border/40 text-lol-text hover:bg-lol-border/60 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmRemove(true)}
+                          disabled={!removalPlan || removing}
+                          className="px-4 py-1.5 rounded text-sm shrink-0 bg-red-500/20 text-red-300 hover:bg-red-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {removing ? "Working..." : "Remove"}
+                        </button>
+                      )}
+                    </div>
+                    {removalPlan && !removing && (
+                      <p className="text-xs text-lol-text mt-2">
+                        {confirmRemove ? "Are you sure? This " : "This "}
+                        deletes {removalPlan.deleted.toLocaleString(LOCALE)} game(s)
+                        {removalPlan.reassigned > 0 &&
+                          ` and moves ${removalPlan.reassigned.toLocaleString(LOCALE)} shared with your other accounts to them`}
+                        . Games your other accounts recorded with this player in them are not
+                        touched.
+                      </p>
+                    )}
+                  </div>
+                  {removeStatus && <p className="text-xs text-lol-text">{removeStatus}</p>}
+                </>
+              )}
             </div>
           </div>
 

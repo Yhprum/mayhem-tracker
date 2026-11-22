@@ -339,6 +339,42 @@ export function registerIpcHandlers() {
     return db.repairPuuids();
   });
 
+  handle("getStoredAccounts", () => db.getStoredAccounts());
+
+  handle("previewAccountRemoval", (_event, puuid) => db.previewAccountRemoval(puuid));
+
+  handle("removeAccount", async (event, puuid) => {
+    // The sync would put every one of its games straight back, and a backfill
+    // in flight could land some halfway through the delete
+    if (lcu.isBackfillRunning()) {
+      return { success: false, error: "Wait for the backfill to finish first." };
+    }
+    if ((await lcu.getSignedInPuuid()) === puuid) {
+      return {
+        success: false,
+        error:
+          "That account is signed in to the League client. Sign out of it first, or it will be synced right back.",
+      };
+    }
+    // Moved games are rescored, which needs champion classes
+    await dragon.waitForChampionData();
+    // Unlike the snapshot before a repair, this one isn't optional: deleting
+    // games is the one action here that nothing else can undo, so it doesn't
+    // go ahead without a verified copy, whatever the auto-backup switch says.
+    try {
+      await backup.createBackup("pre-remove");
+    } catch (err: any) {
+      return { success: false, error: `Backup failed, nothing was removed: ${err.message}` };
+    }
+    try {
+      const result = db.removeAccount(puuid);
+      sendToRenderer(senderWindow(event), "lcu:games-updated");
+      return { success: true, result };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  });
+
   // Backups
   handle("listBackups", () => backup.listBackups());
 

@@ -15,16 +15,25 @@ import { setSetting } from "./settings";
 // owner: player_stats (champion, KDA, items), augments, the remake flag, and
 // the score under the current formula. Heals games whose owner puuid changed
 // during repair (their stored stats still described the old participant) and
-// doubles as a manual "rescore now" for formula changes.
-function rebuildDerivedStats(): number {
+// doubles as a manual "rescore now" for formula changes. Given game ids, it
+// rebuilds only those, for a caller that moved a handful of games to a new
+// owner; without them it rebuilds every game.
+export function rebuildDerivedStats(gameIds?: number[]): number {
+  // One JSON parameter rather than a placeholder per id, so the list can be as
+  // long as a whole account's games without meeting SQLite's variable limit
+  const only = (column: string) =>
+    gameIds ? `WHERE ${column} IN (SELECT value FROM json_each(?))` : "";
+  const params = gameIds ? [JSON.stringify(gameIds)] : [];
+
   const games = db
     .prepare(`
       SELECT g.game_id, g.puuid, g.game_duration,
              ps.champion_id, ps.kills, ps.deaths, ps.assists
       FROM games g
       LEFT JOIN player_stats ps ON g.game_id = ps.game_id
+      ${only("g.game_id")}
     `)
-    .all() as {
+    .all(...params) as {
     game_id: number;
     puuid: string;
     game_duration: number;
@@ -40,8 +49,9 @@ function rebuildDerivedStats(): number {
         SELECT game_id, ${SCORE_ROW_COLUMNS}, early_surrender, largest_killing_spree,
                spell1, spell2, item0, item1, item2, item3, item4, item5, item6
         FROM match_participants
+        ${only("game_id")}
       `)
-      .all() as (ScoreRow & {
+      .all(...params) as (ScoreRow & {
       game_id: number;
       early_surrender: number;
       largest_killing_spree: number;
@@ -59,8 +69,10 @@ function rebuildDerivedStats(): number {
 
   const augmentsByGame = groupByGame(
     db
-      .prepare("SELECT game_id, participant_id, slot, augment_id FROM match_participant_augments")
-      .all() as {
+      .prepare(
+        `SELECT game_id, participant_id, slot, augment_id FROM match_participant_augments ${only("game_id")}`,
+      )
+      .all(...params) as {
       game_id: number;
       participant_id: number;
       slot: number;
@@ -160,9 +172,12 @@ function rebuildDerivedStats(): number {
   });
   tx();
 
-  // Stamp the startup-backfill keys — the rebuild just did their work
-  setSetting("score_formula_version", scoreFormulaKey());
-  setSetting("augment_slots", String(AUGMENT_SLOTS));
+  // Stamp the startup-backfill keys, but only after a rebuild of every game:
+  // a partial one leaves the rest exactly as stale as it found them.
+  if (!gameIds) {
+    setSetting("score_formula_version", scoreFormulaKey());
+    setSetting("augment_slots", String(AUGMENT_SLOTS));
+  }
   return rebuilt;
 }
 

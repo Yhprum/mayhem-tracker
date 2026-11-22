@@ -36,7 +36,13 @@ const KEEP_RECENT = 5;
 const KEEP_WEEKLY = 4;
 const KEEP_MONTHLY = 6;
 
-export type BackupReason = "auto" | "manual" | "pre-import" | "pre-repair" | "pre-restore";
+export type BackupReason =
+  | "auto"
+  | "manual"
+  | "pre-import"
+  | "pre-repair"
+  | "pre-remove"
+  | "pre-restore";
 
 const FILE_RE = /^matches-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})-([a-z-]+)\.db$/;
 
