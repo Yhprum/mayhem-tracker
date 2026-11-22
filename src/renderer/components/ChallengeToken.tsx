@@ -1,4 +1,4 @@
-import { CDRAGON_ASSET_URL } from "../lib/constants";
+import { GAME_ASSET_URL } from "../lib/constants";
 
 interface ChallengeTokenProps {
   // Game-data path to the tier's token, as the client names it
@@ -32,7 +32,7 @@ export default function ChallengeToken({
 
   return (
     <img
-      src={CDRAGON_ASSET_URL("latest", iconPath)}
+      src={GAME_ASSET_URL("latest", iconPath)}
       alt=""
       title={title}
       width={size}

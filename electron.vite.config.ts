@@ -4,11 +4,11 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import type { Plugin } from "vite";
 
-// Icons and splash art are the only remote content the renderer loads, all of
-// it from CommunityDragon; everything else comes over IPC. Splash art is on the
-// cdn host, whose champion endpoints resolve the art's path, which differs from
-// champion to champion on the raw one. 'unsafe-inline' stays in style-src because React writes inline
-// style attributes (progress bars, stat widths) — never in script-src.
+// The renderer loads nothing remote. League art comes from the main process
+// under the asset: scheme (src/main/game-assets.ts), which caches it on disk
+// and does the fetching; everything else comes over IPC. 'unsafe-inline' stays
+// in style-src because React writes inline style attributes (progress bars,
+// stat widths), never in script-src.
 //
 // 'self' is paired with file: throughout: the production renderer is loaded
 // from disk via loadFile, and a file:// document's origin is opaque, so 'self'
@@ -16,7 +16,7 @@ import type { Plugin } from "vite";
 const BASE_CSP = [
   "default-src 'none'",
   "style-src 'self' file: 'unsafe-inline'",
-  "img-src 'self' file: data: https://raw.communitydragon.org https://cdn.communitydragon.org",
+  "img-src 'self' file: data: asset:",
   "font-src 'self' file: data:",
   "object-src 'none'",
   "base-uri 'none'",

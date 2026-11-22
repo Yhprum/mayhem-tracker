@@ -1,5 +1,5 @@
 import { useSummonerSpellData } from "../hooks/useChampions";
-import { CDRAGON_ASSET_URL } from "../lib/constants";
+import { GAME_ASSET_URL } from "../lib/constants";
 
 interface SummonerSpellIconProps {
   spellId: number | null;
@@ -20,7 +20,7 @@ export default function SummonerSpellIcon({ spellId, size = 16 }: SummonerSpellI
   }
   return (
     <img
-      src={CDRAGON_ASSET_URL("latest", spell.iconPath)}
+      src={GAME_ASSET_URL("latest", spell.iconPath)}
       alt=""
       title={spell.name}
       width={size}

@@ -10,6 +10,7 @@ import { startPolling, stopPolling, isClientConnected, fetchNewGames } from "./l
 import { startLiveTracking, stopLiveTracking } from "./live";
 import { startChallengeTracking } from "./challenges";
 import { loadChampionData, loadAugmentData, waitForChampionData } from "./dragon";
+import { registerAssetScheme, startGameAssets } from "./game-assets";
 import { applySecurityPolicy } from "./security";
 import { APP_USER_MODEL_ID, ensureStartMenuShortcut } from "./shortcut";
 import { syncAutoStart, HIDDEN_FLAG } from "./autostart";
@@ -21,6 +22,8 @@ let didFinalFetch = false;
 
 // How long quitting will wait on the last sync before giving up and exiting
 const FINAL_FETCH_TIMEOUT_MS = 5_000;
+
+registerAssetScheme();
 
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -167,6 +170,9 @@ app.whenReady().then(async () => {
   // Needs the database, which holds the answer. Keeps the login item pointing at
   // the portable exe wherever it has been moved to since the last launch.
   syncAutoStart();
+
+  // Serves the renderer's art, so it has to be up before the window
+  startGameAssets();
 
   // Load assets in background
   loadChampionData();

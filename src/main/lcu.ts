@@ -126,6 +126,77 @@ export async function lcuJson(url: string): Promise<any | null> {
   }
 }
 
+// The client answers from local disk, so a request that takes longer than this
+// is one it isn't going to answer.
+const CLIENT_FILE_TIMEOUT_MS = 5_000;
+// How long one lockfile reading answers for: a page of art asks hundreds of
+// times at once
+const FILE_LOOKUP_TTL_MS = 5_000;
+// Each request is a TLS handshake of its own, and a page of art that all went
+// at once would time some of them out, or slow a client the user is queueing
+// in
+const CLIENT_FILE_CONCURRENCY = 6;
+
+let fileLookup: { at: number; credentials: Promise<Credentials | null> } | null = null;
+let fileSlots = CLIENT_FILE_CONCURRENCY;
+const fileQueue: (() => void)[] = [];
+
+async function withFileSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (fileSlots > 0) fileSlots--;
+  else await new Promise<void>((resolve) => fileQueue.push(resolve));
+  try {
+    return await fn();
+  } finally {
+    // Handed straight to the next in line, so nothing can slip in between
+    const next = fileQueue.shift();
+    if (next) next();
+    else fileSlots++;
+  }
+}
+
+// The connect loop's credentials once it has them. Before that (its first tick
+// is seconds after launch, when the first page is already asking for art)
+// whatever the lockfile says, but never authenticate(): a file request is not
+// worth a PowerShell launch.
+function fileCredentials(): Promise<Credentials | null> {
+  if (credentials) return Promise.resolve(credentials);
+  if (!fileLookup || Date.now() - fileLookup.at > FILE_LOOKUP_TTL_MS) {
+    fileLookup = {
+      at: Date.now(),
+      credentials: findClient(installDirCandidates(db.getSetting(INSTALL_DIR_SETTING)))
+        .then((client) => (client.state === "running" ? client.credentials : null))
+        .catch(() => null),
+    };
+  }
+  return fileLookup.credentials;
+}
+
+/**
+ * The raw body the client serves at `url`, or null when it isn't running or
+ * has nothing there. Stands in for art that failed to load elsewhere, once per
+ * image, so it finds the client by its lockfile alone and launches nothing.
+ */
+export async function lcuBytes(url: string): Promise<Buffer | null> {
+  const current = await fileCredentials();
+  if (!current) return null;
+  return withFileSlot(async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const response = await Promise.race([
+        createHttp1Request({ url, method: "GET" }, current),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("timed out")), CLIENT_FILE_TIMEOUT_MS);
+        }),
+      ]);
+      return response.ok ? response.buffer() : null;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+}
+
 async function fetchCurrentSummoner(): Promise<any> {
   return lcuRequest("/lol-summoner/v1/current-summoner");
 }

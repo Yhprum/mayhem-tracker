@@ -10,6 +10,7 @@ import fs from "fs";
 import path from "path";
 import * as db from "./db";
 import * as dragon from "./dragon";
+import { serveGameAssets } from "./game-assets";
 import { localeArguments } from "./locale";
 import { hardenSession } from "./security";
 import {
@@ -80,7 +81,9 @@ const DIALOG_TITLES: Record<CardSpec["kind"], string> = {
 };
 
 function createCardWindow(): BrowserWindow {
-  hardenSession(session.fromPartition(CARD_PARTITION));
+  const cardSession = session.fromPartition(CARD_PARTITION);
+  hardenSession(cardSession);
+  serveGameAssets(cardSession);
 
   const win = new BrowserWindow({
     width: scaled(CARD_WIDTH),

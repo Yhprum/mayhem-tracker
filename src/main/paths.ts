@@ -30,3 +30,10 @@ export function getBackupDir() {
 export function getLogDir() {
   return ensureDir(path.join(getRootDir(), "logs"));
 }
+
+// Copies of League art and game data, any of which can be deleted at any time
+// and fetched again. Not named "cache": Chromium keeps its HTTP cache in
+// userData as "Cache", and on Windows the two names are the same folder.
+export function getAssetCacheDir() {
+  return ensureDir(path.join(getRootDir(), "asset-cache"));
+}

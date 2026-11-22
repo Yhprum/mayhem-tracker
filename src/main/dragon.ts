@@ -2,7 +2,13 @@ import fs from "fs";
 import path from "path";
 import { getDataDir } from "./paths";
 import augmentDescriptions from "./augment-descriptions.json";
-import { cdragonAssetUrl, cherryAugmentsUrl } from "../shared/cdragon";
+import { fetchCdragonJson, loadGameData, loadGameImage } from "./game-assets";
+import { gameAssetUrl, gameDataPath } from "../shared/game-assets";
+
+// Game data, as paths under /lol-game-data/assets/ (see ./game-assets)
+const CHERRY_AUGMENTS = "v1/cherry-augments.json";
+const ITEMS = "v1/items.json";
+const SUMMONER_SPELLS = "v1/summoner-spells.json";
 
 // Every one of these requests gates something the UI waits on: champion data
 // blocks dragon:champions, db:teammate-detail and data:repair-puuids, and a
@@ -137,13 +143,13 @@ export function loadAugmentData(patch?: string): Promise<Record<number, AugmentI
       let resolved = branch;
       let data: any;
       try {
-        data = await fetchJson(cherryAugmentsUrl(branch));
+        data = await loadGameData(branch, CHERRY_AUGMENTS);
       } catch (err) {
         if (branch === "latest") throw err;
         // An archived branch that isn't there is better answered with current
         // data than with nothing.
         resolved = "latest";
-        data = await fetchJson(cherryAugmentsUrl("latest"));
+        data = await loadGameData("latest", CHERRY_AUGMENTS);
       }
       const augments = parseAugments(data, resolved);
       // Current data stands in for an archived branch that wouldn't load, but
@@ -153,9 +159,7 @@ export function loadAugmentData(patch?: string): Promise<Record<number, AugmentI
       // retired since — for the rest of the session.
       if (resolved === branch) augmentCaches.set(key, augments);
       else augmentPromises.delete(key);
-      console.log(
-        `Loaded ${Object.keys(augments).length} augments from CommunityDragon (${resolved})`,
-      );
+      console.log(`Loaded ${Object.keys(augments).length} augments (${resolved})`);
       return augments;
     })();
     // Drop failed loads so a later request can retry
@@ -176,9 +180,6 @@ export type ItemInfo = {
 const itemCache = new Map<string, Record<number, ItemInfo>>();
 const itemPromises = new Map<string, Promise<Record<number, ItemInfo>>>();
 let latestLivePatch: string | null = null;
-
-const itemsJsonUrl = (branch: string) =>
-  `https://raw.communitydragon.org/${branch}/plugins/rcp-be-lol-game-data/global/default/v1/items.json`;
 
 // Map a game's major.minor patch to the CommunityDragon branch that has its
 // data: live patches have their own branch, the current patch is "latest",
@@ -214,10 +215,10 @@ export function loadItemData(patch?: string): Promise<Record<number, ItemInfo>> 
       const branch = await resolveDataBranch(patch);
       let data: any;
       try {
-        data = await fetchJson(itemsJsonUrl(branch));
+        data = await loadGameData(branch, ITEMS);
       } catch (err) {
         if (branch === "latest") throw err;
-        data = await fetchJson(itemsJsonUrl("latest"));
+        data = await loadGameData("latest", ITEMS);
       }
       const items: Record<number, ItemInfo> = {};
       if (Array.isArray(data)) {
@@ -234,7 +235,7 @@ export function loadItemData(patch?: string): Promise<Record<number, ItemInfo>> 
         }
       }
       itemCache.set(key, items);
-      console.log(`Loaded ${Object.keys(items).length} items from CommunityDragon (${branch})`);
+      console.log(`Loaded ${Object.keys(items).length} items (${branch})`);
       return items;
     })();
     // Drop failed loads so a later request can retry
@@ -255,9 +256,7 @@ export function loadSummonerSpellData(): Promise<Record<number, SummonerSpellInf
   if (spellCache) return Promise.resolve(spellCache);
   if (!spellPromise) {
     spellPromise = (async () => {
-      const data = await fetchJson(
-        "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/summoner-spells.json",
-      );
+      const data = await loadGameData("latest", SUMMONER_SPELLS);
       const spells: Record<number, SummonerSpellInfo> = {};
       if (Array.isArray(data)) {
         for (const spell of data) {
@@ -265,7 +264,7 @@ export function loadSummonerSpellData(): Promise<Record<number, SummonerSpellInf
         }
       }
       spellCache = spells;
-      console.log(`Loaded ${Object.keys(spells).length} summoner spells from CommunityDragon`);
+      console.log(`Loaded ${Object.keys(spells).length} summoner spells`);
       return spells;
     })();
     // Drop failed loads so a later request can retry
@@ -368,6 +367,15 @@ const augmentIconCacheFile = () => path.join(getDataDir(), "augment-icon-cache.j
 // filed under both.
 const missKey = (id: number, patch?: string) => `${id}|${patch ?? "latest"}`;
 
+// Hits from before art was served under the asset: scheme name the same file
+// by its CommunityDragon URL
+const CDRAGON_HIT = /^https:\/\/raw\.communitydragon\.org\/([^/]+)\/game\/(.+)$/;
+
+function asAssetUrl(url: string | null): string | null {
+  const match = url?.match(CDRAGON_HIT);
+  return match ? gameAssetUrl(match[1], match[2]) : url;
+}
+
 function readAugmentIconCache(): AugmentIconCache {
   if (!augmentIconCache) {
     try {
@@ -375,9 +383,9 @@ function readAugmentIconCache(): AugmentIconCache {
       // Misses written before they carried a patch claimed to be the last word
       // on an augment for every patch, including ones the walk never reached.
       augmentIconCache = Object.fromEntries(
-        Object.entries(parsed as AugmentIconCache).filter(
-          ([key, url]) => url !== null || key.includes("|"),
-        ),
+        Object.entries(parsed as AugmentIconCache)
+          .filter(([key, url]) => url !== null || key.includes("|"))
+          .map(([key, url]) => [key, asAssetUrl(url)]),
       );
     } catch {
       augmentIconCache = {};
@@ -414,7 +422,7 @@ async function withLookupSlot<T>(fn: () => Promise<T>): Promise<T> {
 // already covered by the live data, and the rest are per-locale mirrors.
 async function getArchivedBranches(): Promise<string[]> {
   if (archivedBranches) return archivedBranches;
-  const listing = await fetchJson("https://raw.communitydragon.org/json/");
+  const listing = await fetchCdragonJson("https://raw.communitydragon.org/json/");
   const branches: string[] = (Array.isArray(listing) ? listing : [])
     .map((entry: any) => String(entry?.name ?? ""))
     .filter((name) => /^\d+\.\d+$/.test(name))
@@ -432,7 +440,7 @@ async function getBranchAugmentIcons(branch: string): Promise<Record<number, str
   if (cached) return cached;
   const icons: Record<number, string> = {};
   try {
-    const data = await fetchJson(cherryAugmentsUrl(branch));
+    const data = await loadGameData(branch, CHERRY_AUGMENTS);
     const entries = Array.isArray(data) ? data : Object.values(data ?? {});
     for (const aug of entries as any[]) {
       const iconPath = aug?.augmentSmallIconPath || aug?.iconSmall || aug?.iconLarge;
@@ -453,43 +461,26 @@ function iconVariants(iconPath: string): string[] {
   return [...new Set([iconPath.replace("small", "large"), iconPath])];
 }
 
-// "missing" is CommunityDragon answering that the asset isn't in this export;
-// "error" is it declining to answer at all. Collapsing the two is what let a
-// throttled request pass for a retired augment.
-type IconProbe = "ok" | "missing" | "error";
-
-async function probeUrl(url: string): Promise<IconProbe> {
-  try {
-    const res = await fetch(url, {
-      method: "HEAD",
-      headers: { "User-Agent": "MayhemTracker/1.0" },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    if (res.ok) return "ok";
-    return res.status === 404 ? "missing" : "error";
-  } catch {
-    // Timed out or never connected — says nothing about the asset.
-    return "error";
-  }
-}
-
 // `conclusive` is false when a variant failed for a reason other than absence,
 // so the caller can tell "this branch doesn't have it" from "we couldn't look".
+// Keeping the two apart is what stops a throttled request passing for a
+// retired augment.
 type BranchIcon = { url: string | null; conclusive: boolean };
 
+// Fetches the art rather than only asking whether it's there, so the
+// renderer's request for the URL this hands back usually finds it on disk.
 async function findIconOnBranch(branch: string, iconPath: string): Promise<BranchIcon> {
   let conclusive = true;
   for (const variant of iconVariants(iconPath)) {
-    const url = cdragonAssetUrl(branch, variant);
-    const probe = await probeUrl(url);
-    if (probe === "ok") return { url, conclusive: true };
-    if (probe === "error") conclusive = false;
+    const art = await loadGameImage(branch, gameDataPath(variant));
+    if (art.state === "ok") return { url: gameAssetUrl(branch, variant), conclusive: true };
+    if (art.state === "error") conclusive = false;
   }
   return { url: null, conclusive };
 }
 
 /**
- * Full CDN URL for an augment whose icon failed to load from the latest export,
+ * Asset URL for an augment whose icon failed to load from the latest export,
  * or null if no recent patch branch has it.
  *
  * A genuinely retired augment resolves to an archived patch branch, and that
@@ -538,7 +529,7 @@ export function resolveAugmentIcon(id: number, patch?: string): Promise<string |
         if (!iconPath) continue;
         const found = await findIconOnBranch(branch, iconPath);
         if (found.url) {
-          console.log(`Resolved augment ${id} icon from CommunityDragon ${branch}`);
+          console.log(`Resolved augment ${id} icon from branch ${branch}`);
           if (liveIsGone) writeAugmentIconCache(hitKey, found.url);
           return found.url;
         }

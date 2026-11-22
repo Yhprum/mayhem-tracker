@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAugmentData } from "../hooks/useChampions";
-import { CDRAGON_ASSET_URL } from "../lib/constants";
+import { GAME_ASSET_URL } from "../lib/constants";
 import HoverCard from "./HoverCard";
 import RiotText from "./RiotText";
 
@@ -84,8 +84,8 @@ export default function AugmentIcon({
     // data names the small art with the large variant beside it under the
     // same name.
     const branch = aug.branch || "latest";
-    const large = CDRAGON_ASSET_URL(branch, aug.iconPath.replace("small", "large"));
-    const small = CDRAGON_ASSET_URL(branch, aug.iconPath);
+    const large = GAME_ASSET_URL(branch, aug.iconPath.replace("small", "large"));
+    const small = GAME_ASSET_URL(branch, aug.iconPath);
     return [...new Set([large, small])].filter((url) => !deadSources.has(url));
   }, [aug]);
 
