@@ -72,17 +72,9 @@ export function registerIpcHandlers() {
     db.getChampionMatchHistory(championId, limit, offset, patch, queue, season),
   );
 
-  handle("refreshGames", async (event) => {
+  handle("backfillHistory", async (event) => {
     // Return errors as data instead of throwing, so the renderer gets a clean
     // message rather than Electron's "Error invoking remote method" wrapper
-    try {
-      return await lcu.syncRecentGames(senderWindow(event));
-    } catch (err) {
-      return { error: lcu.friendlyErrorMessage(err) };
-    }
-  });
-
-  handle("backfillHistory", async (event) => {
     try {
       // Asked for by hand, so it checks everything Riot still has rather than
       // stopping at the newest page it recognises. Someone reaching for this

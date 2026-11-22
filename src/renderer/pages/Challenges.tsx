@@ -259,9 +259,8 @@ function CapstoneCard({ capstone, since }: { capstone: ChallengeProgress; since:
   const percentile = percentileLabel(capstone);
 
   return (
-    <div className="relative overflow-hidden bg-lol-card rounded-xl border border-lol-border/60 p-5">
-      <span className="pointer-events-none absolute -top-16 -right-10 h-40 w-40 rounded-full blur-2xl bg-lol-gold/[0.07]" />
-      <div className="relative flex items-center gap-5">
+    <div className="overflow-hidden bg-lol-card rounded-xl border border-lol-border/60 p-5">
+      <div className="flex items-center gap-5">
         <ChallengeToken iconPath={capstone.iconPath} size={72} dim={capstone.level === "NONE"} />
         <div className="min-w-0 flex-1">
           <div className="text-[11px] uppercase tracking-wider text-lol-text">{capstone.name}</div>

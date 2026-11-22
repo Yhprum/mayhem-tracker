@@ -56,18 +56,15 @@ export function RecordCard({
   const a = ACCENTS[accent];
   const body = (
     <>
-      <span
-        className={`pointer-events-none absolute -top-14 -right-8 h-32 w-32 rounded-full blur-2xl ${a.glow}`}
-      />
-      <div className="relative flex items-center gap-1.5 mb-1">
+      <div className="flex items-center gap-1.5 mb-1">
         <span className={`flex h-5 w-5 items-center justify-center rounded-md ${a.chip}`}>
           {icon}
         </span>
         <span className="text-[11px] text-lol-text uppercase tracking-wider">{label}</span>
       </div>
-      <div className="relative text-2xl font-bold text-lol-text-bright">{value}</div>
-      {sub && <div className="relative text-xs text-lol-text mt-0.5">{sub}</div>}
-      <div className="relative mt-auto pt-3 flex items-center gap-2">
+      <div className="text-2xl font-bold text-lol-text-bright">{value}</div>
+      {sub && <div className="text-xs text-lol-text mt-0.5">{sub}</div>}
+      <div className="mt-auto pt-3 flex items-center gap-2">
         <ChampionIcon championId={match.champion_id} size={24} />
         <div className="min-w-0 flex-1">
           <div className="text-xs text-lol-text-bright truncate">
@@ -87,7 +84,7 @@ export function RecordCard({
     </>
   );
   const tile =
-    "relative flex flex-col overflow-hidden bg-lol-card rounded-xl border border-lol-border/60 p-4 text-left";
+    "flex flex-col overflow-hidden bg-lol-card rounded-xl border border-lol-border/60 p-4 text-left";
 
   if (!onOpen) return <div className={tile}>{body}</div>;
   return (

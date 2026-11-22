@@ -126,14 +126,16 @@ function useContainerWidth<T extends HTMLElement>() {
 function Card({
   title,
   right,
+  className = "",
   children,
 }: {
   title: string;
   right?: React.ReactNode;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-lol-card rounded-xl border border-lol-border/60 p-4">
+    <div className={`bg-lol-card rounded-xl border border-lol-border/60 p-4 ${className}`}>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-semibold text-lol-text-bright">{title}</h2>
         {right}
@@ -686,7 +688,7 @@ export default function Trends() {
 
   if (data.daily.length === 0) {
     return (
-      <div className="max-w-7xl space-y-4">
+      <div className="space-y-4">
         <h1 className="text-xl font-bold text-lol-text-bright">Trends</h1>
         <div className="bg-lol-card rounded-xl border border-lol-border/60 py-16 text-center text-sm text-lol-text">
           No games recorded yet — sync your match history to start tracking trends.
@@ -716,7 +718,7 @@ export default function Trends() {
   );
 
   return (
-    <div className="max-w-7xl space-y-4">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-lol-text-bright">Trends</h1>
         <div className="flex items-center gap-3">
@@ -727,38 +729,45 @@ export default function Trends() {
         </div>
       </div>
 
-      <Card title="Activity">
-        <ActivityHeatmap daily={data.daily} />
-      </Card>
+      {/* The heatmap has a fixed size, so on a wide window the patch chart takes
+          the room beside it, scrolled to the newest patch as it is everywhere */}
+      <div className="flex flex-col gap-4 2xl:flex-row">
+        <Card title="Activity" className="2xl:shrink-0">
+          <ActivityHeatmap daily={data.daily} />
+        </Card>
 
-      <Card title="Win Rate Over Time" right={granularityToggle}>
-        <TimeSeriesChart
-          points={winRatePoints}
-          yMin={0}
-          yMax={100}
-          ticks={[0, 25, 50, 75, 100]}
-          refValue={50}
-          format={(v) => formatPercent(v / 100, 0)}
-        />
-      </Card>
+        {data.patches.length > 1 && (
+          <Card title="Win Rate by Patch" className="2xl:flex-1 2xl:min-w-0">
+            <PatchBars patches={data.patches} />
+          </Card>
+        )}
+      </div>
 
-      {scoreDomain && (
-        <Card title="Average Score Over Time">
+      {/* Side by side once each chart still gets a full-size plot of its own */}
+      <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
+        <Card title="Win Rate Over Time" right={granularityToggle}>
           <TimeSeriesChart
-            points={scorePoints}
-            yMin={scoreDomain.min}
-            yMax={scoreDomain.max}
-            ticks={scoreDomain.ticks}
-            format={(v) => formatDecimal(v)}
+            points={winRatePoints}
+            yMin={0}
+            yMax={100}
+            ticks={[0, 25, 50, 75, 100]}
+            refValue={50}
+            format={(v) => formatPercent(v / 100, 0)}
           />
         </Card>
-      )}
 
-      {data.patches.length > 1 && (
-        <Card title="Win Rate by Patch">
-          <PatchBars patches={data.patches} />
-        </Card>
-      )}
+        {scoreDomain && (
+          <Card title="Average Score Over Time">
+            <TimeSeriesChart
+              points={scorePoints}
+              yMin={scoreDomain.min}
+              yMax={scoreDomain.max}
+              ticks={scoreDomain.ticks}
+              format={(v) => formatDecimal(v)}
+            />
+          </Card>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Card title="By Day of Week">

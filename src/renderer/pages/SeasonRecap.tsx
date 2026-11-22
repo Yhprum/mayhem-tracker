@@ -5,6 +5,10 @@ import { useViewState } from "../hooks/useViewState";
 import { useChampionData } from "../hooks/useChampions";
 import type { SeasonRecap as SeasonRecapData, SeasonSummary } from "../lib/types";
 import { CARD_WIDTH, type CardSpec } from "../../shared/card";
+
+// The preview frame around the card at full size: the card plus a 1px border
+// either side
+const FRAME_WIDTH = CARD_WIDTH + 2;
 import { LOCALE } from "../lib/format";
 import SeasonRecapCard from "../components/SeasonRecapCard";
 import QueueSelect from "../components/QueueSelect";
@@ -67,7 +71,9 @@ export default function SeasonRecap() {
   };
 
   return (
-    <div className="max-w-7xl space-y-4">
+    // As wide as the card preview at full size, so the controls line up with
+    // its right edge instead of running past it
+    <div className="space-y-4" style={{ maxWidth: FRAME_WIDTH }}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold text-lol-text-bright">Season Recap</h1>
         <div className="flex items-center gap-3">

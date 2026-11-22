@@ -101,7 +101,7 @@ export default function GameRecap({
 
       {/* The headline: what happened, on what, where, and how well */}
       <div
-        className={`relative overflow-hidden rounded-xl border p-5 ${
+        className={`overflow-hidden rounded-xl border p-5 ${
           isRemake
             ? "border-lol-border/60 bg-lol-card"
             : isWin
@@ -109,13 +109,7 @@ export default function GameRecap({
               : "border-lol-loss/30 bg-lol-loss/[0.06]"
         }`}
       >
-        <span
-          className={`pointer-events-none absolute -top-24 -left-10 h-56 w-72 rounded-full blur-3xl ${
-            isRemake ? "bg-white/[0.03]" : isWin ? "bg-lol-win/10" : "bg-lol-loss/10"
-          }`}
-        />
-
-        <div className="relative flex flex-wrap items-center gap-5">
+        <div className="flex flex-wrap items-center gap-5">
           <ChampionIcon
             championId={stats?.champion_id ?? 0}
             size={72}
@@ -192,7 +186,7 @@ export default function GameRecap({
           </div>
         </div>
 
-        <div className="relative mt-4 flex flex-wrap items-start gap-4">
+        <div className="mt-4 flex flex-wrap items-start gap-4">
           <HeadlineStat
             label="Damage"
             value={formatCompact(stats?.total_damage_dealt ?? 0)}

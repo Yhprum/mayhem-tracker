@@ -129,7 +129,7 @@ export default function Records() {
 
   if (data.totalGames === 0) {
     return (
-      <div className="max-w-7xl space-y-4">
+      <div className="space-y-4">
         {header}
         <div className="bg-lol-card rounded-xl border border-lol-border/60 py-16 text-center text-sm text-lol-text">
           {account || queue != null
@@ -149,10 +149,10 @@ export default function Records() {
   }
 
   return (
-    <div className="max-w-7xl space-y-4">
+    <div className="space-y-4">
       {header}
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-stretch">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-4 items-stretch">
         {cards.map(({ key, ...card }) => (
           <RecordCard key={key} {...card} champData={champData} onOpen={setOpenMatch} />
         ))}

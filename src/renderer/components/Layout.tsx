@@ -1,19 +1,19 @@
 import { Outlet } from "react-router-dom";
-import Sidebar from "./Sidebar";
-import StatusBar from "./StatusBar";
+import Header from "./Header";
 import RecoveryBanner from "./RecoveryBanner";
+import ActivityToast from "./ActivityToast";
 
 export default function Layout() {
   return (
-    <div className="flex w-full h-full">
-      <Sidebar />
-      <div className="flex flex-col flex-1 min-w-0">
-        <StatusBar />
-        <RecoveryBanner />
-        <main className="scrollbar-edge flex-1 overflow-y-auto p-6">
-          <Outlet />
-        </main>
-      </div>
+    <div className="flex flex-col w-full h-full">
+      <Header />
+      <RecoveryBanner />
+      {/* Pages cap their own width; on a window wider than that they sit in
+          the middle rather than against the left edge */}
+      <main className="scrollbar-edge flex-1 overflow-y-auto p-6 [&>*]:mx-auto">
+        <Outlet />
+      </main>
+      <ActivityToast />
     </div>
   );
 }

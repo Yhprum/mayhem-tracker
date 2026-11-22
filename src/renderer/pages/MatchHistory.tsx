@@ -916,10 +916,8 @@ function ProfileCard({
   const pips = dashboard.recentForm.slice().reverse();
 
   return (
-    <div className="relative flex flex-col gap-3 overflow-hidden bg-lol-card rounded-xl border border-lol-border/60 p-4">
-      <span className="pointer-events-none absolute -top-20 -left-10 h-48 w-64 rounded-full bg-lol-gold/[0.07] blur-3xl" />
-
-      <div className="relative flex items-center gap-3">
+    <div className="flex flex-col gap-3 overflow-hidden bg-lol-card rounded-xl border border-lol-border/60 p-4">
+      <div className="flex items-center gap-3">
         <SummonerIcon
           iconId={profile?.profileIcon ?? null}
           size={40}
@@ -940,7 +938,7 @@ function ProfileCard({
         </div>
       </div>
 
-      <div className="relative mt-auto">
+      <div className="mt-auto">
         <div className="flex items-end justify-between gap-3 mb-1.5">
           <div className="text-2xl font-bold leading-none">
             <span className="text-lol-win">{dashboard.wins.toLocaleString(LOCALE)}W</span>{" "}

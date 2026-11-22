@@ -61,7 +61,7 @@ function createWindow(): BrowserWindow {
     icon: iconPath,
     show: !launchedHidden,
     frame: false,
-    backgroundColor: "#0b0e14",
+    backgroundColor: "#151923",
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       additionalArguments: localeArguments(),

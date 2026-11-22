@@ -1077,7 +1077,6 @@ export interface ElectronAPI {
   onChallengesChanged: (callback: (result: ChallengesResult) => void) => () => void;
   getAllSummonerPuuids: () => Promise<string[]>;
   getProfile: () => Promise<{ name: string | null; profileIcon: number | null }>;
-  refreshGames: () => Promise<{ newGames: number; totalGames: number } | { error: string }>;
   backfillHistory: () => Promise<BackfillResult | { error: string }>;
   cancelBackfill: () => Promise<void>;
   isBackfillRunning: () => Promise<boolean>;
@@ -1178,7 +1177,6 @@ export const INVOKE_CHANNELS = {
   getChallenges: "challenges:get",
   getAllSummonerPuuids: "db:all-summoner-puuids",
   getProfile: "db:profile",
-  refreshGames: "lcu:refresh",
   backfillHistory: "lcu:backfill",
   cancelBackfill: "lcu:cancel-backfill",
   isBackfillRunning: "lcu:backfill-running",

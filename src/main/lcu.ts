@@ -837,7 +837,7 @@ export async function fetchNewGames(
 // On an account that has been walked before, the walk stops at the first page
 // it recognises, so closing a small gap costs little more than the poll it
 // follows.
-export async function syncRecentGames(
+async function syncRecentGames(
   win?: BrowserWindow | null,
   knownSummoner?: any,
 ): Promise<{ newGames: number; totalGames: number }> {

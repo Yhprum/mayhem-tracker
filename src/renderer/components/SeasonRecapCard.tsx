@@ -323,7 +323,6 @@ function Header({
       {/* The art fades out behind the name so the text never sits on a busy
           part of the splash */}
       <div className="absolute inset-0 bg-gradient-to-r from-lol-card from-35% via-lol-card/80 via-60% to-lol-card/10" />
-      <span className="pointer-events-none absolute -top-24 -left-16 h-64 w-96 rounded-full bg-lol-gold/10 blur-3xl" />
 
       <div className="relative flex items-center gap-6 px-7 py-7">
         <SummonerIcon
