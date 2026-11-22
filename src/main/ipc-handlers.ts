@@ -29,6 +29,7 @@ const RENDERER_SETTINGS = new Set([
   "auto_backup",
   "remember_filters",
   "hidden_nav_links",
+  "nav_layout",
   SESSION_GROUPING_SETTING,
 ]);
 

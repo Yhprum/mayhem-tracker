@@ -3,8 +3,15 @@ import { useBackfill } from "../hooks/useBackfill";
 import { queueLabel } from "../components/QueueSelect";
 import { LOCALE, formatDecimal } from "../lib/format";
 import { setRemembering } from "../lib/viewState";
-import { NAV_LINKS, HOME_PATH, toggleNavLink } from "../lib/navLinks";
-import { useHiddenNavLinks } from "../hooks/useHiddenNavLinks";
+import {
+  NAV_LINKS,
+  HOME_PATH,
+  hiddenNavLinks,
+  navLayout,
+  toggleNavLink,
+  type NavLayout,
+} from "../lib/navigation";
+import { useSettingStore } from "../hooks/useSettingStore";
 import type { BackupInfo, ImportProgress } from "../lib/types";
 import {
   DEFAULT_SESSION_GROUPING,
@@ -83,7 +90,8 @@ function Switch({
 export default function Settings() {
   // Shared so a backfill started automatically on first connect shows here too
   const { running: backfilling, progress } = useBackfill();
-  const hiddenNavLinks = useHiddenNavLinks();
+  const hiddenLinks = useSettingStore(hiddenNavLinks);
+  const layout = useSettingStore(navLayout);
   const [autoStart, setAutoStart] = useState(false);
   // Only the packaged program has a durable exe to register at sign-in or to
   // swap for a new version, so those switches say so instead of pretending in a
@@ -483,21 +491,44 @@ export default function Settings() {
           {/* Customization */}
           <div className="order-2 bg-lol-card rounded-xl border border-lol-border/60 p-5">
             <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Customization</h2>
-            <p className="text-sm text-lol-text-bright">Header links</p>
-            <div className="mt-3 space-y-3">
-              {NAV_LINKS.map(({ to, label, icon: Icon }) => (
-                <div key={to} className="flex items-center justify-between gap-8">
-                  <div className="flex items-center gap-2 text-sm text-lol-text">
-                    <Icon className="w-4 h-4 shrink-0" />
-                    {label}
-                  </div>
-                  <Switch
-                    checked={!hiddenNavLinks.has(to)}
-                    disabled={to === HOME_PATH}
-                    onChange={() => toggleNavLink(to)}
-                  />
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-8">
+                <div>
+                  <p className="text-sm text-lol-text-bright">Navigation</p>
+                  <p className="text-xs text-lol-text mt-0.5">
+                    Show the page links across the top of the window, or down a sidebar on the left.
+                  </p>
                 </div>
-              ))}
+                <select
+                  className="select shrink-0"
+                  value={layout}
+                  onChange={(e) => navLayout.set(e.target.value as NavLayout)}
+                >
+                  <option value="header">Header</option>
+                  <option value="sidebar">Sidebar</option>
+                </select>
+              </div>
+
+              <div className="border-t border-lol-border" />
+
+              <div>
+                <p className="text-sm text-lol-text-bright">Navigation links</p>
+                <div className="mt-3 space-y-3">
+                  {NAV_LINKS.map(({ to, label, icon: Icon }) => (
+                    <div key={to} className="flex items-center justify-between gap-8">
+                      <div className="flex items-center gap-2 text-sm text-lol-text">
+                        <Icon className="w-4 h-4 shrink-0" />
+                        {label}
+                      </div>
+                      <Switch
+                        checked={!hiddenLinks.has(to)}
+                        disabled={to === HOME_PATH}
+                        onChange={() => toggleNavLink(to)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
