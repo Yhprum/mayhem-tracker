@@ -10,8 +10,9 @@ import {
 } from "react";
 import { useLcuStatus } from "../hooks/useLcuStatus";
 import { useRecapBadge } from "../hooks/useRecapBadge";
-import type { LcuStatus, SeasonSummary, UpdateInfo } from "../lib/types";
+import type { LcuStatus, SeasonSummary, UpdateInfo, UpdateNotes } from "../lib/types";
 import UpdateDialog from "./UpdateDialog";
+import WhatsNewDialog from "./WhatsNewDialog";
 import {
   MayhemIcon,
   SettingsIcon,
@@ -214,6 +215,30 @@ export default function Header() {
     return () => clearInterval(timer);
   }, []);
 
+  // The launch check installs on its own; the dialog is just there to show it
+  // happening. Asked for as well as listened for, since the install can begin
+  // before this window has loaded.
+  const [installing, setInstalling] = useState(false);
+  useEffect(() => {
+    const show = (info: UpdateInfo) => {
+      setUpdate(info);
+      setInstalling(true);
+      setShowUpdateDialog(true);
+    };
+    window.api.getLaunchInstall().then((info) => info && show(info));
+    return window.api.onUpdateInstalling(show);
+  }, []);
+
+  const closeUpdateDialog = () => {
+    setShowUpdateDialog(false);
+    setInstalling(false);
+  };
+
+  const [updateNotes, setUpdateNotes] = useState<UpdateNotes | null>(null);
+  useEffect(() => {
+    window.api.getUpdateNotes().then(setUpdateNotes);
+  }, []);
+
   const shownLinks = NAV_LINKS.filter((link) => !hiddenLinks.has(link.to));
   const entries: NavEntry[] = shownLinks.map((link) =>
     link.to === "/season" && recapBadge.season
@@ -294,7 +319,17 @@ export default function Header() {
         <WindowControls />
       </header>
       {showUpdateDialog && update && (
-        <UpdateDialog update={update} onClose={() => setShowUpdateDialog(false)} />
+        // Keyed so a launch install taking over an open dialog starts it afresh
+        <UpdateDialog
+          key={installing ? "installing" : "manual"}
+          update={update}
+          installing={installing}
+          onClose={closeUpdateDialog}
+        />
+      )}
+      {/* An update installing right now outranks notes on the last one */}
+      {updateNotes && !showUpdateDialog && (
+        <WhatsNewDialog notes={updateNotes} onClose={() => setUpdateNotes(null)} />
       )}
     </>
   );

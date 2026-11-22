@@ -85,9 +85,12 @@ export default function Settings() {
   const { running: backfilling, progress } = useBackfill();
   const hiddenNavLinks = useHiddenNavLinks();
   const [autoStart, setAutoStart] = useState(false);
-  // Only the packaged program has a path worth registering, so the switch says
-  // so instead of pretending in a dev build
-  const [autoStartSupported, setAutoStartSupported] = useState(false);
+  // Only the packaged program has a durable exe to register at sign-in or to
+  // swap for a new version, so those switches say so instead of pretending in a
+  // dev build
+  const [packaged, setPackaged] = useState(false);
+  const [autoUpdate, setAutoUpdate] = useState(true);
+  const [showReleaseNotes, setShowReleaseNotes] = useState(true);
   const [minimizeToTray, setMinimizeToTray] = useState(true);
   // Every queue with games stored, and the subset the user has switched off
   const [queues, setQueues] = useState<number[]>([]);
@@ -121,18 +124,36 @@ export default function Settings() {
       window.api.getSetting("remember_filters"),
       window.api.getSetting(SESSION_GROUPING_SETTING),
       window.api.getVersion(),
-    ]).then(([startup, startupSupported, tray, hidden, remakes, backup, remember, grouping, v]) => {
-      setAutoStart(startup === "true");
-      setAutoStartSupported(startupSupported);
-      setMinimizeToTray(tray !== "false");
-      setHiddenQueues(new Set(hidden ? hidden.split(",").map(Number) : []));
-      setHideRemakes(remakes === "true");
-      setAutoBackup(backup !== "false");
-      setRememberFilters(remember === "true");
-      setSessionGrouping(parseSessionGrouping(grouping));
-      setVersion(v);
-      setLoading(false);
-    });
+      window.api.getSetting("auto_update"),
+      window.api.getSetting("show_release_notes"),
+    ]).then(
+      ([
+        startup,
+        isPackaged,
+        tray,
+        hidden,
+        remakes,
+        backup,
+        remember,
+        grouping,
+        v,
+        update,
+        notes,
+      ]) => {
+        setAutoStart(startup === "true");
+        setPackaged(isPackaged);
+        setAutoUpdate(update !== "false");
+        setShowReleaseNotes(notes !== "false");
+        setMinimizeToTray(tray !== "false");
+        setHiddenQueues(new Set(hidden ? hidden.split(",").map(Number) : []));
+        setHideRemakes(remakes === "true");
+        setAutoBackup(backup !== "false");
+        setRememberFilters(remember === "true");
+        setSessionGrouping(parseSessionGrouping(grouping));
+        setVersion(v);
+        setLoading(false);
+      },
+    );
   }, []);
 
   // Kept current the same way the queue dropdown is: a game from a queue that
@@ -337,13 +358,13 @@ export default function Settings() {
                   <p className="text-xs text-lol-text mt-0.5">
                     Open the program in the system tray when you sign in to Windows, so your games
                     are recorded without having to remember to start it.
-                    {!autoStartSupported && " Only available in the packaged program."}
+                    {!packaged && " Only available in the packaged program."}
                   </p>
                 </div>
                 <Switch
                   checked={autoStart}
                   onChange={toggle("auto_start", autoStart, setAutoStart)}
-                  disabled={!autoStartSupported}
+                  disabled={!packaged}
                 />
               </div>
 
@@ -480,8 +501,46 @@ export default function Settings() {
             </div>
           </div>
 
-          {/* Troubleshooting */}
+          {/* Updates */}
           <div className="order-5 bg-lol-card rounded-xl border border-lol-border/60 p-5">
+            <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Updates</h2>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-8">
+                <div>
+                  <p className="text-sm text-lol-text-bright">Install updates automatically</p>
+                  <p className="text-xs text-lol-text mt-0.5">
+                    Check for a new version each time the program starts and install it right away.
+                    Never happens during champion select or a game.
+                    {!packaged && " Only available in the packaged program."}
+                  </p>
+                </div>
+                <Switch
+                  checked={autoUpdate}
+                  onChange={toggle("auto_update", autoUpdate, setAutoUpdate)}
+                  disabled={!packaged}
+                />
+              </div>
+
+              <div className="border-t border-lol-border" />
+
+              <div className="flex items-center justify-between gap-8">
+                <div>
+                  <p className="text-sm text-lol-text-bright">Show what's new after updating</p>
+                  <p className="text-xs text-lol-text mt-0.5">
+                    Open the release notes for the versions you just got the first time the program
+                    starts on a new version.
+                  </p>
+                </div>
+                <Switch
+                  checked={showReleaseNotes}
+                  onChange={toggle("show_release_notes", showReleaseNotes, setShowReleaseNotes)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Troubleshooting */}
+          <div className="order-6 bg-lol-card rounded-xl border border-lol-border/60 p-5">
             <h2 className="text-sm font-semibold text-lol-text-bright mb-4">Troubleshooting</h2>
             <div className="flex items-center justify-between gap-8">
               <div>
@@ -502,7 +561,7 @@ export default function Settings() {
           </div>
 
           {/* About */}
-          <div className="order-6 bg-lol-card rounded-xl border border-lol-border/60 p-5">
+          <div className="order-7 bg-lol-card rounded-xl border border-lol-border/60 p-5">
             <h2 className="text-sm font-semibold text-lol-text-bright mb-4">About</h2>
             <div className="flex items-center justify-between gap-8">
               <p className="text-sm text-lol-text-bright">Mayhem Tracker v{version}</p>

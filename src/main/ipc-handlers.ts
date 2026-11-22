@@ -21,6 +21,8 @@ import { SESSION_GROUPING_SETTING } from "../shared/session";
 // Settings page are exposed.
 const RENDERER_SETTINGS = new Set([
   "auto_start",
+  "auto_update",
+  "show_release_notes",
   "minimize_to_tray",
   "hidden_queues",
   "hide_remakes",
@@ -252,6 +254,10 @@ export function registerIpcHandlers() {
     if (!win) return { success: false, error: "No window to report progress to" };
     return updater.downloadAndInstall(win, assetUrl);
   });
+
+  handle("getLaunchInstall", () => updater.getLaunchInstall());
+
+  handle("getUpdateNotes", () => updater.getUpdateNotes());
 
   handle("openUrl", (_event, url) => {
     openExternalUrl(url);

@@ -581,6 +581,16 @@ export interface ReleaseNote {
   url: string;
 }
 
+// The first launch after an update, and the releases it brought in
+export interface UpdateNotes {
+  from: string;
+  to: string;
+  // The release page for `to`, for when the notes couldn't be fetched
+  url: string;
+  // Newest first. Empty when GitHub couldn't be reached.
+  releases: ReleaseNote[];
+}
+
 export interface UpdateInfo {
   hasUpdate: boolean;
   latest?: string;
@@ -1125,6 +1135,13 @@ export interface ElectronAPI {
   checkForUpdate: () => Promise<UpdateInfo>;
   downloadUpdate: (assetUrl: string) => Promise<{ success: boolean; error?: string }>;
   onUpdateProgress: (callback: (percent: number) => void) => () => void;
+  // The release the launch check is installing, or null when it is not
+  getLaunchInstall: () => Promise<UpdateInfo | null>;
+  onUpdateInstalling: (callback: (update: UpdateInfo) => void) => () => void;
+  onUpdateInstallFailed: (callback: (error: string) => void) => () => void;
+  // What changed since the version that ran before this launch, when this is
+  // the first launch on a newer one and the user wants to see it
+  getUpdateNotes: () => Promise<UpdateNotes | null>;
   openUrl: (url: string) => Promise<void>;
   minimizeWindow: () => Promise<void>;
   toggleMaximizeWindow: () => Promise<void>;
@@ -1203,6 +1220,8 @@ export const INVOKE_CHANNELS = {
   getVersion: "app:version",
   checkForUpdate: "app:check-update",
   downloadUpdate: "app:download-update",
+  getLaunchInstall: "app:launch-install",
+  getUpdateNotes: "app:update-notes",
   openUrl: "app:open-url",
   minimizeWindow: "window:minimize",
   toggleMaximizeWindow: "window:toggle-maximize",
@@ -1219,6 +1238,8 @@ export interface RendererEvents {
   "live:changed": LiveGameSnapshot;
   "challenges:changed": ChallengesResult;
   "update:progress": number;
+  "update:installing": UpdateInfo;
+  "update:install-failed": string;
   "window:maximized-changed": boolean;
   "data:import-progress": ImportProgress;
 }

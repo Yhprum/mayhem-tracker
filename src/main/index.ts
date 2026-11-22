@@ -14,6 +14,7 @@ import { registerAssetScheme, startGameAssets } from "./game-assets";
 import { applySecurityPolicy } from "./security";
 import { APP_USER_MODEL_ID, ensureStartMenuShortcut } from "./shortcut";
 import { syncAutoStart, HIDDEN_FLAG } from "./autostart";
+import { installUpdateOnLaunch, recordLaunchVersion } from "./updater";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -167,6 +168,9 @@ app.whenReady().then(async () => {
   // is restored from the newest good snapshot here, before anything reads it.
   initDatabaseWithRecovery();
 
+  // Before the window can ask whether this launch is the first on a new version
+  recordLaunchVersion();
+
   // Needs the database, which holds the answer. Keeps the login item pointing at
   // the portable exe wherever it has been moved to since the last launch.
   syncAutoStart();
@@ -199,6 +203,9 @@ app.whenReady().then(async () => {
   // client keeps no history of its own, so a day nobody writes down is gone.
   startChallengeTracking(win);
   startBackupSchedule();
+  // Last, once everything that has to run on a launch is under way. Only ever
+  // at startup, so an update never restarts the app partway through a session.
+  installUpdateOnLaunch(win).catch((err) => console.error("Launch update failed:", err));
 });
 
 app.on("before-quit", async (event) => {

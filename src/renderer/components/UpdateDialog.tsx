@@ -1,57 +1,40 @@
 import { useEffect, useState } from "react";
-import { LOCALE, formatDecimal, formatPercent } from "../lib/format";
-import type { ReleaseNote, UpdateInfo } from "../lib/types";
-import { ChevronRightIcon, RefreshIcon } from "./icons";
-import Markdown from "./Markdown";
-
-function formatReleaseDate(iso: string): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString(LOCALE, { month: "short", day: "numeric" });
-}
-
-function ReleaseBody({ release }: { release: ReleaseNote }) {
-  if (!release.body) {
-    return <p className="text-[12px] text-lol-text/50 italic">No notes for this release.</p>;
-  }
-  return (
-    <div className="text-[12px] text-lol-text">
-      <Markdown text={release.body} />
-    </div>
-  );
-}
+import { formatDecimal, formatPercent } from "../lib/format";
+import type { UpdateInfo } from "../lib/types";
+import { RefreshIcon } from "./icons";
+import ReleaseNotes from "./ReleaseNotes";
 
 export default function UpdateDialog({
   update,
+  installing = false,
   onClose,
 }: {
   update: UpdateInfo;
+  // The main process started this install itself at launch, rather than the
+  // user from this dialog
+  installing?: boolean;
   onClose: () => void;
 }) {
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState(installing);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  // A launch install has no button press awaiting its result, so a failure
+  // arrives as an event instead
+  useEffect(() => {
+    return window.api.onUpdateInstallFailed((message) => {
+      setDownloading(false);
+      setError(message);
+    });
+  }, []);
+
   const releases = update.releases ?? [];
-  // Only the newest is expanded up front: someone several versions behind gets a
-  // scannable list of what they missed instead of a wall of bullets.
-  const [openVersions, setOpenVersions] = useState<Set<string>>(
-    () => new Set(releases.length ? [releases[0].version] : []),
-  );
+  // A launch install that failed is back to an offer like any other
+  const launchInstalling = installing && !error;
 
   useEffect(() => {
     return window.api.onUpdateProgress(setProgress);
   }, []);
-
-  const toggleVersion = (version: string) => {
-    setOpenVersions((prev) => {
-      const next = new Set(prev);
-      if (next.has(version)) next.delete(version);
-      else next.add(version);
-      return next;
-    });
-  };
 
   const handleUpdate = async () => {
     if (!update.assetUrl) {
@@ -79,11 +62,20 @@ export default function UpdateDialog({
         className="flex max-h-[85vh] w-[32rem] max-w-[90vw] flex-col rounded-lg border border-lol-border bg-lol-card p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-[15px] font-bold text-lol-text-bright">Update Available</h2>
-        <p className="mt-2 text-[13px] text-lol-text">
-          Version <span className="text-lol-gold">v{update.latest}</span> is available (you have v
-          {update.current}).
-        </p>
+        <h2 className="text-[15px] font-bold text-lol-text-bright">
+          {launchInstalling ? "Updating" : "Update Available"}
+        </h2>
+        {launchInstalling ? (
+          <p className="mt-2 text-[13px] text-lol-text">
+            Updating to <span className="text-lol-gold">v{update.latest}</span> from v
+            {update.current}. The program restarts on its own when it's done.
+          </p>
+        ) : (
+          <p className="mt-2 text-[13px] text-lol-text">
+            Version <span className="text-lol-gold">v{update.latest}</span> is available (you have v
+            {update.current}).
+          </p>
+        )}
         {releases.length > 1 && (
           <p className="mt-0.5 text-[12px] text-lol-text/60">
             {releases.length} versions of changes since your install
@@ -91,42 +83,7 @@ export default function UpdateDialog({
           </p>
         )}
 
-        {releases.length > 0 && (
-          <div className="mt-3 min-h-0 flex-1 overflow-y-auto rounded-md border border-lol-border bg-black/20 p-3">
-            {releases.map((release, i) => {
-              // A single missed release needs no accordion around it.
-              if (releases.length === 1)
-                return <ReleaseBody key={release.version} release={release} />;
-              const open = openVersions.has(release.version);
-              return (
-                <div
-                  key={release.version}
-                  className={i > 0 ? "mt-1 border-t border-lol-border/50 pt-1" : ""}
-                >
-                  <button
-                    onClick={() => toggleVersion(release.version)}
-                    className="flex w-full items-center gap-1.5 rounded py-1 text-left hover:bg-white/5 transition-colors cursor-pointer"
-                  >
-                    <ChevronRightIcon
-                      className={`w-3 h-3 shrink-0 text-lol-text/50 transition-transform ${open ? "rotate-90" : ""}`}
-                    />
-                    <span className="text-[12px] font-semibold text-lol-gold">
-                      v{release.version}
-                    </span>
-                    <span className="ml-auto text-[11px] text-lol-text/40">
-                      {formatReleaseDate(release.publishedAt)}
-                    </span>
-                  </button>
-                  {open && (
-                    <div className="pb-2 pl-[18px]">
-                      <ReleaseBody release={release} />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {releases.length > 0 && <ReleaseNotes releases={releases} />}
 
         {downloading && (
           <div className="mt-4">

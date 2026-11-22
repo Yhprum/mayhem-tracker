@@ -1176,6 +1176,17 @@ async function isInGame(): Promise<boolean> {
   return phase !== null && IN_GAME_PHASES.has(phase);
 }
 
+// Champion select through the end of the game itself: the stretch where a
+// restart would pull the app out from under a match. Post-game is fine, since
+// quitting runs a final sync and the next launch picks up anything it missed.
+const MATCH_PHASES = new Set(["ChampSelect", "GameStart", "InProgress", "Reconnect"]);
+
+export async function isMatchUnderway(): Promise<boolean> {
+  if (!isClientConnected()) return false;
+  const phase = await fetchGameflowPhase();
+  return phase !== null && MATCH_PHASES.has(phase);
+}
+
 // The first sync an account gets in a session walks its whole history, and
 // every later tick takes the cheap LCU path. That first walk is the app's
 // answer to everything the twenty-game window cannot see: the games played

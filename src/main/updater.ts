@@ -4,8 +4,12 @@ import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { HIDDEN_FLAG } from "./autostart";
+import { getSetting, setSetting } from "./db";
 import { sendToRenderer } from "./ipc";
-import type { ReleaseNote, UpdateInfo } from "../shared/api";
+import { isMatchUnderway } from "./lcu";
+import { isGameRunning } from "./live";
+import type { ReleaseNote, UpdateInfo, UpdateNotes } from "../shared/api";
 
 const CHECK_TIMEOUT_MS = 10_000;
 // One page covers any realistic gap between installs, for a single request.
@@ -17,6 +21,10 @@ const MAX_BODY_CHARS = 4_000;
 // a total-duration cap would abort a slow but perfectly healthy connection.
 // What we actually want to catch is a transfer that has stopped moving.
 const DOWNLOAD_STALL_TIMEOUT_MS = 30_000;
+// A launch at Windows sign-in can beat the network up, so a failed launch check
+// gets a few more tries before the update is left to the header badge.
+const LAUNCH_CHECK_ATTEMPTS = 3;
+const LAUNCH_RETRY_MS = 60_000;
 
 // The expected hash never leaves the main process: the renderer only echoes
 // back an asset URL, so trusting a digest it supplied would verify nothing.
@@ -66,23 +74,32 @@ function parseDigest(digest: unknown): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
+// The newest page of releases, and the part of it that was actually published.
+// Null when GitHub gave no usable answer.
+async function fetchReleasePage(): Promise<{ page: any[]; published: any[] } | null> {
+  const res = await fetch(
+    `https://api.github.com/repos/Yhprum/mayhem-tracker/releases?per_page=${RELEASE_PAGE_SIZE}`,
+    {
+      headers: { "User-Agent": "mayhem-tracker" },
+      signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
+    },
+  );
+  if (!res.ok) return null;
+  const body = (await res.json()) as unknown;
+  const page: any[] = Array.isArray(body) ? body : [];
+  // Unlike /releases/latest, this endpoint includes drafts and prereleases,
+  // which were never meant to be offered as an update.
+  const published = page.filter(
+    (r) => r && !r.draft && !r.prerelease && typeof r.tag_name === "string",
+  );
+  return { page, published };
+}
+
 export async function checkForUpdate(): Promise<UpdateInfo> {
   try {
-    const res = await fetch(
-      `https://api.github.com/repos/Yhprum/mayhem-tracker/releases?per_page=${RELEASE_PAGE_SIZE}`,
-      {
-        headers: { "User-Agent": "mayhem-tracker" },
-        signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
-      },
-    );
-    if (!res.ok) return { hasUpdate: false, error: "No releases found" };
-    const page = (await res.json()) as any;
-    // Unlike /releases/latest, this endpoint includes drafts and prereleases,
-    // which were never meant to be offered as an update.
-    const published: any[] = (Array.isArray(page) ? page : []).filter(
-      (r) => r && !r.draft && !r.prerelease && typeof r.tag_name === "string",
-    );
-    if (!published.length) return { hasUpdate: false, error: "No releases found" };
+    const releases = await fetchReleasePage();
+    if (!releases?.published.length) return { hasUpdate: false, error: "No releases found" };
+    const { page, published } = releases;
 
     const newest = published[0];
     const latest = String(newest.tag_name).replace(/^v/, "");
@@ -122,10 +139,31 @@ export async function checkForUpdate(): Promise<UpdateInfo> {
   }
 }
 
+type InstallResult = { success: boolean; error?: string };
+
+// Two installs at once would race two swap scripts over the same exe
+let installInProgress = false;
+
+// `canRestart` is asked once the download is verified, just before the app
+// quits, so an install that took a while can still back out of restarting.
 export async function downloadAndInstall(
   win: BrowserWindow,
   assetUrl: string,
-): Promise<{ success: boolean; error?: string }> {
+  canRestart?: () => Promise<boolean>,
+): Promise<InstallResult> {
+  if (installInProgress) return { success: false, error: "An update is already being installed" };
+  installInProgress = true;
+  const result = await install(win, assetUrl, canRestart);
+  // Left set on success: the app is already on its way out
+  if (!result.success) installInProgress = false;
+  return result;
+}
+
+async function install(
+  win: BrowserWindow,
+  assetUrl: string,
+  canRestart?: () => Promise<boolean>,
+): Promise<InstallResult> {
   // Set by electron-builder's portable launcher; absent in dev and non-portable builds
   const portableExe = process.env.PORTABLE_EXECUTABLE_FILE;
   if (!portableExe) {
@@ -222,6 +260,18 @@ export async function downloadAndInstall(
     return { success: false, error: `Download failed: ${err.message}` };
   }
 
+  if (canRestart && !(await canRestart())) {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    return {
+      success: false,
+      error: "A match started during the download. Install from here once it's over.",
+    };
+  }
+
+  // Comes back the way it was left: an app updated from the tray reopens in the
+  // tray rather than putting a window in front of whatever the user is doing.
+  const relaunchArgs = win.isVisible() ? "" : ` ${HIDDEN_FLAG}`;
+
   // Install under the artifact name (productName minus spaces) regardless of the
   // current filename, so exes downloaded before the version was dropped from the
   // artifact name get migrated.
@@ -248,11 +298,11 @@ export async function downloadAndInstall(
       `del /f "${portableExe}" >nul 2>&1`,
       `if exist "${portableExe}" goto wait`,
       `move /y "${stagedExe}" "${targetExe}" >nul 2>&1`,
-      `start "" "${targetExe}"`,
+      `start "" "${targetExe}"${relaunchArgs}`,
       "goto cleanup",
       ":fail",
       `del /f "${stagedExe}" >nul 2>&1`,
-      `start "" "${portableExe}"`,
+      `start "" "${portableExe}"${relaunchArgs}`,
       ":cleanup",
       `rd /s /q "${tmpDir}"`,
       "",
@@ -263,4 +313,90 @@ export async function downloadAndInstall(
   // Let the IPC response reach the renderer before quitting
   setTimeout(() => app.quit(), 200);
   return { success: true };
+}
+
+// Either one alone can miss a match: the client may not be connected yet this
+// early in a launch, and the game's own API is down through champion select.
+async function matchUnderway(): Promise<boolean> {
+  const [client, game] = await Promise.all([isMatchUnderway(), isGameRunning()]);
+  return client || game;
+}
+
+// The release the launch check is installing, held so a window that loads
+// after the install began still opens onto its progress.
+let launchInstall: UpdateInfo | null = null;
+
+export function getLaunchInstall(): UpdateInfo | null {
+  return launchInstall;
+}
+
+// Runs once per launch and never again while the app stays up, so an update
+// can only restart the app at a moment the user just started it, never in the
+// middle of a session. A launch during a match leaves the update to the header
+// badge instead.
+export async function installUpdateOnLaunch(win: BrowserWindow): Promise<void> {
+  if (!process.env.PORTABLE_EXECUTABLE_FILE) return;
+  if (getSetting("auto_update") === "false") return;
+
+  let info = await checkForUpdate();
+  for (let attempt = 1; info.error && attempt < LAUNCH_CHECK_ATTEMPTS; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, LAUNCH_RETRY_MS));
+    info = await checkForUpdate();
+  }
+  if (info.error) console.log("Launch update check failed:", info.error);
+  if (!info.hasUpdate || !info.assetUrl) return;
+
+  if (await matchUnderway()) {
+    console.log(`Update ${info.latest} available; not installing during a match`);
+    return;
+  }
+
+  console.log(`Installing update ${info.latest} on launch`);
+  launchInstall = info;
+  sendToRenderer(win, "update:installing", info);
+  const result = await downloadAndInstall(win, info.assetUrl, async () => !(await matchUnderway()));
+  if (!result.success) {
+    launchInstall = null;
+    const error = result.error ?? "Update failed";
+    console.log("Launch update failed:", error);
+    sendToRenderer(win, "update:install-failed", error);
+  }
+}
+
+// The version this install ran as before the current one, when this launch is
+// the first on a newer version. Set once at startup, before anything reads it.
+let updatedFrom: string | null = null;
+
+// Remembered across launches rather than written by the installer, so a version
+// reached any way at all, a manual download included, counts as an update.
+export function recordLaunchVersion(): void {
+  const current = app.getVersion();
+  const previous = getSetting("last_run_version");
+  if (previous && compareVersions(current, previous) > 0) updatedFrom = previous;
+  if (previous !== current) setSetting("last_run_version", current);
+}
+
+// Shared by every caller this launch, so a window that reloads asks GitHub once
+let updateNotes: Promise<UpdateNotes | null> | null = null;
+
+export function getUpdateNotes(): Promise<UpdateNotes | null> {
+  updateNotes ??= loadUpdateNotes();
+  return updateNotes;
+}
+
+async function loadUpdateNotes(): Promise<UpdateNotes | null> {
+  const from = updatedFrom;
+  if (!from || getSetting("show_release_notes") === "false") return null;
+  const to = app.getVersion();
+  const url = `https://github.com/Yhprum/mayhem-tracker/releases/tag/v${to}`;
+  try {
+    const page = await fetchReleasePage();
+    const releases = (page?.published ?? []).filter(
+      (r) => compareVersions(r.tag_name, from) > 0 && compareVersions(r.tag_name, to) <= 0,
+    );
+    return { from, to, url, releases: releases.map(toReleaseNote) };
+  } catch {
+    // Still worth saying the update landed; the dialog links out for the notes
+    return { from, to, url, releases: [] };
+  }
 }

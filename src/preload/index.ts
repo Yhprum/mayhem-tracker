@@ -47,6 +47,8 @@ const api: ElectronAPI = {
   onStatusChanged: subscribe("lcu:status-changed"),
   onGamesUpdated: subscribe("lcu:games-updated"),
   onUpdateProgress: subscribe("update:progress"),
+  onUpdateInstalling: subscribe("update:installing"),
+  onUpdateInstallFailed: subscribe("update:install-failed"),
   onImportProgress: subscribe("data:import-progress"),
   onMaximizedChanged: subscribe("window:maximized-changed"),
 };

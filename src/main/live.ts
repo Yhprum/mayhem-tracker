@@ -512,6 +512,18 @@ function stopPolling() {
   void refreshLiveGame();
 }
 
+// Whether a game is running at all, client or no client. Anything other than a
+// refused connection counts: the API answers non-200 while the game loads, and
+// a probe that fails some other way is no proof the game is gone.
+export async function isGameRunning(): Promise<boolean> {
+  try {
+    await liveRequest("/liveclientdata/gamestats");
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException)?.code !== "ECONNREFUSED";
+  }
+}
+
 export function getLiveGame(): LiveGameSnapshot {
   return latest;
 }
